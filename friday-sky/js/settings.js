@@ -329,12 +329,15 @@
 
     var key = document.getElementById("set-key");
     var mask = document.getElementById("key-mask");
+    function keyPh() { key.placeholder = root.FridayStorage.hasApiKey() ? "Key saved. Paste a new one to replace it." : "Paste your Groq key"; }
+    keyPh();
     mask.textContent = root.FridayStorage.hasApiKey() ? "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
     document.getElementById("btn-key-save").onclick = function () {
       if (!key.value.trim()) { self.onToast("Paste a new key first."); return; }
       root.FridayStorage.setApiKey(key.value);
       key.value = "";
       mask.textContent = "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey());
+      keyPh();
       self.onToast("Key saved on this phone.");
     };
     document.getElementById("btn-key-clear").onclick = function () {
@@ -342,6 +345,7 @@
       root.FridayStorage.setApiKey("");
       key.value = "";
       mask.textContent = "No key saved yet.";
+      keyPh();
       self.onToast("Key cleared.");
     };
 
