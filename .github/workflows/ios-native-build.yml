@@ -23,7 +23,7 @@ on:
 jobs:
   build-ios-simulator:
     name: Build ${{ matrix.app_name }} for iOS Simulator
-    runs-on: macos-26
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
