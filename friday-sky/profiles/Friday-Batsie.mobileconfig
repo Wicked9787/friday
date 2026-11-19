@@ -537,11 +537,11 @@
 			<key>IsRemovable</key>
 			<true/>
 			<key>Label</key>
-			<string>Friday</string>
+			<string>Jarvis</string>
 			<key>PayloadDescription</key>
 			<string>Web Clip</string>
 			<key>PayloadDisplayName</key>
-			<string>Friday</string>
+			<string>Jarvis</string>
 			<key>PayloadIdentifier</key>
 			<string>com.friday.batsie.webclip</string>
 			<key>PayloadType</key>
@@ -559,13 +559,13 @@
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>Adds Friday to your Home Screen with her own icon.</string>
+	<string>Adds Jarvis to your Home Screen with its own icon.</string>
 	<key>PayloadDisplayName</key>
-	<string>Friday</string>
+	<string>Jarvis</string>
 	<key>PayloadIdentifier</key>
 	<string>com.friday.batsie.profile</string>
 	<key>PayloadOrganization</key>
-	<string>Friday</string>
+	<string>Jarvis</string>
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadType</key>

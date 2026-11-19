@@ -24,7 +24,7 @@
     this.onToast = opts.onToast || function () {};
     this.values = loadSettings();
     if (!this.values.look) this.values.look = this.profile.defaultLook || "N";
-    if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday 2";
+    if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday";
     if (this.profile.daddySms && !this.values.daddySms) this.values.daddySms = this.profile.daddySms;
     saveSettings(this.values);
     this._bind();
@@ -81,7 +81,7 @@
     var sc = document.getElementById("set-shortcut");
     sc.value = this.values.shortcutName;
     sc.onchange = sc.onblur = function () {
-      self.values.shortcutName = sc.value.trim() || "Friday 2";
+      self.values.shortcutName = sc.value.trim() || "Friday";
       saveSettings(self.values);
     };
 
@@ -158,7 +158,7 @@
   };
 
   FridaySettings.prototype.shortcutName = function () {
-    return this.values.shortcutName || "Friday 2";
+    return this.values.shortcutName || "Friday";
   };
   FridaySettings.prototype.look = function () {
     return this.values.look || "N";

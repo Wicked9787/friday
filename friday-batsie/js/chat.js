@@ -72,7 +72,7 @@
       "Address " + profile.ownerName + " as " + (terms || "nothing special") + " about " + perTen + " times in every 10 lines of dialogue. The rest of the time, use no honorific at all — just talk plainly.",
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
       "Keep answers concise unless you are asked for more.",
-      "If you need the phone to do something you cannot do yourself (alarms, lights, Do Not Disturb, sending a real text, cameras), say clearly that you will hand it to the " + (profile.shortcutName || "Friday 2") + " shortcut.",
+      "If you need the phone to do something you cannot do yourself (alarms, lights, Do Not Disturb, sending a real text, cameras), say clearly that you will hand it to the " + (profile.shortcutName || "Friday") + " shortcut.",
       mem ? ("Long-term memory, written by " + profile.ownerName + ":\n" + mem) : "You have no long-term memory notes yet.",
       "Your name is " + profile.assistantName + ". The person you help is " + profile.ownerName + "."
     ].join("\n");
