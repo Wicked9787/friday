@@ -10,6 +10,121 @@
   var handsFree = cfg.queryParam("listen") === "1";
   var busy = false;
 
+
+  function lookOrder() {
+    var ids = [];
+    (cfg.LOOK_GROUPS || []).forEach(function (g) {
+      (g.ids || []).forEach(function (id) { if (cfg.LOOKS[id]) ids.push(id); });
+    });
+    return ids;
+  }
+
+  var lookLabelTimer = 0;
+  function showLookLabel(id) {
+    var el = document.getElementById("look-label");
+    if (!el) return;
+    var item = cfg.LOOKS[id];
+    el.textContent = item ? item.name : id;
+    el.classList.remove("fade");
+    el.classList.add("show");
+    clearTimeout(lookLabelTimer);
+    lookLabelTimer = setTimeout(function () {
+      el.classList.add("fade");
+      el.classList.remove("show");
+    }, 1100);
+  }
+
+  function applyLook(id, announce) {
+    if (!id || !cfg.LOOKS[id]) return;
+    if (orb) orb.setLook(id);
+    if (settings) {
+      settings.values.look = id;
+      FridayStorage.set("settings", settings.values);
+      var looks = document.getElementById("looks");
+      if (looks) {
+        looks.querySelectorAll(".look").forEach(function (b) {
+          b.classList.toggle("on", b.getAttribute("data-look") === id);
+        });
+      }
+      if (settings._syncHeaders) settings._syncHeaders();
+    }
+    if (announce !== false) showLookLabel(id);
+  }
+
+  var LAYOUT_FRAMES = {
+    orbit: { cyN: 0.46, radiusK: 0.28 },
+    ring: { cyN: 0.46, radiusK: 0.26 },
+    dock: { cyN: 0.42, radiusK: 0.32 },
+    grid: { cyN: 0.24, radiusK: 0.20 },
+    arc: { cyN: 0.34, radiusK: 0.26 },
+    orbonly: { cyN: 0.50, radiusK: 0.34 },
+    double: { cyN: 0.44, radiusK: 0.24 },
+    spiral: { cyN: 0.30, radiusK: 0.24 },
+    home: { cyN: 0.22, radiusK: 0.18 },
+    list: { cyN: 0.28, radiusK: 0.22 },
+    sheet: { cyN: 0.32, radiusK: 0.24 }
+  };
+
+  function applyOrbFrame(mode, revealed) {
+    var m = (mode === "orbonly" && revealed) ? "dock" : (mode || "orbit");
+    var f = LAYOUT_FRAMES[m] || LAYOUT_FRAMES.orbit;
+    if (orb) orb.setFrame(f);
+    var stage = document.getElementById("stage");
+    if (stage) stage.style.setProperty("--orb-y", (f.cyN * 100) + "%");
+  }
+
+  function applyLayout(id, fromSettings) {
+    if (!id) id = "orbit";
+    if (settings && !fromSettings) {
+      settings.values.layout = id;
+      FridayStorage.set("settings", settings.values);
+      if (settings._syncHeaders) settings._syncHeaders();
+    }
+    if (bubbles) bubbles.setLayout(id);
+    else applyOrbFrame(id, id !== "orbonly");
+  }
+
+  function applyAppIcon(id) {
+    if (!id) return;
+    var href180 = "icons/choices/" + id + "-180.png";
+    var href192 = "icons/choices/" + id + "-192.png";
+    var href512 = "icons/choices/" + id + "-512.png";
+    var apple = document.querySelector("link[rel='apple-touch-icon']");
+    if (apple) apple.setAttribute("href", href180);
+    var icon = document.querySelector("link[rel='icon']");
+    if (icon) {
+      icon.setAttribute("href", href192);
+      icon.setAttribute("sizes", "192x192");
+    }
+    if (icon && !document.querySelector("link[rel='icon'][sizes='512x512']")) {
+      var big = document.createElement("link");
+      big.rel = "icon";
+      big.type = "image/png";
+      big.setAttribute("sizes", "512x512");
+      big.href = href512;
+      document.head.appendChild(big);
+    }
+  }
+
+  var WMO = {
+    0: "clear", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "foggy", 48: "foggy", 51: "light drizzle", 53: "drizzle", 55: "drizzle",
+    56: "freezing drizzle", 57: "freezing drizzle", 61: "rain", 63: "rain",
+    65: "heavy rain", 66: "freezing rain", 67: "freezing rain", 71: "snow",
+    73: "snow", 75: "heavy snow", 77: "flurries", 80: "showers", 81: "showers",
+    82: "heavy showers", 85: "snow showers", 86: "snow showers",
+    95: "thunderstorms", 96: "thunderstorms", 99: "thunderstorms"
+  };
+
+  function cycleLook(dir) {
+    var ids = lookOrder();
+    var cur = (settings && settings.look()) || "N";
+    var i = ids.indexOf(cur);
+    if (i < 0) i = 0;
+    var next = ids[(i + dir + ids.length) % ids.length];
+    applyLook(next, true);
+  }
+
   function toast(msg) {
     var el = document.getElementById("toast");
     el.textContent = msg;
@@ -39,12 +154,6 @@
     if (neural) neural.stop();
   }
 
-  function tickClock() {
-    var el = document.getElementById("clock");
-    var d = new Date();
-    el.textContent = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  }
-
   function shortcutUrl(command) {
     var name = encodeURIComponent(settings.shortcutName());
     var text = encodeURIComponent(command);
@@ -71,6 +180,164 @@
   function openUrl(url) {
     if (!url) return;
     location.href = url;
+  }
+
+  function honorific() {
+    var terms = profile.terms || profile.honorifics || [];
+    if (!terms.length && profile.term) terms = [profile.term];
+    return terms[0] || "";
+  }
+
+  function getCoords() {
+    var home = cfg.HOME_COORDS || { lat: 36.6, lon: -83.66, label: "Cumberland Gap" };
+    return new Promise(function (resolve) {
+      if (!navigator.geolocation) return resolve({ lat: home.lat, lon: home.lon, fallback: true, label: home.label });
+      var done = false;
+      var timer = setTimeout(function () {
+        if (done) return;
+        done = true;
+        resolve({ lat: home.lat, lon: home.lon, fallback: true, label: home.label });
+      }, 3500);
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude, fallback: false });
+      }, function () {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ lat: home.lat, lon: home.lon, fallback: true, label: home.label });
+      }, { timeout: 3000, maximumAge: 30 * 60 * 1000 });
+    });
+  }
+
+  function fetchWeather() {
+    return getCoords().then(function (pos) {
+      var url = "https://api.open-meteo.com/v1/forecast?latitude=" + pos.lat +
+        "&longitude=" + pos.lon + "&current=temperature_2m,weather_code&temperature_unit=fahrenheit";
+      return fetch(url).then(function (r) { return r.json(); }).then(function (data) {
+        var t = data && data.current ? Math.round(data.current.temperature_2m) : null;
+        var code = data && data.current ? data.current.weather_code : null;
+        var phrase = WMO[code] || "the weather you'd expect";
+        return { temp: t, phrase: phrase, fallback: pos.fallback, label: pos.label || "Cumberland Gap" };
+      });
+    });
+  }
+
+  function weatherSentence() {
+    return fetchWeather().then(function (w) {
+      var where = w.fallback ? ("In " + w.label + ", it's ") : "It's ";
+      if (w.temp == null) return "I couldn't get the weather just now.";
+      return where + w.temp + "° and " + w.phrase + ".";
+    }).catch(function () {
+      return "I couldn't get the weather just now.";
+    });
+  }
+
+  function todayNotesAndTimers() {
+    var bits = [];
+    var notes = (tools && tools.notes()) || [];
+    var start = new Date();
+    start.setHours(0, 0, 0, 0);
+    var today = notes.filter(function (n) {
+      if (!n || !n.at) return true;
+      var d = new Date(n.at);
+      return d >= start;
+    });
+    if (today.length) {
+      var first = today[0].text || "";
+      if (today.length === 1) bits.push("You have a note: " + first);
+      else bits.push("You have " + today.length + " notes for today. The first is: " + first);
+    }
+    if (tools && tools._timer && tools._remain > 0) {
+      var m = Math.floor(tools._remain / 60), s = tools._remain % 60;
+      bits.push("A timer is running, with " + (m ? (m + " minutes ") : "") + s + " seconds left.");
+    }
+    if (!bits.length) bits.push("No notes or timers for today.");
+    return bits.join(" ");
+  }
+
+  function clockPhrase(d) {
+    var h = d.getHours(), m = d.getMinutes();
+    var ap = h >= 12 ? "PM" : "AM";
+    var hr = h % 12;
+    if (!hr) hr = 12;
+    var min = m < 10 ? "0" + m : String(m);
+    return "It's " + hr + ":" + min + " " + ap + ".";
+  }
+
+  function wakeLine() {
+    var d = new Date();
+    var h = d.getHours();
+    var term = honorific();
+    var name = profile.ownerName || "";
+    var part = h < 12 ? "morning" : (h < 17 ? "afternoon" : "evening");
+    var lines = [
+      "Good " + part + ".",
+      "I'm here.",
+      "Ready when you are."
+    ];
+    if (term) {
+      lines.push("Good " + part + ", " + term + ".");
+      lines.push("I'm here, " + term + ".");
+      lines.push("Ready when you are, " + term + ".");
+    }
+    if (name) lines.push("Hello, " + name.split(" ")[0] + ".");
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+
+  function speakLine(text) {
+    if (!text) return;
+    setCaption(text);
+    if (voice) voice.speak(text, profile);
+  }
+
+  function maybeGreet() {
+    var s = (settings && settings.values) || settingsData || {};
+    var now = new Date();
+    var hour = now.getHours();
+    var dayKey = now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
+    var briefDue = s.morningBriefing !== false && hour >= 5 && hour < 11 && FridayStorage.get("briefingDate", "") !== dayKey;
+    if (briefDue) {
+      FridayStorage.set("briefingDate", dayKey);
+      var hello = "Good morning" + (honorific() ? ", " + honorific() : "") + ". " + clockPhrase(now);
+      weatherSentence().then(function (wx) {
+        speakLine(hello + " " + wx + " " + todayNotesAndTimers());
+      });
+      return;
+    }
+    if (s.wakeGreeting !== false) speakLine(wakeLine());
+  }
+
+  function renderChips() {
+    var el = document.getElementById("chips");
+    if (!el) return;
+    el.innerHTML = "";
+    var list = (settings && settings.values && settings.values.chips) || (cfg.DEFAULT_CHIPS || []);
+    list.forEach(function (c) {
+      if (c.type === "shortcut") {
+        var a = document.createElement("a");
+        a.className = "chip";
+        a.href = shortcutUrl(c.command || c.label);
+        a.textContent = c.label || "Shortcut";
+        el.appendChild(a);
+      } else {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.textContent = c.label || "Chip";
+        b.addEventListener("click", function () {
+          if (c.type === "weather") {
+            setCaption("Checking the weather…");
+            weatherSentence().then(function (line) { speakLine(line); });
+          } else {
+            handleUtterance(c.command || c.label);
+          }
+        });
+        el.appendChild(b);
+      }
+    });
   }
 
   function renderChat() {
@@ -254,16 +521,24 @@
           runShortcut(act.command);
         } else if (act.type === "url") openUrl(act.url);
       },
-      onAddRequest: function () { openPanel("add-bubble"); }
+      onAddRequest: function () { openPanel("add-bubble"); },
+      onLayout: function (mode, revealed) { applyOrbFrame(mode, revealed); }
     });
 
     settings = new FridaySettings({
       profile: profile,
       voice: voice,
-      onLook: function (id) { orb.setLook(id); toast("Look changed."); },
+      onLook: function (id) { applyLook(id, true); },
+      onLayout: function (id) { applyLayout(id, true); },
+      onIcon: function (id) { applyAppIcon(id); },
+      onChips: function () { renderChips(); },
       onReset: function () { toast("Reset. Reloading."); setTimeout(function () { location.reload(); }, 400); },
       onToast: toast
     });
+
+    applyLayout(settings.values.layout || "orbit", true);
+    if (settings.values.iconId) applyAppIcon(settings.values.iconId);
+    renderChips();
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
 
@@ -271,6 +546,39 @@
       if (document.querySelector(".panel.open")) return;
       toggleListen();
     });
+
+    (function bindLookSwipe() {
+      var zone = document.getElementById("orb-swipe");
+      if (!zone) return;
+      var x0 = 0, y0 = 0, t0 = 0, moved = false;
+      function start(ev) {
+        var p = ev.touches ? ev.touches[0] : ev;
+        x0 = p.clientX; y0 = p.clientY; t0 = Date.now(); moved = false;
+      }
+      function move(ev) {
+        var p = ev.touches ? ev.touches[0] : ev;
+        if (Math.hypot(p.clientX - x0, p.clientY - y0) > 12) moved = true;
+      }
+      function end(ev) {
+        var p = (ev.changedTouches && ev.changedTouches[0]) || ev;
+        var dx = p.clientX - x0, dy = p.clientY - y0;
+        if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+          ev.preventDefault();
+          cycleLook(dx < 0 ? 1 : -1);
+          return;
+        }
+        if (!moved && Date.now() - t0 < 450) {
+          if (document.querySelector(".panel.open")) return;
+          toggleListen();
+        }
+      }
+      zone.addEventListener("touchstart", start, { passive: true });
+      zone.addEventListener("touchmove", move, { passive: true });
+      zone.addEventListener("touchend", end);
+      zone.addEventListener("mousedown", start);
+      zone.addEventListener("mousemove", move);
+      zone.addEventListener("mouseup", end);
+    })();
 
     document.getElementById("btn-settings").onclick = function () { openPanel("settings"); };
     document.getElementById("btn-chat").onclick = function () { openPanel("chat"); };
@@ -348,9 +656,6 @@
       toast("Key saved on this phone.");
     });
 
-    tickClock();
-    setInterval(tickClock, 10000);
-
     if (!FridayStorage.hasApiKey()) showSetup(true);
 
     if (handsFree && FridayStorage.hasApiKey()) {
@@ -361,6 +666,8 @@
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
+
+    setTimeout(maybeGreet, 700);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);

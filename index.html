@@ -21,7 +21,6 @@
   <div id="listen-dot" aria-hidden="true"></div>
   <div id="stage">
     <div id="chrome">
-      <div class="clock" id="clock"></div>
       <div class="actions">
         <button class="icon-btn" id="btn-neural" title="Neural map" aria-label="Neural map">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -43,7 +42,13 @@
         </button>
       </div>
     </div>
-    <div id="bubbles"></div>
+    <div id="orb-swipe" aria-hidden="true"></div>
+    <div id="look-label"></div>
+    <div id="bubble-tray">
+      <div id="bubbles"></div>
+    </div>
+    <div id="chips" aria-label="Quick replies"></div>
+    <div id="reveal-zone" aria-hidden="true"></div>
     <div id="caption">
       <div class="name" id="caption-name">friday</div>
       <div class="line" id="caption-line">Tap to talk</div>
@@ -70,9 +75,48 @@
       <button class="icon-btn" data-close="settings" aria-label="Close">✕</button>
     </header>
     <div class="body">
-      <div class="field-label">Looks</div>
-      <div class="hint">Switch Friday’s orb whenever you like. All the looks we made are here.</div>
-      <div class="looks" id="looks" style="margin-top:10px"></div>
+      <details class="accord" id="accord-looks">
+        <summary>Looks <span class="accord-current" id="looks-current">Core &amp; shells</span></summary>
+        <div class="accord-body">
+          <p class="hint">Switch Friday’s orb whenever you like. All the looks we made are here. You can also swipe left or right on the orb.</p>
+          <div class="looks" id="looks"></div>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-icons">
+        <summary>App icon <span class="accord-current" id="icons-current">Current</span></summary>
+        <div class="accord-body">
+          <p class="hint">Pick a Home Screen icon, then install the new Web Clip in Settings. After it appears, delete the old icon. This replaces the previous Friday or Jarvis clip.</p>
+          <div class="icon-grid" id="icon-grid"></div>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-layout">
+        <summary>Layout <span class="accord-current" id="layout-current">Orbit</span></summary>
+        <div class="accord-body">
+          <p class="hint">How the bubbles sit around the orb. Edit mode works in every layout, and the bubble order is shared.</p>
+          <div class="layout-grid" id="layout-grid"></div>
+        </div>
+      </details>
+
+      <div class="row row-col">
+        <label class="toggle-row">Morning briefing
+          <input type="checkbox" id="set-briefing">
+        </label>
+        <div class="sub">The first time you open the app between 5 and 11 in the morning, she tells you the time, the weather, and any notes or timers for today. Weather comes from Open-Meteo. If the phone won’t share a location, she uses Cumberland Gap.</div>
+      </div>
+      <div class="row row-col">
+        <label class="toggle-row">Wake greeting
+          <input type="checkbox" id="set-wake">
+        </label>
+        <div class="sub">A short line in her voice each time you open the app. The lines live on this phone — she does not call the internet for them.</div>
+      </div>
+      <div class="row row-col">
+        <label>Quick replies</label>
+        <div class="sub">These chips sit under the orb. If a chip runs your shortcut, that tap opens Shortcuts directly.</div>
+        <div id="chip-editor"></div>
+        <button class="btn" type="button" id="btn-chip-add">Add a chip</button>
+      </div>
 
       <div class="row row-col">
         <label for="set-voice">Speaking voice</label>
@@ -117,10 +161,36 @@
         <input type="file" id="restore-file" accept="application/json,.json" class="hidden">
       </div>
       <div class="row row-col">
+        <label>Check for updates</label>
+        <div class="sub">Clears the saved offline copy and reloads the latest files from the site. Use this after you upload a change on GitHub.</div>
+        <button class="btn gold" type="button" id="btn-update">Check for updates</button>
+      </div>
+      <div class="row row-col">
         <label>Reset</label>
         <div class="sub">Clears memory, notes, chat, and layout on this phone. You will be asked first.</div>
         <button class="btn danger" type="button" id="btn-reset">Reset Friday on this phone</button>
       </div>
+      <details class="accord" id="accord-about">
+        <summary>About &amp; updating</summary>
+        <div class="accord-body about-copy">
+          <p>This app is a website you keep on GitHub Pages. The live site is <a href="https://wicked9787.github.io/friday/" target="_blank" rel="noopener">wicked9787.github.io/friday</a>. Sky’s copy opens with <code>?u=sky</code>. Batsie’s copy opens with <code>?u=batsie</code>.</p>
+          <p>The Groq key stays on this phone. Never paste it into a file you upload.</p>
+          <p><strong>What each part is</strong></p>
+          <ul>
+            <li><code>index.html</code>, <code>css/app.css</code>, and the files in <code>js/</code> — the app itself.</li>
+            <li><code>config.js</code> — names, looks, layouts, and the default bubbles for Sky and Batsie.</li>
+            <li><code>sw.js</code> — the offline copy. After you change files, bump the cache name at the top (for example to <code>friday-shell-v4</code>) so phones pick up the new version, or use Check for updates.</li>
+            <li><code>icons/</code> and <code>icons/choices/</code> — Home Screen icons.</li>
+            <li><code>profiles/</code> — unsigned Web Clip files that add the icon to the Home Screen.</li>
+            <li><code>scriptable/</code> — the widget scripts. Batsie’s copy in <code>friday-batsie/scriptable/</code> should keep <code>?u=batsie</code>.</li>
+            <li><code>friday-sky/</code> and <code>friday-batsie/</code> — standalone copies that are already set to one person.</li>
+            <li><code>docs/</code> — setup guides and <a href="docs/HOW-TO-UPDATE.md">HOW-TO-UPDATE.md</a>, a longer version of this page.</li>
+          </ul>
+          <p><strong>How to change something</strong></p>
+          <p>On a computer or in the GitHub website, open the <a href="https://github.com/Wicked9787/friday" target="_blank" rel="noopener">Wicked9787/friday</a> repo, edit a file, and commit it to <code>main</code>. Wait a minute, then tap Check for updates in this Settings page.</p>
+          <p>You can also ask a free AI helper to edit a file you paste in, then upload that file back on GitHub. A short walkthrough is in the how-to-update guide.</p>
+        </div>
+      </details>
     </div>
   </section>
 

@@ -34,27 +34,108 @@
   };
 
   var LOOKS = {
-    N: {
-      id: "N",
-      name: "Core & shells",
-      blurb: "Glossy black core, four fractured shells, gold and silver dust when someone talks."
-    },
-    F: {
-      id: "F",
-      name: "Streams",
-      blurb: "A fractured gold shell with a constant gold and silver flow that rises and falls when someone talks."
-    },
-    M: {
-      id: "M",
-      name: "Shells & streams",
-      blurb: "The core and shells, plus the voice streams."
-    },
-    H: {
-      id: "H",
-      name: "Halo shell",
-      blurb: "A fractured gold and silver particle shell around a glowing ring core."
-    }
+    N:  { id:"N",  group:"orbs", name:"Core & shells", blurb:"Glossy black core, four fractured shells, mixed dust when someone talks." },
+    M:  { id:"M",  group:"orbs", name:"Shells & streams", blurb:"The core and shells, plus the voice streams." },
+    F:  { id:"F",  group:"orbs", name:"Streams", blurb:"A fractured gold shell with a constant gold and silver flow." },
+    H:  { id:"H",  group:"orbs", name:"Halo shell", blurb:"A fractured gold and silver particle shell around a glowing ring core." },
+    F1: { id:"F1", group:"orbs", name:"F1 Flow through the core", blurb:"A constant gold and silver flow passing through a ring core." },
+    F2: { id:"F2", group:"orbs", name:"F2 Flow + shell dust", blurb:"The flow, plus a fractured shell that sheds dust." },
+    H1: { id:"H1", group:"orbs", name:"H1 Holographic sphere", blurb:"A fractured holographic particle sphere around a ring core." },
+    H2: { id:"H2", group:"orbs", name:"H2 Sphere + black orb", blurb:"The holographic shell around a glossy black core, with inner cords." },
+    H3: { id:"H3", group:"orbs", name:"H3 Sphere + wrap", blurb:"The holographic sphere with wrapping gold and silver strands." },
+    H4: { id:"H4", group:"orbs", name:"H4 Gold & silver ring", blurb:"A gold and silver particle shell around a larger silver-leaning ring." },
+    V1: { id:"V1", group:"orbs", name:"V1 Voice from the core", blurb:"Voice strands rise from the holographic core when someone talks." },
+    V2: { id:"V2", group:"orbs", name:"V2 Shell follows the voice", blurb:"The outer shell moves with the voice and sheds dust." },
+    I1: { id:"I1", group:"orbs", name:"I1 Inside strands", blurb:"A glossy black orb with gold and silver strands glowing inside." },
+    I3: { id:"I3", group:"orbs", name:"I3 Wrapping strands", blurb:"A glossy black orb with strands wrapping the surface." },
+    R:  { id:"R",  group:"orbs", name:"R Holographic", blurb:"A translucent holographic wireframe sphere, dense meridians and dust." },
+
+    "1":  { id:"1",  group:"concepts", name:"1 Soft violet", blurb:"A minimal, soft violet glow." },
+    "2":  { id:"2",  group:"concepts", name:"2 Teal rings", blurb:"Dark glass with teal sound-wave rings." },
+    "3":  { id:"3",  group:"concepts", name:"3 Amber geometry", blurb:"A warm amber and rose geometric motif." },
+    "4":  { id:"4",  group:"concepts", name:"4 Liquid chrome", blurb:"A crisp white and silver liquid-chrome blob." },
+    "5":  { id:"5",  group:"concepts", name:"5 Aurora ribbon", blurb:"A soft aurora ribbon on deep navy." },
+    "6":  { id:"6",  group:"concepts", name:"6 Coral waveform", blurb:"A coral voice wave on monochrome black." },
+    "7":  { id:"7",  group:"concepts", name:"7 Emerald gem", blurb:"A faceted emerald and gold gem." },
+    "8":  { id:"8",  group:"concepts", name:"8 Pastel bubbles", blurb:"Soft peach, mint, and lavender motes." },
+    "9":  { id:"9",  group:"concepts", name:"9 Electric cloud", blurb:"An electric-blue particle cloud on a dark grid." },
+    "10": { id:"10", group:"concepts", name:"10 Liquid Gold", blurb:"A molten gold AI core with metallic highlights." },
+    "11": { id:"11", group:"concepts", name:"11 Dark Silver", blurb:"A liquid chrome core on deep graphite." },
+    "12": { id:"12", group:"concepts", name:"12 Neural core", blurb:"A glowing cyan and violet neural-network core." },
+    "13": { id:"13", group:"concepts", name:"13 Dual metal", blurb:"Gold and silver intertwined in one core." },
+    "14": { id:"14", group:"concepts", name:"14 Liquid Gold wave", blurb:"A liquid-gold metal voice waveform." },
+    "15": { id:"15", group:"concepts", name:"15 Dark Silver wave", blurb:"A chrome liquid-metal voice waveform." },
+    "16": { id:"16", group:"concepts", name:"16 Obsidian wave", blurb:"A white-metal waveform on obsidian." },
+    "17": { id:"17", group:"concepts", name:"17 Gold & Silver wave", blurb:"Gold and silver metal waves together." },
+    "18": { id:"18", group:"concepts", name:"18 Gold Pulse", blurb:"A gold voice pulse of rings and radial ticks." },
+    "19": { id:"19", group:"concepts", name:"19 Silver Glass", blurb:"A chrome voice ribbon with a glass ghost." },
+    "20": { id:"20", group:"concepts", name:"20 Black Gold Luxe", blurb:"Spare gold line-art on deep black." },
+    "21": { id:"21", group:"concepts", name:"21 Titanium", blurb:"A titanium metal voice ribbon." },
+    "22": { id:"22", group:"concepts", name:"22 Carbon AI", blurb:"A smoky carbon voice wave." },
+    "23": { id:"23", group:"concepts", name:"23 Midnight Gold & Silver", blurb:"Stereo gold and silver channels with signal pulses." },
+    "24": { id:"24", group:"concepts", name:"24 Neural Threads", blurb:"Flowing gold and chrome threads with traveling pulses." },
+    "25": { id:"25", group:"concepts", name:"25 Generative Dual", blurb:"A dusty gold and silver generative wave." },
+    "26": { id:"26", group:"concepts", name:"26 Gold Dust", blurb:"A gold-heavy dusty voice wave." },
+    "27": { id:"27", group:"concepts", name:"27 Silver Dust", blurb:"A silver-heavy dusty voice wave." },
+    "28": { id:"28", group:"concepts", name:"28 Obsidian", blurb:"An equal gold and silver dust wave on black." },
+    "28A":{ id:"28A",group:"concepts", name:"28A Twin rings", blurb:"The obsidian wave with two orbit rings and a larger core." },
+    "28B":{ id:"28B",group:"concepts", name:"28B Trail core", blurb:"A larger core with a particle trail." },
+    "28C":{ id:"28C",group:"concepts", name:"28C Alive ring", blurb:"A thinking shimmer on the ring, more alive while talking." },
+    "28D":{ id:"28D",group:"concepts", name:"28D Hairline", blurb:"An ultra-minimal hairline ring and a quiet wave." },
+    "29": { id:"29", group:"concepts", name:"29 Pearl", blurb:"A lighter pearl gold and silver dust wave." },
+
+    C1: { id:"C1", group:"cords", name:"C1 Harp bundle", blurb:"Bundled vocal-cord strands, like a harp through the core." },
+    C2: { id:"C2", group:"cords", name:"C2 Vocal folds", blurb:"A pair of vocal folds around a center gap." },
+    C3: { id:"C3", group:"cords", name:"C3 Fanning strands", blurb:"Strands that fan from a narrow left point to a wide right." },
+    C4: { id:"C4", group:"cords", name:"C4 Full-width weave", blurb:"A loose twelve-strand weave across the screen." },
+
+    D1: { id:"D1", group:"dust", name:"D1 Dense & crisp", blurb:"Fine gold and silver dust, tightly interwoven." },
+    D2: { id:"D2", group:"dust", name:"D2 Smoke drift", blurb:"Looser lines, particles drifting off like smoke." },
+    D3: { id:"D3", group:"dust", name:"D3 Sparkle peaks", blurb:"The same core, with sparkles where the wave is loudest." },
+    D4: { id:"D4", group:"dust", name:"D4 Full-width crossing", blurb:"No circle — a gold line and a silver line cross." }
   };
+
+  var LOOK_GROUPS = [
+    { id:"orbs", name:"Orbs", ids:["N","M","F","H","F1","F2","H1","H2","H3","H4","V1","V2","I1","I3","R"] },
+    { id:"concepts", name:"Concepts", ids:["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","28A","28B","28C","28D","29"] },
+    { id:"cords", name:"Voice cords", ids:["C1","C2","C3","C4"] },
+    { id:"dust", name:"Voice dust", ids:["D1","D2","D3","D4"] }
+  ];
+
+
+  var LAYOUTS = [
+    { id:"orbit", name:"Orbit", blurb:"Bubbles float around the orb, like Concept 28." },
+    { id:"ring", name:"Ring", blurb:"Bubbles sit evenly in a circle around the orb, Apple Watch style." },
+    { id:"dock", name:"Dock", blurb:"A large orb in the center, and a frosted, scrollable row of bubbles at the bottom." },
+    { id:"grid", name:"Grid", blurb:"A smaller orb at the top, with bubbles in a grid below." },
+    { id:"arc", name:"Arc", blurb:"Bubbles in a semicircle under the orb." },
+    { id:"orbonly", name:"Orb only", blurb:"Just the orb. Swipe up from the bottom to reveal your bubbles." },
+    { id:"double", name:"Double ring", blurb:"Bubbles on two rings, from Concept 28A." },
+    { id:"spiral", name:"Spiral", blurb:"Bubbles on a spiral under the orb, from Concept 28B." },
+    { id:"home", name:"Home + dock", blurb:"A Home Screen grid with a dock of four, from the early concepts." },
+    { id:"list", name:"List", blurb:"The orb above a list of bubbles, from the later concept screens." },
+    { id:"sheet", name:"Sheet", blurb:"Bubbles in a bottom sheet, like Concept 28A." }
+  ];
+
+  var ICON_CHOICES = [
+    { id:"I1", name:"I1 Inside" },
+    { id:"I2", name:"I2" },
+    { id:"I3", name:"I3 Wrap" },
+    { id:"I4", name:"I4" },
+    { id:"H1", name:"H1 Sphere" },
+    { id:"H2", name:"H2 Black core" },
+    { id:"H3", name:"H3 Wrap" },
+    { id:"H4", name:"H4 Gold & silver" }
+  ];
+
+  var DEFAULT_CHIPS = [
+    { id:"alarm", label:"Set alarm", type:"shortcut", command:"set an alarm" },
+    { id:"lights", label:"Lights off", type:"shortcut", command:"lights off" },
+    { id:"night", label:"Good night", type:"shortcut", command:"good night" },
+    { id:"weather", label:"What's the weather", type:"weather", command:"" }
+  ];
+
+  var HOME_COORDS = { lat: 36.6, lon: -83.66, label: "Cumberland Gap" };
 
   var DEFAULT_BUBBLES = {
     sky: [
@@ -126,6 +207,11 @@
   root.FRIDAY_CONFIG = {
     PROFILES: PROFILES,
     LOOKS: LOOKS,
+    LOOK_GROUPS: LOOK_GROUPS,
+    LAYOUTS: LAYOUTS,
+    ICON_CHOICES: ICON_CHOICES,
+    DEFAULT_CHIPS: DEFAULT_CHIPS,
+    HOME_COORDS: HOME_COORDS,
     DEFAULT_BUBBLES: DEFAULT_BUBBLES,
     SITE_URL: SITE_URL,
     GITHUB_USER: GITHUB_USER,

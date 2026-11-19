@@ -78,10 +78,16 @@
     if (!this.list || !this.list.length) this.list = defaultBubbles(this.profile);
     this._floatT0 = performance.now();
     this._slots = LAYOUT.map(function (p) { return [p[0] - CX, p[1] - CY]; });
+    this.mode = "orbit";
+    this.revealed = true;
+    this._flow = false;
+    this._slotUnit = "scaled";
+    this.onLayout = opts.onLayout || function () {};
     this.render();
     var self = this;
     this._onResize = function () { self.layout(); };
     window.addEventListener("resize", this._onResize);
+    this._bindReveal();
     this._raf = requestAnimationFrame(function tick(ts) {
       self._tick(ts);
       self._raf = requestAnimationFrame(tick);
@@ -93,22 +99,166 @@
     return m / 590 * 0.92;
   };
 
-  FridayBubbles.prototype.layout = function () {
+  var FLOW = { dock: 1, grid: 1, home: 1, list: 1, sheet: 1 };
+
+  FridayBubbles.prototype._effectiveMode = function () {
+    if (this.mode === "orbonly") return (this.revealed || this.edit) ? "dock" : "orbonly";
+    return this.mode || "orbit";
+  };
+
+  FridayBubbles.prototype._stageClass = function () {
+    var stage = document.getElementById("stage");
+    if (!stage) return;
+    Array.prototype.slice.call(stage.classList).forEach(function (c) {
+      if (c.indexOf("layout-") === 0 || c === "bubbles-revealed" || c === "flow-tray") stage.classList.remove(c);
+    });
+    stage.classList.add("layout-" + (this.mode || "orbit"));
+    var eff = this._effectiveMode();
+    if (FLOW[eff]) stage.classList.add("flow-tray");
+    if (this.mode === "orbonly" && (this.revealed || this.edit)) stage.classList.add("bubbles-revealed");
+  };
+
+  FridayBubbles.prototype._bindReveal = function () {
+    var self = this;
+    var zone = document.getElementById("reveal-zone");
+    if (!zone) return;
+    var y0 = 0, x0 = 0, tracking = false;
+    zone.addEventListener("touchstart", function (e) {
+      if (self.mode !== "orbonly" || !e.touches[0]) return;
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+      tracking = true;
+    }, { passive: true });
+    zone.addEventListener("touchend", function (e) {
+      if (!tracking) return;
+      tracking = false;
+      var t = e.changedTouches && e.changedTouches[0];
+      if (!t) return;
+      var dy = t.clientY - y0, dx = t.clientX - x0;
+      if (Math.abs(dx) > Math.abs(dy)) return;
+      if (dy < -48) self.setRevealed(true);
+      else if (dy > 48 && !self.edit) self.setRevealed(false);
+    }, { passive: true });
+  };
+
+  FridayBubbles.prototype.setLayout = function (mode) {
+    this.mode = mode || "orbit";
+    this.revealed = this.mode !== "orbonly";
+    this._stageClass();
+    this.render();
+    this.onLayout(this.mode, this.revealed);
+  };
+
+  FridayBubbles.prototype.setRevealed = function (on) {
+    this.revealed = !!on;
+    this._stageClass();
+    this.layout();
+    this.onLayout(this.mode, this.revealed);
+  };
+
+  FridayBubbles.prototype._computeModeSlots = function () {
+    var mode = this._effectiveMode();
+    var n = Math.max(this.list.length + (this.edit ? 1 : 0), 8);
     var s = this.scale();
+    var w = window.innerWidth, h = window.innerHeight;
+    var i, a, r, slots = [];
+    this._flow = !!FLOW[mode];
+    this._slotUnit = "scaled";
+    function toSlot(px, py) { return [px / s, py / s]; }
+    if (mode === "orbit") {
+      this._slots = LAYOUT.map(function (p) { return [p[0] - CX, p[1] - CY]; });
+      return;
+    }
+    if (mode === "orbonly") {
+      this._slots = LAYOUT.map(function () { return [0, 0]; });
+      return;
+    }
+    if (mode === "ring") {
+      r = Math.min(w, h) * 0.36;
+      for (i = 0; i < n; i++) {
+        a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r));
+      }
+    } else if (mode === "double") {
+      var mid = Math.ceil(n / 2);
+      for (i = 0; i < n; i++) {
+        var ring = i < mid ? 0 : 1;
+        var idx = i < mid ? i : i - mid;
+        var count = Math.max(i < mid ? mid : n - mid, 1);
+        r = Math.min(w, h) * (ring ? 0.42 : 0.27);
+        a = -Math.PI / 2 + (idx / count) * Math.PI * 2 + (ring ? Math.PI / count : 0);
+        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r));
+      }
+    } else if (mode === "arc") {
+      r = Math.min(w, h) * 0.38;
+      for (i = 0; i < n; i++) {
+        a = Math.PI * 0.15 + (n <= 1 ? Math.PI * 0.35 : (i / (n - 1)) * Math.PI * 0.7);
+        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r + 8));
+      }
+    } else if (mode === "spiral") {
+      for (i = 0; i < n; i++) {
+        var t = (i + 1) / Math.max(n, 1);
+        r = Math.min(w, h) * (0.18 + t * 0.28);
+        a = Math.PI * 0.18 + t * Math.PI * 1.15;
+        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r + t * 28));
+      }
+    } else {
+      // Flow layouts position with CSS. Keep placeholder slots so drag can swap indices.
+      for (i = 0; i < Math.max(n, this.list.length); i++) slots.push([i * 80, 0]);
+    }
+    this._slots = slots;
+  };
+
+  FridayBubbles.prototype.layout = function () {
+    this._computeModeSlots();
+    this._stageClass();
+    var s = this._slotUnit === "px" ? 1 : this.scale();
     var nodes = this.el.querySelectorAll(".bubble[data-id]");
     var self = this;
+    var mode = this._effectiveMode();
+    var bySlot = this.list.slice().sort(function (a, b) { return (a.slot || 0) - (b.slot || 0); });
+    var dockIds = {};
+    if (mode === "home") {
+      bySlot.slice(0, 4).forEach(function (b) { dockIds[b.id] = true; });
+    }
+    var dockIndex = 0;
     nodes.forEach(function (node) {
       var b = self.byId(node.getAttribute("data-id"));
       if (!b) return;
-      var slot = self._slots[b.slot % self._slots.length] || [0, 0];
+      var szScale = mode === "list" || mode === "sheet" ? 0.72 : 1;
+      var sz = (b.size === "sm" ? 52 : 84) * s * (self._flow ? 0.85 : 1) * szScale;
+      if (mode === "grid" || mode === "home") sz = 58 * s * (1 / self.scale()) * (self.scale());
+      node.style.setProperty("--sz", sz + "px");
+      if (mode === "home") {
+        if (dockIds[b.id]) {
+          node.setAttribute("data-dock", "1");
+          node.style.gridColumn = String((dockIndex++ % 4) + 1);
+        } else {
+          node.removeAttribute("data-dock");
+          node.style.gridColumn = "";
+        }
+      } else {
+        node.removeAttribute("data-dock");
+        node.style.gridColumn = "";
+      }
+      if (self._flow) {
+        node.dataset.baseX = "0";
+        node.dataset.baseY = "0";
+        node.style.transform = "none";
+        return;
+      }
+      var slot = self._slots[(b.slot || 0) % self._slots.length] || [0, 0];
       var px = slot[0] * s;
       var py = slot[1] * s;
       node.dataset.baseX = px;
       node.dataset.baseY = py;
-      var sz = (b.size === "sm" ? 52 : 84) * s;
-      node.style.setProperty("--sz", sz + "px");
       if (!self.edit) node.style.transform = "translate(calc(-50% + " + px + "px), calc(-50% + " + py + "px))";
     });
+    var add = this.el.querySelector(".add-bubble");
+    if (add && this._flow) {
+      add.style.transform = "none";
+      add.style.setProperty("--sz", (52 * s) + "px");
+    }
   };
 
   FridayBubbles.prototype.byId = function (id) {
@@ -123,7 +273,7 @@
   FridayBubbles.prototype.render = function () {
     var self = this;
     this.el.innerHTML = "";
-    this.list.forEach(function (b, i) {
+    this.list.slice().sort(function (a, b) { return (a.slot || 0) - (b.slot || 0); }).forEach(function (b, i) {
       if (b.slot == null) b.slot = i;
       self.el.appendChild(self._node(b));
     });
@@ -159,10 +309,12 @@
     var self = this;
     btn.addEventListener("click", function () { self.onAddRequest(); });
     var s = this.scale();
-    var extra = this._slots[Math.min(used, this._slots.length - 1)];
-    // Park the add bubble just below the ring.
     btn.style.setProperty("--sz", 52 * s + "px");
-    btn.style.transform = "translate(-50%, calc(-50% + " + (150 * s) + "px))";
+    if (this._flow) {
+      btn.style.transform = "none";
+    } else {
+      btn.style.transform = "translate(-50%, calc(-50% + " + (150 * s) + "px))";
+    }
     return btn;
   };
 
@@ -242,6 +394,7 @@
   };
 
   FridayBubbles.prototype._relayoutOthers = function (except) {
+    if (this._flow) return;
     var s = this.scale();
     var self = this;
     this.el.querySelectorAll(".bubble[data-id]").forEach(function (node) {
@@ -257,6 +410,23 @@
   };
 
   FridayBubbles.prototype._nearestSlot = function (x, y) {
+    if (this._flow) {
+      var els = this.el.querySelectorAll(".bubble[data-id]");
+      var best = 0, bd = 1e9, i, r, cx, cy, d, b;
+      var rect = this.el.getBoundingClientRect();
+      for (i = 0; i < els.length; i++) {
+        r = els[i].getBoundingClientRect();
+        cx = r.left + r.width / 2 - rect.left;
+        cy = r.top + r.height / 2 - rect.top;
+        d = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+        if (d < bd) {
+          bd = d;
+          b = this.byId(els[i].getAttribute("data-id"));
+          best = b && b.slot != null ? b.slot : i;
+        }
+      }
+      return best;
+    }
     var s = this.scale();
     var best = 0, bd = 1e9, i;
     for (i = 0; i < this._slots.length; i++) {
@@ -268,21 +438,25 @@
   };
 
   FridayBubbles.prototype._tick = function (ts) {
-    if (this.edit) return;
+    if (this.edit || this._flow) return;
+    var mode = this._effectiveMode();
+    var floaty = mode === "orbit" || mode === "ring" || mode === "double" || mode === "arc" || mode === "spiral";
     var t = (ts - this._floatT0) / 1000;
     var nodes = this.el.querySelectorAll(".bubble[data-id]");
     nodes.forEach(function (node, i) {
       var x = parseFloat(node.dataset.baseX || "0");
       var y = parseFloat(node.dataset.baseY || "0");
-      var fx = Math.sin(t * 0.7 + i * 1.17) * 2.4;
-      var fy = Math.cos(t * 0.9 + i * 0.83) * 3.2;
+      var fx = floaty ? Math.sin(t * 0.7 + i * 1.17) * 2.4 : 0;
+      var fy = floaty ? Math.cos(t * 0.9 + i * 0.83) * 3.2 : 0;
       node.style.transform = "translate(calc(-50% + " + (x + fx) + "px), calc(-50% + " + (y + fy) + "px))";
     });
   };
 
   FridayBubbles.prototype.setEdit = function (on) {
     this.edit = !!on;
+    if (this.edit && this.mode === "orbonly") this.revealed = true;
     this.render();
+    this.onLayout(this.mode, this.revealed);
   };
 
   FridayBubbles.prototype.remove = function (id) {
