@@ -21,8 +21,8 @@ on:
       - ".github/workflows/ios-native-build.yml"
 
 jobs:
-  build-ios-simulator:
-    name: Build ${{ matrix.app_name }} for iOS Simulator
+  build-ios:
+    name: Build ${{ matrix.app_name }} (simulator + device IPA)
     runs-on: macos-15-intel
     strategy:
       fail-fast: false
@@ -30,10 +30,10 @@ jobs:
         include:
           - profile: sky
             app_name: Friday
-            artifact_name: friday-ios-simulator
+            artifact_name: friday
           - profile: batsie
             app_name: Jarvis
-            artifact_name: jarvis-ios-simulator
+            artifact_name: jarvis
 
     env:
       FRIDAY_PROFILE: ${{ matrix.profile }}
@@ -74,7 +74,34 @@ jobs:
       - name: Save simulator app
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: ${{ matrix.artifact_name }}-ios-simulator
           path: build/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build unsigned iPhone app
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/DeviceDerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/DeviceDerivedData/Build/Products/Release-iphoneos/App.app build/ipa/Payload/
+          cd build/ipa
+          /usr/bin/zip -qry ../${{ matrix.artifact_name }}-unsigned.ipa Payload
+
+      - name: Save unsigned iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-ios-unsigned-ipa
+          path: build/${{ matrix.artifact_name }}-unsigned.ipa
           if-no-files-found: error
           retention-days: 7
