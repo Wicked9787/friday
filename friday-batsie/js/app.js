@@ -53,8 +53,19 @@
 
   function runShortcut(command) {
     var url = shortcutUrl(command);
-    // iOS will leave the PWA to open Shortcuts.
-    location.href = url;
+    // iOS blocks app links that don't come straight from a tap, so show a
+    // tap-to-run button (a real link) and also try opening it right away.
+    var old = document.getElementById("run-shortcut-btn");
+    if (old) old.remove();
+    var a = document.createElement("a");
+    a.id = "run-shortcut-btn";
+    a.href = url;
+    a.textContent = "Run in Shortcuts";
+    a.setAttribute("style", "position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%);z-index:9999;padding:14px 26px;border-radius:999px;background:rgba(20,20,20,.85);border:1px solid rgba(214,180,110,.7);color:#e9d3a0;font:600 16px -apple-system,system-ui,sans-serif;text-decoration:none;letter-spacing:.3px;box-shadow:0 0 24px rgba(214,180,110,.35);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)");
+    a.addEventListener("click", function () { setTimeout(function () { a.remove(); }, 400); });
+    document.body.appendChild(a);
+    setTimeout(function () { if (a.parentNode) a.remove(); }, 30000);
+    try { location.href = url; } catch (e) {}
   }
 
   function openUrl(url) {
