@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Make a Friday Home Screen icon</title>
+  <style>
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,sans-serif; background:#000; color:#efece8; padding:32px 22px calc(32px + env(safe-area-inset-bottom)); }
+    h1 { font-weight:500; letter-spacing:.12em; text-transform:lowercase; font-size:22px; }
+    p, li { color:#9a9a9c; line-height:1.5; font-size:16px; }
+    label { display:block; margin:16px 0 6px; }
+    input, select { width:100%; font-size:16px; padding:12px; border-radius:12px; border:1px solid #2a2a2c; background:#121214; color:#efece8; box-sizing:border-box; }
+    button { margin-top:18px; width:100%; padding:14px; border:0; border-radius:12px; background:#e8c872; color:#14110a; font-weight:600; font-size:16px; }
+    a { color:#e8c872; }
+    .hint { font-size:13px; color:#7a7a7c; }
+  </style>
+</head>
+<body>
+  <h1>friday icon</h1>
+  <p>This builds a small settings file for your iPhone. After you install it, Friday sits on the Home Screen with her own icon and opens full screen.</p>
+  <form id="f">
+    <label for="url">App address</label>
+    <input id="url" type="url" required>
+    <p class="hint">Usually https://wicked9787.github.io/friday/?u=sky — change the username if the site moves.</p>
+    <label for="who">Who is this for?</label>
+    <select id="who">
+      <option value="sky">Sky (?u=sky)</option>
+      <option value="batsie">Batsie (?u=batsie)</option>
+      <option value="custom">Use the address as typed</option>
+    </select>
+    <label for="label">Home Screen name</label>
+    <input id="label" value="Friday">
+    <button type="submit">Download profile</button>
+  </form>
+  <p class="hint">On the iPhone: open the downloaded file, then go to Settings → General → VPN &amp; Device Management, tap the Friday profile, and tap Install. Apple will say it is unsigned. That is normal for a profile you made yourself.</p>
+  <p class="hint"><a href="./">Back to Friday</a></p>
+  <script>
+    (function () {
+      var base = location.origin + location.pathname.replace(/make_profile\.html$/, "");
+      if (!/\/$/.test(base)) base += "/";
+      var start = "https://wicked9787.github.io/friday/";
+      try {
+        if (location.hostname && location.hostname !== "localhost") start = base;
+      } catch (e) {}
+      var url = document.getElementById("url");
+      var who = document.getElementById("who");
+      url.value = start + (start.indexOf("?u=") >= 0 ? "" : "?u=sky");
+      who.addEventListener("change", function () {
+        if (who.value === "custom") return;
+        var u = url.value.replace(/\?.*$/, "").replace(/\/?$/, "/");
+        url.value = u + "?u=" + who.value;
+      });
+
+      function uuid() {
+        if (crypto.randomUUID) return crypto.randomUUID().toUpperCase();
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+          var r = Math.random() * 16 | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        }).toUpperCase();
+      }
+      function b64(buf) {
+        var b = new Uint8Array(buf), s = "", i;
+        for (i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+        return btoa(s).replace(/(.{76})/g, "$1\n");
+      }
+      function xml(s) {
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      }
+      function build(iconB64, href, label, tag) {
+        var id1 = uuid(), id2 = uuid();
+        return '<?xml version="1.0" encoding="UTF-8"?>\n' +
+          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n' +
+          '<plist version="1.0"><dict>\n' +
+          '<key>PayloadContent</key><array><dict>\n' +
+          '<key>FullScreen</key><true/>\n' +
+          '<key>Icon</key><data>\n' + iconB64 + '\n</data>\n' +
+          '<key>IgnoreManifestScope</key><true/>\n' +
+          '<key>IsRemovable</key><true/>\n' +
+          '<key>Label</key><string>' + xml(label) + '</string>\n' +
+          '<key>PayloadDescription</key><string>Web Clip</string>\n' +
+          '<key>PayloadDisplayName</key><string>' + xml(label) + '</string>\n' +
+          '<key>PayloadIdentifier</key><string>com.friday.' + tag + '.webclip</string>\n' +
+          '<key>PayloadType</key><string>com.apple.webClip.managed</string>\n' +
+          '<key>PayloadUUID</key><string>' + id1 + '</string>\n' +
+          '<key>PayloadVersion</key><integer>1</integer>\n' +
+          '<key>Precomposed</key><true/>\n' +
+          '<key>URL</key><string>' + xml(href) + '</string>\n' +
+          '</dict></array>\n' +
+          '<key>PayloadDescription</key><string>Adds ' + xml(label) + ' to your Home Screen with her own icon.</string>\n' +
+          '<key>PayloadDisplayName</key><string>' + xml(label) + '</string>\n' +
+          '<key>PayloadIdentifier</key><string>com.friday.' + tag + '.profile</string>\n' +
+          '<key>PayloadOrganization</key><string>Friday</string>\n' +
+          '<key>PayloadRemovalDisallowed</key><false/>\n' +
+          '<key>PayloadType</key><string>Configuration</string>\n' +
+          '<key>PayloadUUID</key><string>' + id2 + '</string>\n' +
+          '<key>PayloadVersion</key><integer>1</integer>\n' +
+          '</dict></plist>\n';
+      }
+      document.getElementById("f").addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        fetch("icons/icon-180.png").then(function (r) { return r.arrayBuffer(); }).then(function (buf) {
+          var href = url.value.trim();
+          var label = document.getElementById("label").value.trim() || "Friday";
+          var tag = (who.value === "custom" ? "custom" : who.value).replace(/[^a-z0-9]/g, "") || "custom";
+          var xmlFile = build(b64(buf), href, label, tag);
+          var blob = new Blob([xmlFile], { type: "application/x-apple-aspen-config" });
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "Friday-" + (tag.charAt(0).toUpperCase() + tag.slice(1)) + ".mobileconfig";
+          a.click();
+        }).catch(function () { alert("Could not load the icon. Open this page from the hosted Friday site."); });
+      });
+    })();
+  </script>
+</body>
+</html>

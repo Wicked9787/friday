@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Friday">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="format-detection" content="telephone=no">
+  <title>Friday</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <canvas id="orb-canvas" aria-label="Friday orb"></canvas>
+  <div id="listen-dot" aria-hidden="true"></div>
+  <div id="stage">
+    <div id="chrome">
+      <div class="clock" id="clock"></div>
+      <div class="actions">
+        <button class="icon-btn" id="btn-neural" title="Neural map" aria-label="Neural map">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="7" r="1.6"/><circle cx="19" cy="8" r="1.6"/>
+            <circle cx="6" cy="17" r="1.6"/><circle cx="18" cy="17" r="1.6"/>
+            <path d="M10.2 11.2 6.4 8.2M13.8 11 17.6 9M10.4 13.4 7.2 16.2M13.8 13.4 17 16.2"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btn-chat" title="Chat" aria-label="Chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M5 16.5V7.8A2.8 2.8 0 0 1 7.8 5h8.4A2.8 2.8 0 0 1 19 7.8v5.2A2.8 2.8 0 0 1 16.2 16H9l-4 3.2z"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 3.5v2.2M12 18.3v2.2M4.8 6.6l1.6 1.6M17.6 15.8l1.6 1.6M3.5 12h2.2M18.3 12h2.2M4.8 17.4l1.6-1.6M17.6 8.2l1.6-1.6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="bubbles"></div>
+    <div id="caption">
+      <div class="name" id="caption-name">friday</div>
+      <div class="line" id="caption-line">Tap to talk</div>
+    </div>
+    <div id="edit-bar">
+      <button class="pill" id="btn-edit-reset">Reset layout</button>
+      <button class="pill gold" id="btn-edit-done">Done</button>
+    </div>
+  </div>
+
+  <div id="setup">
+    <h1 id="setup-name">friday</h1>
+    <p>Paste your Groq API key to get started. It stays on this phone only and is never put in the app files.</p>
+    <p class="hint">Get a free key at <a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a>. Make an account, open API Keys, and create one.</p>
+    <form id="setup-form">
+      <input type="password" id="setup-key" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gsk_…" required>
+      <button class="btn gold" type="submit">Save and open Friday</button>
+    </form>
+  </div>
+
+  <section class="panel" id="panel-settings" aria-label="Settings">
+    <header>
+      <h1>Settings</h1>
+      <button class="icon-btn" data-close="settings" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <div class="field-label">Looks</div>
+      <div class="hint">Switch Friday’s orb whenever you like. All the looks we made are here.</div>
+      <div class="looks" id="looks" style="margin-top:10px"></div>
+
+      <div class="row row-col">
+        <label for="set-voice">Speaking voice</label>
+        <select id="set-voice"></select>
+        <div class="sub" id="voice-hint"></div>
+      </div>
+      <div class="row row-col">
+        <label for="set-shortcut">Shortcut name</label>
+        <input type="text" id="set-shortcut" placeholder="Friday 2">
+        <div class="sub">Used when Friday needs to set alarms, lights, and other phone jobs.</div>
+      </div>
+      <div class="row row-col">
+        <label for="set-key">Groq API key</label>
+        <input type="password" id="set-key" placeholder="Not set" autocomplete="off">
+        <div class="sub" id="key-mask"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="button" id="btn-key-save">Replace key</button>
+          <button class="btn danger" type="button" id="btn-key-clear">Clear</button>
+        </div>
+      </div>
+      <div class="row row-col" id="row-daddy">
+        <label for="set-daddy">Daddy’s number (for the text bubble)</label>
+        <input type="tel" id="set-daddy" placeholder="Optional, used as sms:number">
+      </div>
+      <div class="row row-col">
+        <label for="set-widget">Widget style hint</label>
+        <select id="set-widget">
+          <option value="clear">Clear</option>
+          <option value="tinted">Tinted</option>
+          <option value="solid">Solid</option>
+        </select>
+        <div class="sub">A reminder for the Scriptable widget parameter. It does not change the widget by itself.</div>
+      </div>
+      <div class="row row-col">
+        <label>Backup and restore</label>
+        <div class="sub">Saves memory, notes, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
+        <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
+          <input type="checkbox" id="backup-include-key"> Include API key in this backup
+        </label>
+        <button class="btn gold" type="button" id="btn-backup">Download backup</button>
+        <button class="btn" type="button" id="btn-restore">Restore from file</button>
+        <input type="file" id="restore-file" accept="application/json,.json" class="hidden">
+      </div>
+      <div class="row row-col">
+        <label>Reset</label>
+        <div class="sub">Clears memory, notes, chat, and layout on this phone. You will be asked first.</div>
+        <button class="btn danger" type="button" id="btn-reset">Reset Friday on this phone</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-chat" aria-label="Chat">
+    <header>
+      <h1>Chat</h1>
+      <button class="icon-btn" data-close="chat" aria-label="Close">✕</button>
+    </header>
+    <div class="body" id="chat-thread"></div>
+    <form id="composer">
+      <input type="text" id="chat-input" placeholder="Message Friday" enterkeyhint="send" autocomplete="off">
+      <button class="btn gold" type="submit">Send</button>
+    </form>
+  </section>
+
+  <section class="panel" id="panel-notes" aria-label="Notes">
+    <header>
+      <h1>Notes</h1>
+      <button class="icon-btn" data-close="notes" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <form id="note-form">
+        <textarea id="note-text" placeholder="Write a note"></textarea>
+        <button class="btn gold" type="submit">Save note</button>
+      </form>
+      <div id="note-list" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-memory" aria-label="Memory">
+    <header>
+      <h1>Memory</h1>
+      <button class="icon-btn" data-close="memory" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <form id="memory-form">
+        <textarea id="memory-text" placeholder="Something Friday should remember"></textarea>
+        <button class="btn gold" type="submit">Add to memory</button>
+      </form>
+      <div id="memory-list" style="margin-top:18px"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-timer" aria-label="Timer">
+    <header>
+      <h1>Timer</h1>
+      <button class="icon-btn" data-close="timer" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <div id="timer-display">00:00</div>
+      <div class="timer-row">
+        <input type="text" inputmode="numeric" id="timer-min" placeholder="min" value="5">
+        <input type="text" inputmode="numeric" id="timer-sec" placeholder="sec" value="0">
+      </div>
+      <button class="btn gold" type="button" id="timer-start">Start</button>
+      <button class="btn" type="button" id="timer-cancel">Cancel</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-money" aria-label="Money">
+    <header>
+      <h1>Money</h1>
+      <button class="icon-btn" data-close="money" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <p class="hint">Ask Friday about a bill, a budget, or a payment. She will use her money helper, then answer in her own voice.</p>
+      <form id="money-form">
+        <textarea id="money-text" placeholder="What should I know about this bill?"></textarea>
+        <button class="btn gold" type="submit">Ask Friday</button>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-neural" aria-label="Neural map">
+    <header>
+      <h1>Neural map</h1>
+      <button class="icon-btn" data-close="neural" aria-label="Close">✕</button>
+    </header>
+    <div class="body" style="position:relative;flex:1">
+      <canvas id="neural-canvas"></canvas>
+      <div id="neural-caption">FRIDAY · THINKING</div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-add-bubble" aria-label="Add bubble">
+    <header>
+      <h1>Add a bubble</h1>
+      <button class="icon-btn" data-close="add-bubble" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <div id="bubble-presets"></div>
+      <div class="row row-col">
+        <label>Custom link</label>
+        <input type="text" id="custom-label" placeholder="Label">
+        <input type="text" id="custom-url" placeholder="tel:, sms:, mailto:, or a website" style="margin-top:8px">
+        <button class="btn gold" type="button" id="btn-custom-bubble">Add custom bubble</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" role="status"></div>
+
+  <script src="config.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/orb.js"></script>
+  <script src="js/bubbles.js"></script>
+  <script src="js/voice.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/neural.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
