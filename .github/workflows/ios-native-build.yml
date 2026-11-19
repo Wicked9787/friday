@@ -1,0 +1,80 @@
+name: Native iOS build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - friday-native
+    paths:
+      - "index.html"
+      - "config.js"
+      - "css/**"
+      - "js/**"
+      - "icons/**"
+      - "profiles/**"
+      - "scriptable/**"
+      - "friday-sky/**"
+      - "friday-batsie/**"
+      - "package.json"
+      - "capacitor.config.js"
+      - "scripts/**"
+      - ".github/workflows/ios-native-build.yml"
+
+jobs:
+  build-ios-simulator:
+    name: Build ${{ matrix.app_name }} for iOS Simulator
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: sky
+            app_name: Friday
+            artifact_name: friday-ios-simulator
+          - profile: batsie
+            app_name: Jarvis
+            artifact_name: jarvis-ios-simulator
+
+    env:
+      FRIDAY_PROFILE: ${{ matrix.profile }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Prepare the app bundle
+        run: npm run build
+
+      - name: Generate the iOS project
+        run: npx cap add ios
+
+      - name: Sync web assets into iOS
+        run: npx cap sync ios
+
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Save simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: build/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+          if-no-files-found: error
+          retention-days: 7
