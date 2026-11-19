@@ -145,6 +145,7 @@
       { id: "alarm", kind: "alarm", label: "", gold: true, size: "sm", action: "shortcut", command: "set an alarm" },
       { id: "cameras", kind: "cameras", label: "Cameras", gold: true, size: "lg", action: "shortcut", command: "cameras" },
       { id: "chat", kind: "chat", label: "", gold: false, size: "sm", action: "panel", panel: "chat" },
+      { id: "texts", kind: "messages", label: "Messages", gold: true, size: "lg", action: "url", url: "sms:" },
       { id: "music", kind: "music", label: "Music", gold: false, size: "lg", action: "url", url: "music://" },
       { id: "money", kind: "money", label: "", gold: true, size: "sm", action: "panel", panel: "money" },
       { id: "memory", kind: "memory", label: "Memory", gold: true, size: "lg", action: "panel", panel: "memory" },

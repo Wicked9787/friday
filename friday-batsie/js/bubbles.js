@@ -8,7 +8,7 @@
     tv: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg>',
     alarm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="13" r="7"/><path d="M12 13V9M5 6 3 4M19 6l2-2"/></svg>',
     cameras: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/></svg>',
-    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 16.5V7.8A2.8 2.8 0 0 1 7.8 5h8.4A2.8 2.8 0 0 1 19 7.8v5.2A2.8 2.8 0 0 1 16.2 16H9l-4 3.2z"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l1.9 5.6L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9z"/><path d="M18.5 15.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg>',
     music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2.2"/><circle cx="17" cy="16" r="2.2"/></svg>',
     money: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3v18M16 7.5c0-2-1.8-3.2-4-3.2S8 5.5 8 7.2s1.6 2.8 4 3.3 4 1.6 4 3.4-1.8 3.3-4 3.3-4-1.2-4-3.3"/></svg>',
     memory: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4c4 4 4 8 0 16-4-8-4-12 0-16z"/><path d="M8 11h8"/></svg>',
@@ -76,6 +76,11 @@
     this.edit = false;
     this.list = root.FridayStorage.get("bubbles", null);
     if (!this.list || !this.list.length) this.list = defaultBubbles(this.profile);
+    // migration: give Sky a real Messages bubble if the saved layout predates it
+    if (this.profile.id === "sky" && !this.list.some(function (b) { return b.kind === "messages"; })) {
+      this.list.push({ id: "texts", kind: "messages", label: "Messages", gold: true, size: "lg", action: "url", url: "sms:", slot: this.list.length });
+      root.FridayStorage.set && root.FridayStorage.set("bubbles", this.list);
+    }
     this._floatT0 = performance.now();
     this._slots = LAYOUT.map(function (p) { return [p[0] - CX, p[1] - CY]; });
     this.mode = "orbit";
