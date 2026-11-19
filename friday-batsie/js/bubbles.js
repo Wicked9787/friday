@@ -82,12 +82,14 @@
       root.FridayStorage.set && root.FridayStorage.set("bubbles", this.list);
     }
     this._floatT0 = performance.now();
-    this._slots = LAYOUT.map(function (p) { return [p[0] - CX, p[1] - CY]; });
+    this._slots = [];
     this.mode = "orbit";
     this.revealed = true;
     this._flow = false;
     this._slotUnit = "scaled";
     this.onLayout = opts.onLayout || function () {};
+    this.frameFor = opts.frameFor || function () { return null; };
+    this._fit = 1;
     this.render();
     var self = this;
     this._onResize = function () { self.layout(); };
@@ -150,74 +152,144 @@
     this.mode = mode || "orbit";
     this.revealed = this.mode !== "orbonly";
     this._stageClass();
-    this.render();
     this.onLayout(this.mode, this.revealed);
+    this.render();
   };
 
   FridayBubbles.prototype.setRevealed = function (on) {
     this.revealed = !!on;
     this._stageClass();
-    this.layout();
     this.onLayout(this.mode, this.revealed);
+    this.layout();
   };
+
+  // Screen band the floating bubbles may use, in px relative to the orb center.
+  FridayBubbles.prototype._bounds = function () {
+    var w = window.innerWidth, h = window.innerHeight;
+    var f = this.frameFor(this._effectiveMode()) || { cyN: 0.46, radiusK: 0.28 };
+    var cy = h * f.cyN;
+    var top = 64, bottom = h - 150;
+    var bar = document.querySelector("#chrome .actions");
+    if (bar) { var br = bar.getBoundingClientRect(); if (br.bottom > 0) top = br.bottom + 8; }
+    var chips = document.getElementById("chips");
+    if (chips && chips.offsetParent !== null && chips.children.length) {
+      var cr = chips.getBoundingClientRect();
+      if (cr.top > cy) bottom = Math.min(bottom, cr.top - 4);
+    }
+    return {
+      l: -w / 2 + 6, r: w / 2 - 6, t: top - cy, b: bottom - cy,
+      orbR: f.radiusK * Math.min(w, h) * 1.02 + 4
+    };
+  };
+
+  // Push circles apart, off the orb and the Add spot, inside the band.
+  function relax(pts, rad, B, fixed) {
+    var it, i, j, n = pts.length, gap = 6;
+    for (it = 0; it < 260; it++) {
+      for (i = 0; i < n; i++) {
+        for (j = i + 1; j < n; j++) {
+          var dx = pts[j][0] - pts[i][0], dy = pts[j][1] - pts[i][1];
+          var d = Math.sqrt(dx * dx + dy * dy), m = rad * 2 + gap;
+          if (d < m) {
+            if (d < 0.01) { dx = Math.cos(i + j); dy = Math.sin(i + j); d = 1; }
+            var push = (m - d) / 2 / d;
+            pts[i][0] -= dx * push; pts[i][1] -= dy * push;
+            pts[j][0] += dx * push; pts[j][1] += dy * push;
+          }
+        }
+        var obs = [[0, 0, B.orbR + rad]];
+        if (fixed) obs.push([fixed[0], fixed[1], fixed[2] + rad + gap]);
+        obs.forEach(function (o) {
+          var ox = pts[i][0] - o[0], oy = pts[i][1] - o[1];
+          var od = Math.sqrt(ox * ox + oy * oy);
+          if (od < o[2]) {
+            if (od < 0.01) { ox = Math.cos(i * 2.4); oy = Math.sin(i * 2.4); od = 1; }
+            pts[i][0] = o[0] + ox / od * o[2];
+            pts[i][1] = o[1] + oy / od * o[2];
+          }
+        });
+        pts[i][0] = Math.max(B.l + rad, Math.min(B.r - rad, pts[i][0]));
+        pts[i][1] = Math.max(B.t + rad, Math.min(B.b - rad, pts[i][1]));
+      }
+    }
+    for (i = 0; i < n; i++) {
+      if (Math.hypot(pts[i][0], pts[i][1]) < B.orbR + rad - 1) return false;
+      if (fixed && Math.hypot(pts[i][0] - fixed[0], pts[i][1] - fixed[1]) < fixed[2] + rad - 1) return false;
+      for (j = i + 1; j < n; j++) if (Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) < rad * 2 - 1) return false;
+    }
+    return true;
+  }
 
   FridayBubbles.prototype._computeModeSlots = function () {
     var mode = this._effectiveMode();
-    var n = Math.max(this.list.length + (this.edit ? 1 : 0), 8);
+    var n = Math.max(this.list.length, 1);
     var s = this.scale();
-    var w = window.innerWidth, h = window.innerHeight;
-    var i, a, r, slots = [];
+    var i, a, r, t, pts = [];
     this._flow = !!FLOW[mode];
-    this._slotUnit = "scaled";
-    function toSlot(px, py) { return [px / s, py / s]; }
-    if (mode === "orbit") {
-      this._slots = LAYOUT.map(function (p) { return [p[0] - CX, p[1] - CY]; });
+    this._slotUnit = "px";
+    this._fit = 1;
+    if (this._flow) {
+      // Flow layouts position with CSS. Placeholder slots keep drag swaps working.
+      for (i = 0; i < n; i++) pts.push([i * 80, 0]);
+      this._slots = pts;
+      this._addPos = null;
       return;
     }
-    if (mode === "orbonly") {
-      this._slots = LAYOUT.map(function () { return [0, 0]; });
-      return;
+    var B = this._bounds();
+    var rx = Math.min(B.r, -B.l), ryUp = -B.t, ryDn = B.b;
+    var rad = 60 * s;
+    var addR = 30 * s + 6;
+    var add = [0, B.b - addR, addR];
+    for (var tries = 0; tries < 6; tries++) {
+      pts = [];
+      var ring1 = B.orbR + rad + 6;
+      if (mode === "orbit") {
+        for (i = 0; i < n; i++) {
+          if (i < LAYOUT.length) pts.push([(LAYOUT[i][0] - CX) * s * 1.25, (LAYOUT[i][1] - CY) * s * 1.25]);
+          else { a = (i - LAYOUT.length + 0.5) * 2.1; pts.push([Math.cos(a) * rx * 0.8, Math.sin(a) * ryUp * 0.8]); }
+        }
+      } else if (mode === "double") {
+        var mid = Math.ceil(n * 0.42);
+        for (i = 0; i < n; i++) {
+          var outer = i >= mid, idx = outer ? i - mid : i, cnt = outer ? n - mid : mid;
+          a = -Math.PI / 2 + (idx / Math.max(cnt, 1)) * Math.PI * 2 + (outer ? Math.PI / cnt : 0);
+          r = outer ? ring1 + rad * 2 + 8 : ring1;
+          pts.push([Math.cos(a) * Math.min(r, rx - rad), Math.sin(a) * r]);
+        }
+      } else if (mode === "arc") {
+        for (i = 0; i < n; i++) {
+          a = Math.PI * 0.08 + (n <= 1 ? 0.42 : i / (n - 1)) * Math.PI * 0.84;
+          r = ring1 + (i % 2) * rad * 1.6;
+          pts.push([Math.cos(a) * Math.min(r, rx), Math.sin(a) * r]);
+        }
+      } else if (mode === "spiral") {
+        for (i = 0; i < n; i++) {
+          t = i / Math.max(n - 1, 1);
+          a = -Math.PI / 2 + t * Math.PI * 3.2;
+          r = ring1 + t * rad * 2.2;
+          pts.push([Math.cos(a) * Math.min(r, rx), Math.sin(a) * r]);
+        }
+      } else {
+        // ring (and the hidden orb-only state)
+        for (i = 0; i < n; i++) {
+          a = -Math.PI / 2 + (i / n) * Math.PI * 2;
+          pts.push([Math.cos(a) * Math.min(ring1 * 1.05, rx - rad), Math.sin(a) * (Math.sin(a) < 0 ? Math.min(ryUp - rad, ring1 * 1.3) : Math.min(ryDn - rad, ring1 * 1.3))]);
+        }
+      }
+      if (relax(pts, rad, B, add)) break;
+      // Too crowded: shrink everything and try again.
+      rad *= 0.88; addR *= 0.9; add = [0, B.b - addR, addR];
+      this._fit *= 0.88;
+      B.orbR *= 0.96;
     }
-    if (mode === "ring") {
-      r = Math.min(w, h) * 0.36;
-      for (i = 0; i < n; i++) {
-        a = -Math.PI / 2 + (i / n) * Math.PI * 2;
-        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r));
-      }
-    } else if (mode === "double") {
-      var mid = Math.ceil(n / 2);
-      for (i = 0; i < n; i++) {
-        var ring = i < mid ? 0 : 1;
-        var idx = i < mid ? i : i - mid;
-        var count = Math.max(i < mid ? mid : n - mid, 1);
-        r = Math.min(w, h) * (ring ? 0.42 : 0.27);
-        a = -Math.PI / 2 + (idx / count) * Math.PI * 2 + (ring ? Math.PI / count : 0);
-        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r));
-      }
-    } else if (mode === "arc") {
-      r = Math.min(w, h) * 0.38;
-      for (i = 0; i < n; i++) {
-        a = Math.PI * 0.15 + (n <= 1 ? Math.PI * 0.35 : (i / (n - 1)) * Math.PI * 0.7);
-        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r + 8));
-      }
-    } else if (mode === "spiral") {
-      for (i = 0; i < n; i++) {
-        var t = (i + 1) / Math.max(n, 1);
-        r = Math.min(w, h) * (0.18 + t * 0.28);
-        a = Math.PI * 0.18 + t * Math.PI * 1.15;
-        slots.push(toSlot(Math.cos(a) * r, Math.sin(a) * r + t * 28));
-      }
-    } else {
-      // Flow layouts position with CSS. Keep placeholder slots so drag can swap indices.
-      for (i = 0; i < Math.max(n, this.list.length); i++) slots.push([i * 80, 0]);
-    }
-    this._slots = slots;
+    this._slots = pts;
+    this._addPos = add;
   };
 
   FridayBubbles.prototype.layout = function () {
     this._computeModeSlots();
     this._stageClass();
-    var s = this._slotUnit === "px" ? 1 : this.scale();
+    var s = this.scale();
     var nodes = this.el.querySelectorAll(".bubble[data-id]");
     var self = this;
     var mode = this._effectiveMode();
@@ -227,24 +299,28 @@
       bySlot.slice(0, 4).forEach(function (b) { dockIds[b.id] = true; });
     }
     var dockIndex = 0;
+    var dockRow = Math.ceil(Math.max(this.list.length - 4, 0) / 4) + 1;
     nodes.forEach(function (node) {
       var b = self.byId(node.getAttribute("data-id"));
       if (!b) return;
       var szScale = mode === "list" || mode === "sheet" ? 0.72 : 1;
-      var sz = (b.size === "sm" ? 52 : 84) * s * (self._flow ? 0.85 : 1) * szScale;
-      if (mode === "grid" || mode === "home") sz = 58 * s * (1 / self.scale()) * (self.scale());
+      var sz = (b.size === "sm" ? 52 : 84) * s * (self._flow ? 0.85 : self._fit) * szScale;
+      if (mode === "grid" || mode === "home") sz = 58 * s;
       node.style.setProperty("--sz", sz + "px");
       if (mode === "home") {
         if (dockIds[b.id]) {
           node.setAttribute("data-dock", "1");
           node.style.gridColumn = String((dockIndex++ % 4) + 1);
+          node.style.gridRow = String(dockRow);
         } else {
           node.removeAttribute("data-dock");
           node.style.gridColumn = "";
+          node.style.gridRow = "";
         }
       } else {
         node.removeAttribute("data-dock");
         node.style.gridColumn = "";
+        node.style.gridRow = "";
       }
       if (self._flow) {
         node.dataset.baseX = "0";
@@ -252,17 +328,21 @@
         node.style.transform = "none";
         return;
       }
-      var slot = self._slots[(b.slot || 0) % self._slots.length] || [0, 0];
-      var px = slot[0] * s;
-      var py = slot[1] * s;
-      node.dataset.baseX = px;
-      node.dataset.baseY = py;
-      if (!self.edit) node.style.transform = "translate(calc(-50% + " + px + "px), calc(-50% + " + py + "px))";
+      var slot = self._slots[b.slot] || self._slots[(b.slot || 0) % self._slots.length] || [0, 0];
+      node.dataset.baseX = slot[0];
+      node.dataset.baseY = slot[1];
+      if (!node.classList.contains("dragging")) node.style.transform = "translate(calc(-50% + " + slot[0] + "px), calc(-50% + " + slot[1] + "px))";
     });
     var add = this.el.querySelector(".add-bubble");
-    if (add && this._flow) {
-      add.style.transform = "none";
-      add.style.setProperty("--sz", (52 * s) + "px");
+    if (add) {
+      if (this._flow) {
+        add.style.transform = "none";
+        add.style.setProperty("--sz", (52 * s) + "px");
+      } else {
+        var ap = this._addPos || [0, 200, 30];
+        add.style.setProperty("--sz", (52 * s * this._fit) + "px");
+        add.style.transform = "translate(calc(-50% + " + ap[0] + "px), calc(-50% + " + ap[1] + "px))";
+      }
     }
   };
 
@@ -278,14 +358,27 @@
   FridayBubbles.prototype.render = function () {
     var self = this;
     this.el.innerHTML = "";
-    this.list.slice().sort(function (a, b) { return (a.slot || 0) - (b.slot || 0); }).forEach(function (b, i) {
-      if (b.slot == null) b.slot = i;
+    this._normalizeSlots();
+    this.list.slice().sort(function (a, b) { return a.slot - b.slot; }).forEach(function (b) {
       self.el.appendChild(self._node(b));
     });
     if (this.edit) this.el.appendChild(this._addNode());
     this.el.classList.toggle("edit-on", this.edit);
     document.getElementById("stage").classList.toggle("edit-on", this.edit);
     this.layout();
+  };
+
+  // Every bubble gets its own slot 0..n-1. Repairs stacked or duplicate saved slots.
+  FridayBubbles.prototype._normalizeSlots = function () {
+    var changed = false;
+    var order = this.list.map(function (b, i) { return { b: b, i: i }; });
+    order.sort(function (x, y) {
+      var a = typeof x.b.slot === "number" ? x.b.slot : 1e6 + x.i;
+      var c = typeof y.b.slot === "number" ? y.b.slot : 1e6 + y.i;
+      return a - c || x.i - y.i;
+    });
+    order.forEach(function (o, k) { if (o.b.slot !== k) { o.b.slot = k; changed = true; } });
+    if (changed) this.save();
   };
 
   FridayBubbles.prototype._node = function (b) {
@@ -306,20 +399,9 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "bubble add-bubble";
-    var used = this.list.length;
-    var slot = this._slots[used % this._slots.length] || [0, 220];
-    btn.dataset.baseX = slot[0];
-    btn.dataset.baseY = slot[1];
     btn.innerHTML = '<span class="orb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 6v12M6 12h12"/></svg></span><span class="label">Add</span>';
     var self = this;
     btn.addEventListener("click", function () { self.onAddRequest(); });
-    var s = this.scale();
-    btn.style.setProperty("--sz", 52 * s + "px");
-    if (this._flow) {
-      btn.style.transform = "none";
-    } else {
-      btn.style.transform = "translate(-50%, calc(-50% + " + (150 * s) + "px))";
-    }
     return btn;
   };
 
@@ -373,7 +455,7 @@
       var y = p.clientY - rect.top;
       btn.style.transform = "translate(calc(-50% + " + x + "px), calc(-50% + " + y + "px))";
       moved = true;
-      var nearest = self._nearestSlot(x, y);
+      var nearest = self._nearestSlot(x, y, b.slot);
       if (nearest != null && nearest !== b.slot) {
         var other = self.list.filter(function (x) { return x.slot === nearest; })[0];
         if (other) {
@@ -400,21 +482,20 @@
 
   FridayBubbles.prototype._relayoutOthers = function (except) {
     if (this._flow) return;
-    var s = this.scale();
     var self = this;
     this.el.querySelectorAll(".bubble[data-id]").forEach(function (node) {
       if (node === except) return;
       var b = self.byId(node.getAttribute("data-id"));
       if (!b) return;
-      var slot = self._slots[b.slot % self._slots.length];
-      var px = slot[0] * s, py = slot[1] * s;
+      var slot = self._slots[b.slot] || [0, 0];
+      var px = slot[0], py = slot[1];
       node.dataset.baseX = px;
       node.dataset.baseY = py;
       node.style.transform = "translate(calc(-50% + " + px + "px), calc(-50% + " + py + "px))";
     });
   };
 
-  FridayBubbles.prototype._nearestSlot = function (x, y) {
+  FridayBubbles.prototype._nearestSlot = function (x, y, cur) {
     if (this._flow) {
       var els = this.el.querySelectorAll(".bubble[data-id]");
       var best = 0, bd = 1e9, i, r, cx, cy, d, b;
@@ -432,12 +513,17 @@
       }
       return best;
     }
-    var s = this.scale();
-    var best = 0, bd = 1e9, i;
-    for (i = 0; i < this._slots.length; i++) {
-      var dx = this._slots[i][0] * s - x, dy = this._slots[i][1] * s - y;
+    var best = 0, bd = 1e9, i, n = Math.min(this._slots.length, this.list.length);
+    for (i = 0; i < n; i++) {
+      var dx = this._slots[i][0] - x, dy = this._slots[i][1] - y;
       var d = dx * dx + dy * dy;
       if (d < bd) { bd = d; best = i; }
+    }
+    // Small dead zone so a bubble doesn't flip back and forth between two slots.
+    var own = this._slots[cur];
+    if (own && best !== cur) {
+      var od = (own[0] - x) * (own[0] - x) + (own[1] - y) * (own[1] - y);
+      if (Math.sqrt(od) - Math.sqrt(bd) < 14) return cur;
     }
     return best;
   };
@@ -460,8 +546,9 @@
   FridayBubbles.prototype.setEdit = function (on) {
     this.edit = !!on;
     if (this.edit && this.mode === "orbonly") this.revealed = true;
-    this.render();
+    this._stageClass();
     this.onLayout(this.mode, this.revealed);
+    this.render();
   };
 
   FridayBubbles.prototype.remove = function (id) {
@@ -472,10 +559,7 @@
 
   FridayBubbles.prototype.add = function (spec) {
     var b = Object.assign({ id: uid(), gold: true, size: "lg", kind: "link", label: "Link", action: "url", url: "#" }, spec);
-    var used = {};
-    this.list.forEach(function (x) { used[x.slot] = true; });
-    b.slot = 0;
-    for (var i = 0; i < this._slots.length; i++) if (!used[i]) { b.slot = i; break; }
+    b.slot = this.list.length;
     this.list.push(b);
     this.save();
     this.render();

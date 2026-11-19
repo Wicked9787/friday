@@ -753,8 +753,9 @@
     "    p=vec3(cos(ang)*rr,sin(ang)*rr,0.0);",
     "  }",
     "  else if(sh>16.5&&sh<18.5){",
-    "    p=aPos+0.03*vec3(sin(uTime*0.13+aStream.x),cos(uTime*0.09+aStream.y),sin(uTime*0.07+aStream.z));",
-    "    p*=mix(1.0,1.0+0.07*uTalk,1.0);",
+    "    p=aPos+0.045*vec3(sin(uTime*0.62+aStream.x),cos(uTime*0.51+aStream.y),sin(uTime*0.47+aStream.z));",
+    "    p=rotAxis(p,vec3(0.12,0.98,0.16),uAngH*2.2);",
+    "    p*=1.0+0.03*sin(uTime*1.25)+0.08*uTalk*(0.6+0.4*sin(uTime*8.0+aStream.x));",
     "  }",
     "  p*=uScale;",
     "  float z=p.z;",
@@ -773,6 +774,7 @@
     "    }",
     "  }",
     "  float inten=aData.x*dw*uK;",
+    "  if(sh>16.5&&sh<18.5) inten*=0.74+0.26*sin(uTime*(1.4+uTalk*3.0)+aStream.x*2.3+aStream.y*1.7);",
     "  vec3 col=palColor(aStream.w,aData.y,aData.w);",
     "  col=mix(col,goldRamp(0.78),max(uSpeaker,0.0)*uTalk*0.30);",
     "  col=mix(col,silvRamp(0.78),max(-uSpeaker,0.0)*uTalk*0.30);",
@@ -930,9 +932,14 @@
     return applym(M, [0, 1, 0]);
   }
 
-  function FridayOrb(canvas) {
+  function FridayOrb(canvas, opts) {
+    opts = opts || {};
     this.canvas = canvas;
+    this._fixedW = opts.width || 0;
+    this._fixedH = opts.height || 0;
+    this._thumb = !!opts.thumb;
     this.gl = canvas.getContext("webgl", {
+      preserveDrawingBuffer: !!opts.thumb,
       alpha: false,
       antialias: false,
       premultipliedAlpha: true,
@@ -949,8 +956,14 @@
     var c16 = gl.getExtension("EXT_color_buffer_half_float");
     var t16 = gl.getExtension("OES_texture_half_float");
     var t32 = gl.getExtension("OES_texture_float");
-    if (c16 && t16) this._half = t16.HALF_FLOAT_OES;
-    else if (c32 && t32) this._float = true;
+    // Linear filtering of half/float textures needs its own extension. Without it
+    // the bloom textures sample as black and the orb never shows, so use 8-bit.
+    var l16 = gl.getExtension("OES_texture_half_float_linear");
+    var l32 = gl.getExtension("OES_texture_float_linear");
+    if (c16 && t16 && l16) this._half = t16.HALF_FLOAT_OES;
+    else if (c32 && t32 && l32) this._float = true;
+    this._frames = 0;
+    this._fallbackStep = 0;
 
     this.progP = program(gl, VERT, FRAG);
     this.progBody = program(gl, QUAD_VERT, BODY_FRAG);
@@ -969,7 +982,7 @@
     this.dust = null;
 
     this.look = "N";
-    this.quality = QUALITY.high;
+    this.quality = opts.thumb ? QUALITY.med : QUALITY.high;
     this._qOrder = ["high", "med", "low"];
     this.speaker = "idle";
     this.volume = 0;
@@ -999,11 +1012,70 @@
 
     var self = this;
     this._onResize = function () { self.resize(); };
-    window.addEventListener("resize", this._onResize);
-    window.addEventListener("orientationchange", this._onResize);
+    if (!this._thumb) {
+      window.addEventListener("resize", this._onResize);
+      window.addEventListener("orientationchange", this._onResize);
+    }
+    if (opts.thumb) { this._cyN = 0.5; this._radiusK = 0.36; }
     this.resize();
     this._rebuild();
   }
+
+  // Draw one look into a small image (data URL). One shared hidden WebGL canvas.
+  var thumbOrb = null, thumbCache = {};
+  FridayOrb.thumbnail = function (look, size) {
+    size = size || 160;
+    if (thumbCache[look]) return thumbCache[look];
+    try {
+      if (!thumbOrb) {
+        var c = document.createElement("canvas");
+        thumbOrb = new FridayOrb(c, { thumb: true, width: size, height: size });
+      }
+      thumbOrb.speaker = "idle";
+      thumbOrb.look = null;
+      thumbOrb.setLook(look);
+      thumbOrb._t0 = 0; thumbOrb._last = 0;
+      for (var i = 0; i < 24; i++) thumbOrb._frame(1000 + i * 33);
+      thumbCache[look] = thumbOrb.canvas.toDataURL("image/jpeg", 0.8);
+      return thumbCache[look];
+    } catch (e) {
+      return "";
+    }
+  };
+
+  // Is anything lit around the orb center on the screen buffer?
+  FridayOrb.prototype._litCheck = function () {
+    var gl = this.gl, w = this.canvas.width, h = this.canvas.height;
+    var n = Math.max(2, Math.min(w, Math.round(this._radius * 2)));
+    var x0 = Math.max(0, Math.round(this._cx - n / 2));
+    var px = new Uint8Array(n * 4), py = new Uint8Array(n * 4), i, mx = 0;
+    try {
+      gl.readPixels(x0, Math.round(this._cy), Math.min(n, w - x0), 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      var y0 = Math.max(0, Math.round(this._cy - n / 2));
+      gl.readPixels(Math.round(this._cx), y0, 1, Math.min(n, h - y0), gl.RGBA, gl.UNSIGNED_BYTE, py);
+    } catch (e) { return true; }
+    for (i = 0; i < px.length; i += 4) mx = Math.max(mx, px[i], px[i + 1], px[i + 2], py[i], py[i + 1], py[i + 2]);
+    return mx > 10;
+  };
+
+  // If the orb draws nothing, step down: 8-bit targets, then the default look.
+  FridayOrb.prototype._selfCheck = function () {
+    if (this._litCheck()) { this._fallbackStep = 9; return; }
+    this._frames = 0;
+    if (this._fallbackStep === 0 && (this._half || this._float)) {
+      this._half = null; this._float = false;
+      this._allocTargets();
+      this._fallbackStep = 1;
+    } else if (this._fallbackStep <= 1 && this.look !== "N") {
+      this._fallbackStep = 2;
+      this._failedLook = this.look;
+      this.look = "N";
+      this._rebuild();
+      if (this.onFallback) this.onFallback(this._failedLook);
+    } else {
+      this._fallbackStep = 9;
+    }
+  };
 
   FridayOrb.prototype.setFrame = function (opts) {
     opts = opts || {};
@@ -1018,6 +1090,8 @@
       return;
     }
     this.look = id;
+    this._frames = 0;
+    if (this._fallbackStep === 9) this._fallbackStep = 1;
     this._rebuild();
   };
 
@@ -1064,9 +1138,9 @@
 
   FridayOrb.prototype.resize = function () {
     var cvs = this.canvas;
-    var cssW = Math.max(1, window.innerWidth);
-    var cssH = Math.max(1, window.innerHeight);
-    var dpr = Math.min(this.quality.dpr, window.devicePixelRatio || 1);
+    var cssW = this._fixedW || Math.max(1, window.innerWidth);
+    var cssH = this._fixedH || Math.max(1, window.innerHeight);
+    var dpr = this._thumb ? 1 : Math.min(this.quality.dpr, window.devicePixelRatio || 1);
     this._dpr = dpr;
     this._cssW = cssW;
     this._cssH = cssH;
@@ -1075,8 +1149,10 @@
     if (cvs.width !== w || cvs.height !== h) {
       cvs.width = w;
       cvs.height = h;
-      cvs.style.width = cssW + "px";
-      cvs.style.height = cssH + "px";
+      if (!this._thumb) {
+        cvs.style.width = cssW + "px";
+        cvs.style.height = cssH + "px";
+      }
       this._allocTargets();
     }
     // Orb sits at the bubble-ring center (46% from the top).
@@ -1126,7 +1202,9 @@
     var dens = this.quality.dens;
     var buf = new ParticleBuf();
     var user = this.speaker === "user";
-    var spec = buildLook(buf, look, dens, user, this.quality) || {};
+    var spec;
+    try { spec = buildLook(buf, look, dens, user, this.quality) || {}; }
+    catch (e) { buf = new ParticleBuf(); this.look = look = "N"; spec = buildLook(buf, "N", dens, user, this.quality) || {}; }
     this._spec = spec;
     this.hasCore = spec.core ? 1 : (spec.shells || spec.inner || look === "I1" || look === "I3" || look === "H2" || look === "N" || look === "M" ? 1 : 0);
     if (spec.core === 0) this.hasCore = 0;
@@ -1407,6 +1485,8 @@
     gl.uniform1f(cu.uExposure, this._exposure * 0.85);
     this._drawQuad(this.progComp);
 
+    if (!this._thumb && this._fallbackStep < 9 && ++this._frames === 12) this._selfCheck();
+    if (this._thumb) return;
     this._fpsWin.push(dt);
     if (this._fpsWin.length > 90) this._fpsWin.shift();
     this._checked += dt;

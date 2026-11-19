@@ -158,13 +158,39 @@
         btn.type = "button";
         btn.className = "look" + (self.values.look === id ? " on" : "");
         btn.setAttribute("data-look", id);
-        btn.innerHTML = "<b>" + item.name + "</b><span>" + item.blurb + "</span>";
+        btn.innerHTML = '<i class="look-thumb" data-thumb="' + id + '"></i><b>' + item.name + "</b><span>" + item.blurb + "</span>";
         btn.addEventListener("click", function () { self.setLook(id); });
         grid.appendChild(btn);
       });
       wrap.appendChild(grid);
       looks.appendChild(wrap);
     });
+    this._bindThumbs(looks);
+  };
+
+  // Draw a still preview of each Look, a few at a time, once the Looks menu opens.
+  FridaySettings.prototype._bindThumbs = function (looks) {
+    var acc = document.getElementById("accord-looks");
+    var started = false;
+    function run() {
+      if (started || !root.FridayOrb || !root.FridayOrb.thumbnail) return;
+      started = true;
+      var items = Array.prototype.slice.call(looks.querySelectorAll(".look-thumb[data-thumb]"));
+      (function next() {
+        var el = items.shift();
+        if (!el) return;
+        var url = root.FridayOrb.thumbnail(el.getAttribute("data-thumb"), 160);
+        if (url) {
+          looks.querySelectorAll('.look-thumb[data-thumb="' + el.getAttribute("data-thumb") + '"]').forEach(function (t) {
+            t.style.backgroundImage = "url(" + url + ")";
+            t.setAttribute("data-done", "1");
+          });
+        }
+        setTimeout(next, 0);
+      })();
+    }
+    if (!acc || acc.open) setTimeout(run, 50);
+    if (acc) acc.addEventListener("toggle", function () { if (acc.open) run(); });
   };
 
   FridaySettings.prototype._bindIcons = function () {

@@ -14,7 +14,7 @@
   function lookOrder() {
     var ids = [];
     (cfg.LOOK_GROUPS || []).forEach(function (g) {
-      (g.ids || []).forEach(function (id) { if (cfg.LOOKS[id]) ids.push(id); });
+      (g.ids || []).forEach(function (id) { if (cfg.LOOKS[id] && ids.indexOf(id) < 0) ids.push(id); });
     });
     return ids;
   }
@@ -62,7 +62,7 @@
     spiral: { cyN: 0.30, radiusK: 0.24 },
     home: { cyN: 0.22, radiusK: 0.18 },
     list: { cyN: 0.28, radiusK: 0.22 },
-    sheet: { cyN: 0.32, radiusK: 0.24 }
+    sheet: { cyN: 0.25, radiusK: 0.2 }
   };
 
   function applyOrbFrame(mode, revealed) {
@@ -338,6 +338,7 @@
         el.appendChild(b);
       }
     });
+    if (bubbles) bubbles.layout();
   }
 
   function renderChat() {
@@ -522,7 +523,8 @@
         } else if (act.type === "url") openUrl(act.url);
       },
       onAddRequest: function () { openPanel("add-bubble"); },
-      onLayout: function (mode, revealed) { applyOrbFrame(mode, revealed); }
+      onLayout: function (mode, revealed) { applyOrbFrame(mode, revealed); },
+      frameFor: function (mode) { return LAYOUT_FRAMES[mode] || LAYOUT_FRAMES.orbit; }
     });
 
     settings = new FridaySettings({
@@ -537,6 +539,7 @@
     });
 
     applyLayout(settings.values.layout || "orbit", true);
+    window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
 
@@ -588,6 +591,8 @@
     });
     document.getElementById("btn-edit-done").onclick = function () { bubbles.setEdit(false); };
     document.getElementById("btn-edit-reset").onclick = function () { bubbles.resetLayout(); };
+    var rl = document.getElementById("btn-settings-reset-layout");
+    if (rl) rl.onclick = function () { bubbles.resetLayout(); toast("Layout reset. Every bubble has its own spot."); };
 
     document.getElementById("composer").addEventListener("submit", function (ev) {
       ev.preventDefault();
