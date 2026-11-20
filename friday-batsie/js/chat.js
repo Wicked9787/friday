@@ -135,11 +135,13 @@
     if (!text) return;
     this.memory.push({ text: text, at: new Date().toISOString() });
     this.save();
+    try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
   };
 
   FridayChat.prototype.removeMemory = function (i) {
     this.memory.splice(i, 1);
     this.save();
+    try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
   };
 
   FridayChat.prototype.rememberFromSpeech = function (text) {

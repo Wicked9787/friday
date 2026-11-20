@@ -142,6 +142,61 @@ img { -webkit-touch-callout: none; }
   box-shadow: none;
 }
 .bubble.dragging { z-index: 20; opacity: 0.92; }
+.bubble.suggest .orb {
+  opacity: 0.9;
+  box-shadow:
+    0 8px 16px rgba(0,0,0,0.45),
+    0 0 0 0.5px rgba(232,200,114,0.3);
+}
+#bubble-presets, .scheme-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+.scheme-list .btn { padding: 8px 12px; font-size: 13px; }
+.icon-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.icon-pick button {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #101012;
+  color: var(--silver);
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.icon-pick button svg { width: 20px; height: 20px; display: block; }
+.icon-pick button.on {
+  border-color: rgba(232,200,114,0.55);
+  background: #16140e;
+  color: var(--gold);
+}
+.connection-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 6px;
+  align-items: center;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #101012;
+}
+.connection-row .conn-name { font-weight: 600; min-width: 0; }
+.connection-row .conn-url {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.connection-row .btn { padding: 7px 10px; font-size: 12px; }
 
 @keyframes wiggle {
   0% { transform: rotate(-4deg) scale(1.02); }

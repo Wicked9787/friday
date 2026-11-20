@@ -58,7 +58,10 @@
       memory: get("memory", []),
       notes: get("notes", []),
       history: get("history", []),
-      timers: get("timers", [])
+      timers: get("timers", []),
+      connections: get("connections", []),
+      usage: get("usage", {}),
+      dismissedSuggestions: get("dismissedSuggestions", [])
     };
     if (includeKey) data.apiKey = getApiKey();
     return data;
@@ -87,6 +90,9 @@
     if (data.notes) set("notes", data.notes);
     if (data.history) set("history", data.history);
     if (data.timers) set("timers", data.timers);
+    if (data.connections) set("connections", data.connections);
+    if (data.usage) set("usage", data.usage);
+    if (data.dismissedSuggestions) set("dismissedSuggestions", data.dismissedSuggestions);
     if (data.profile) rawSet(PREFIX + "profile", data.profile);
     if (typeof data.apiKey === "string" && data.apiKey) setApiKey(data.apiKey);
   }

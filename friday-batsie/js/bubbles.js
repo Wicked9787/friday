@@ -16,7 +16,14 @@
     automations: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8h6l2-3h6"/><path d="M4 16h7l2-3h7"/><circle cx="6" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg>',
     weather: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 4.2V3M10 17v-1.2M4.2 10H3M17 10h-1.2M5.6 5.6 4.8 4.8M15.2 15.2l-.8-.8M15.2 5.6l.8-.8"/><path d="M14 13.5a4 4 0 0 1 1 7.5H8.5A3.5 3.5 0 0 1 8 14"/></svg>',
     messages: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7A2.5 2.5 0 0 1 17.5 16H9l-5 4V6.5z"/></svg>',
-    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.1l1.4-1.4a5 5 0 0 0-7.1-7.1L10.5 6"/><path d="M14 11a5 5 0 0 0-7.5-.1L5.1 12.3a5 5 0 0 0 7.1 7.1L13.5 18"/></svg>'
+    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.5.1l1.4-1.4a5 5 0 0 0-7.1-7.1L10.5 6"/><path d="M14 11a5 5 0 0 0-7.5-.1L5.1 12.3a5 5 0 0 0 7.1 7.1L13.5 18"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.2"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 3h3l1 5-2 1a11 11 0 0 0 6 6l1-2 5 1v3c0 1-1 2-2 2C10 19 5 14 5 5c0-1 1-2 2-2z"/></svg>',
+    mail: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="m3 7 9 7 9-7"/></svg>',
+    maps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.2"/></svg>',
+    photos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m3 16 5-4 4 3 3-2 6 4"/></svg>',
+    settings: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6"/></svg>',
+    video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>'
   };
 
   // Concept 28 layout in 590-space, recentered around the orb.
@@ -39,6 +46,8 @@
     { kind: "tv", label: "TV", gold: false, size: "lg", action: "shortcut", command: "tv on" },
     { kind: "alarm", label: "Alarm", gold: true, size: "sm", action: "shortcut", command: "set an alarm" },
     { kind: "cameras", label: "Cameras", gold: true, size: "lg", action: "shortcut", command: "cameras" },
+    { kind: "camera", label: "Camera", gold: false, size: "sm", action: "url", url: "camera://" },
+    { kind: "phone", label: "Phone", gold: true, size: "sm", action: "url", url: "tel:" },
     { kind: "chat", label: "Chat", gold: false, size: "sm", action: "panel", panel: "chat" },
     { kind: "music", label: "Music", gold: false, size: "lg", action: "url", url: "music://" },
     { kind: "money", label: "Money", gold: true, size: "sm", action: "panel", panel: "money" },
@@ -49,7 +58,104 @@
     { kind: "messages", label: "Daddy", gold: true, size: "lg", action: "url", url: "sms:" }
   ];
 
+  var APP_SCHEMES = [
+    { name: "Camera", url: "camera://", kind: "camera" },
+    { name: "Phone", url: "tel:", kind: "phone" },
+    { name: "Messages", url: "sms:", kind: "messages" },
+    { name: "FaceTime", url: "facetime://", kind: "video" },
+    { name: "Mail", url: "mailto:", kind: "mail" },
+    { name: "Maps", url: "maps://", kind: "maps" },
+    { name: "Music", url: "music://", kind: "music" },
+    { name: "Photos", url: "photos-redirect://", kind: "photos" },
+    { name: "Settings", url: "app-settings:", kind: "settings" },
+    { name: "Spotify", url: "spotify://", kind: "music" },
+    { name: "YouTube", url: "youtube://", kind: "video" },
+    { name: "Netflix", url: "nflx://", kind: "video" },
+    { name: "Instagram", url: "instagram://", kind: "link" },
+    { name: "TikTok", url: "snssdk1233://", kind: "video" },
+    { name: "Facebook", url: "fb://", kind: "link" },
+    { name: "X", url: "twitter://", kind: "link" },
+    { name: "WhatsApp", url: "whatsapp://", kind: "messages" },
+    { name: "Cash App", url: "cashme://", kind: "money" },
+    { name: "Shortcuts", url: "shortcuts://", kind: "automations" }
+  ];
+  var SUGGEST_CAP = 6;
+
   function uid() { return "b" + Math.random().toString(36).slice(2, 9); }
+
+  function normKey(s) { return String(s || "").trim().toLowerCase(); }
+
+  function schemeForUrl(url) {
+    var u = normKey(url);
+    for (var i = 0; i < APP_SCHEMES.length; i++) {
+      if (normKey(APP_SCHEMES[i].url) === u) return APP_SCHEMES[i];
+    }
+    return null;
+  }
+
+  function labelForUsageKey(key) {
+    var known = schemeForUrl(key.indexOf("url:") === 0 ? key.slice(4) : "");
+    if (known) return known.name;
+    if (key.indexOf("url:") === 0) {
+      var raw = key.slice(4);
+      try {
+        if (/^https?:/i.test(raw)) return new URL(raw).hostname.replace(/^www\./, "") || "Link";
+      } catch (e) {}
+      return raw.replace(/:\/\/$/, "").replace(/:$/, "") || "Link";
+    }
+    if (key.indexOf("cmd:") === 0) return key.slice(4) || "Shortcut";
+    if (key.indexOf("panel:") === 0) return (key.slice(6) || "Panel").replace(/^\w/, function (c) { return c.toUpperCase(); });
+    return "Link";
+  }
+
+  function specFromUsageKey(key) {
+    var preset, i, kind, url, command, panel;
+    if (key.indexOf("url:") === 0) {
+      url = key.slice(4);
+      if (!url) return null;
+      kind = (schemeForUrl(url) || {}).kind || "link";
+      for (i = 0; i < PRESETS.length; i++) {
+        if (PRESETS[i].action === "url" && normKey(PRESETS[i].url) === normKey(url)) preset = PRESETS[i];
+      }
+      return {
+        suggestKey: key,
+        kind: (preset && preset.kind) || kind,
+        label: (preset && preset.label) || labelForUsageKey(key),
+        action: "url",
+        url: url
+      };
+    }
+    if (key.indexOf("cmd:") === 0) {
+      command = key.slice(4);
+      if (!command) return null;
+      for (i = 0; i < PRESETS.length; i++) {
+        if (PRESETS[i].action === "shortcut" && normKey(PRESETS[i].command) === command) preset = PRESETS[i];
+      }
+      return {
+        suggestKey: key,
+        kind: (preset && preset.kind) || "automations",
+        label: (preset && preset.label) || labelForUsageKey(key),
+        action: "shortcut",
+        command: command
+      };
+    }
+    if (key.indexOf("panel:") === 0) {
+      panel = key.slice(6);
+      if (!panel) return null;
+      for (i = 0; i < PRESETS.length; i++) {
+        if (PRESETS[i].action === "panel" && PRESETS[i].panel === panel) preset = PRESETS[i];
+      }
+      return {
+        suggestKey: key,
+        kind: (preset && preset.kind) || "link",
+        label: (preset && preset.label) || labelForUsageKey(key),
+        action: "panel",
+        panel: panel
+      };
+    }
+    return null;
+  }
+
 
   function defaultBubbles(profile) {
     var list = (root.FRIDAY_CONFIG.DEFAULT_BUBBLES[profile.id] || root.FRIDAY_CONFIG.DEFAULT_BUBBLES.sky).map(function (b, i) {
@@ -76,11 +182,21 @@
     this.edit = false;
     this.list = root.FridayStorage.get("bubbles", null);
     if (!this.list || !this.list.length) this.list = defaultBubbles(this.profile);
+    var migrated = false;
     // migration: give Sky a real Messages bubble if the saved layout predates it
     if (this.profile.id === "sky" && !this.list.some(function (b) { return b.kind === "messages"; })) {
       this.list.push({ id: "texts", kind: "messages", label: "Messages", gold: true, size: "lg", action: "url", url: "sms:", slot: this.list.length });
-      root.FridayStorage.set && root.FridayStorage.set("bubbles", this.list);
+      migrated = true;
     }
+    if (!this.list.some(function (b) { return b.kind === "camera"; })) {
+      this.list.push({ id: "camera", kind: "camera", label: "Camera", gold: false, size: "sm", action: "url", url: "camera://", slot: this.list.length });
+      migrated = true;
+    }
+    if (!this.list.some(function (b) { return b.kind === "phone"; })) {
+      this.list.push({ id: "phone", kind: "phone", label: "Phone", gold: true, size: "sm", action: "url", url: "tel:", slot: this.list.length });
+      migrated = true;
+    }
+    if (migrated && root.FridayStorage.set) root.FridayStorage.set("bubbles", this.list);
     this._floatT0 = performance.now();
     this._slots = [];
     this.mode = "orbit";
@@ -91,6 +207,7 @@
     this.frameFor = opts.frameFor || function () { return null; };
     this._fit = 1;
     this.render();
+    this.refreshSuggestions();
     var self = this;
     this._onResize = function () { self.layout(); };
     window.addEventListener("resize", this._onResize);
@@ -384,7 +501,7 @@
   FridayBubbles.prototype._node = function (b) {
     var btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "bubble" + (b.gold ? " gold" : "");
+    btn.className = "bubble" + (b.gold ? " gold" : "") + (b.suggest ? " suggest" : "");
     btn.setAttribute("data-id", b.id);
     btn.setAttribute("aria-label", b.label || b.kind);
     var icon = ICONS[b.kind] || ICONS.link;
@@ -552,9 +669,17 @@
   };
 
   FridayBubbles.prototype.remove = function (id) {
-    this.list = this.list.filter(function (b) { return b.id !== id; });
+    var b = this.byId(id);
+    if (b && b.suggest && b.suggestKey) {
+      var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
+      if (dismissed.indexOf(b.suggestKey) < 0) {
+        dismissed.push(b.suggestKey);
+        root.FridayStorage.set("dismissedSuggestions", dismissed);
+      }
+    }
+    this.list = this.list.filter(function (x) { return x.id !== id; });
     this.save();
-    this.render();
+    if (!this.refreshSuggestions()) this.render();
   };
 
   FridayBubbles.prototype.add = function (spec) {
@@ -568,13 +693,135 @@
   FridayBubbles.prototype.resetLayout = function () {
     this.list = defaultBubbles(this.profile);
     this.save();
-    this.render();
+    if (!this.refreshSuggestions()) this.render();
   };
 
   FridayBubbles.prototype.presets = function () { return PRESETS; };
 
+  FridayBubbles.prototype.usageKey = function (b) {
+    if (!b) return "";
+    if (b.suggestKey) return b.suggestKey;
+    if (b.action === "url") return "url:" + normKey(this._resolveUrl(b) || b.url || "");
+    if (b.action === "shortcut") return "cmd:" + normKey(b.command);
+    if (b.action === "panel") return "panel:" + normKey(b.panel);
+    return "kind:" + normKey(b.kind);
+  };
+
+  FridayBubbles.prototype.bumpUsage = function (b) {
+    var key = this.usageKey(b);
+    if (key) this.noteUsage(key);
+  };
+
+  FridayBubbles.prototype.noteUsage = function (key) {
+    key = normKey(key);
+    if (!key) return;
+    var usage = root.FridayStorage.get("usage", {}) || {};
+    usage[key] = (usage[key] || 0) + 1;
+    root.FridayStorage.set("usage", usage);
+  };
+
+  FridayBubbles.prototype.noteAppMentions = function (text) {
+    var t = " " + normKey(text) + " ";
+    if (!/(open|launch|start|play|call|text|message)/.test(t)) return false;
+    var i, name, hit = false;
+    for (i = 0; i < APP_SCHEMES.length; i++) {
+      name = normKey(APP_SCHEMES[i].name);
+      if (name && t.indexOf(name) >= 0) {
+        this.noteUsage("url:" + normKey(APP_SCHEMES[i].url));
+        hit = true;
+      }
+    }
+    return hit;
+  };
+
+  FridayBubbles.prototype._suggestionCovered = function (spec) {
+    var self = this;
+    return this.list.some(function (b) {
+      if (b.suggest) return false;
+      if (spec.suggestKey && b.suggestKey === spec.suggestKey) return true;
+      if (spec.action === "url" && b.action === "url" && normKey(self._resolveUrl(b) || b.url) === normKey(spec.url)) return true;
+      if (spec.action === "shortcut" && b.action === "shortcut" && normKey(b.command) === normKey(spec.command)) return true;
+      if (spec.action === "panel" && !spec.fromMemory && b.action === "panel" && b.panel === spec.panel) return true;
+      if (spec.kind === "camera" && b.kind === "camera") return true;
+      if (spec.kind === "phone" && b.kind === "phone") return true;
+      return false;
+    });
+  };
+
+  // Auto-add up to a few small suggestion bubbles from memory and frequent actions.
+  // Returns true if it already re-rendered.
+  FridayBubbles.prototype.refreshSuggestions = function () {
+    var self = this;
+    var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
+    var usage = root.FridayStorage.get("usage", {}) || {};
+    var memory = root.FridayStorage.get("memory", []) || [];
+    var candidates = [];
+
+    function addCand(spec, score) {
+      if (!spec || !spec.suggestKey) return;
+      if (dismissed.indexOf(spec.suggestKey) >= 0) return;
+      if (self._suggestionCovered(spec)) return;
+      if (candidates.some(function (c) { return c.suggestKey === spec.suggestKey; })) return;
+      spec.suggest = true;
+      spec.size = "sm";
+      spec.gold = false;
+      spec.score = score || 1;
+      candidates.push(spec);
+    }
+
+    memory.forEach(function (m) {
+      var text = String((m && m.text) || m || "").trim();
+      if (!text) return;
+      var key = "memory:" + normKey(text).replace(/\s+/g, " ").slice(0, 80);
+      var label = text.length > 18 ? text.slice(0, 16) + "…" : text;
+      addCand({ suggestKey: key, kind: "memory", label: label, action: "panel", panel: "memory", fromMemory: true }, 5);
+    });
+
+    Object.keys(usage).forEach(function (key) {
+      if ((usage[key] || 0) < 2) return;
+      if (key.indexOf("memory:") === 0) return;
+      addCand(specFromUsageKey(key), usage[key]);
+    });
+
+    candidates.sort(function (a, b) { return (b.score - a.score) || String(a.label).localeCompare(String(b.label)); });
+    candidates = candidates.slice(0, SUGGEST_CAP);
+
+    var wanted = {};
+    candidates.forEach(function (c) { wanted[c.suggestKey] = c; });
+
+    var changed = false;
+    this.list = this.list.filter(function (b) {
+      if (!b.suggest) return true;
+      if (wanted[b.suggestKey]) {
+        delete wanted[b.suggestKey];
+        return true;
+      }
+      changed = true;
+      return false;
+    });
+    Object.keys(wanted).forEach(function (k) {
+      var c = wanted[k];
+      delete c.score;
+      c.id = uid();
+      c.slot = self.list.length;
+      self.list.push(c);
+      changed = true;
+    });
+    if (changed) {
+      this.save();
+      this.render();
+    }
+    return changed;
+  };
+
   FridayBubbles.prototype.activate = function (b) {
     if (this.edit) return;
+    this.bumpUsage(b);
+    if (b.suggest) {
+      b.suggest = false;
+      this.save();
+      this.refreshSuggestions();
+    }
     if (b.action === "panel") this.onAction({ type: "panel", panel: b.panel, bubble: b });
     else if (b.action === "shortcut") this.onAction({ type: "shortcut", command: b.command, bubble: b });
     else if (b.action === "url") this.onAction({ type: "url", url: this._resolveUrl(b), bubble: b });
@@ -605,4 +852,5 @@
 
   root.FridayBubbles = FridayBubbles;
   root.FridayBubbleIcons = ICONS;
+  root.FridayAppSchemes = APP_SCHEMES;
 })(window);

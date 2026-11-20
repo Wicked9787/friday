@@ -72,6 +72,24 @@
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
+  function isNativeApp() {
+    try {
+      if (root.Capacitor && typeof root.Capacitor.isNativePlatform === "function" && root.Capacitor.isNativePlatform()) {
+        return true;
+      }
+    } catch (e) {}
+    return location.protocol === "capacitor:";
+  }
+
+  function loadConnections() {
+    var list = root.FridayStorage.get("connections", []);
+    return Array.isArray(list) ? list : [];
+  }
+
+  function saveConnections(list) {
+    root.FridayStorage.set("connections", list || []);
+  }
+
   function appUrl(profileId) {
     var path = (location.pathname || "/").replace(/index\.html$/, "");
     if (path.slice(-1) !== "/") path += "/";
@@ -118,6 +136,7 @@
     this.onChips = opts.onChips || function () {};
     this.onReset = opts.onReset || function () {};
     this.onToast = opts.onToast || function () {};
+    this.onAddBubble = opts.onAddBubble || function () {};
     this.values = loadSettings();
     if (!this.values.look) this.values.look = this.profile.defaultLook || "N";
     if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday";
@@ -285,9 +304,16 @@
   FridaySettings.prototype._bind = function () {
     var self = this;
     this._bindLooks();
-    this._bindIcons();
+    var iconAccord = document.getElementById("accord-icons");
+    if (isNativeApp() && iconAccord) {
+      iconAccord.hidden = true;
+      iconAccord.style.display = "none";
+    } else {
+      this._bindIcons();
+    }
     this._bindLayouts();
     this._bindChips();
+    this._bindConnections();
     this._syncHeaders();
 
     var briefing = document.getElementById("set-briefing");
@@ -453,6 +479,123 @@
     };
   };
 
+  FridaySettings.prototype._syncConnectionsHeader = function () {
+    var el = document.getElementById("connections-current");
+    if (!el) return;
+    var n = loadConnections().length;
+    el.textContent = n ? (n + (n === 1 ? " connected" : " connected")) : "None";
+  };
+
+  FridaySettings.prototype._bindConnections = function () {
+    var self = this;
+    var listEl = document.getElementById("connections-list");
+    var iconsEl = document.getElementById("conn-icons");
+    if (!listEl) return;
+    var selectedKind = "link";
+    var icons = root.FridayBubbleIcons || {};
+
+    function current() { return loadConnections(); }
+
+    function renderIcons() {
+      if (!iconsEl) return;
+      iconsEl.innerHTML = "";
+      Object.keys(icons).forEach(function (kind) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = kind === selectedKind ? "on" : "";
+        btn.setAttribute("data-kind", kind);
+        btn.setAttribute("aria-label", kind);
+        btn.innerHTML = icons[kind];
+        btn.addEventListener("click", function () {
+          selectedKind = kind;
+          renderIcons();
+        });
+        iconsEl.appendChild(btn);
+      });
+    }
+
+    function renderList() {
+      var list = current();
+      listEl.innerHTML = "";
+      list.forEach(function (c, i) {
+        var row = document.createElement("div");
+        row.className = "connection-row";
+        var name = document.createElement("div");
+        name.className = "conn-name";
+        name.textContent = c.name || "Connection";
+        var open = document.createElement("button");
+        open.type = "button";
+        open.className = "btn";
+        open.textContent = "Open";
+        open.addEventListener("click", function () {
+          if (!c.url) return;
+          try { location.href = c.url; } catch (e) {}
+        });
+        var add = document.createElement("button");
+        add.type = "button";
+        add.className = "btn gold";
+        add.textContent = "Add bubble";
+        add.addEventListener("click", function () {
+          self.onAddBubble({
+            kind: c.kind || "link",
+            label: c.name || "Connection",
+            gold: true,
+            size: "lg",
+            action: "url",
+            url: c.url,
+            connectionId: c.id
+          });
+        });
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "btn danger";
+        del.textContent = "Remove";
+        del.addEventListener("click", function () {
+          var next = current().filter(function (x, idx) { return idx !== i; });
+          saveConnections(next);
+          renderList();
+        });
+        var url = document.createElement("div");
+        url.className = "conn-url";
+        url.textContent = c.url || "";
+        row.appendChild(name);
+        row.appendChild(open);
+        row.appendChild(add);
+        row.appendChild(del);
+        row.appendChild(url);
+        listEl.appendChild(row);
+      });
+      self._syncConnectionsHeader();
+    }
+
+    var addBtn = document.getElementById("btn-conn-add");
+    if (addBtn) {
+      addBtn.onclick = function () {
+        var name = (document.getElementById("conn-name") || {}).value;
+        var url = (document.getElementById("conn-url") || {}).value;
+        name = String(name || "").trim();
+        url = String(url || "").trim();
+        if (!name) { self.onToast("Give the connection a name."); return; }
+        if (!url) { self.onToast("Add a link or app scheme."); return; }
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && /^[\w.-]+\.[a-z]{2,}([\/:?#]|$)/i.test(url)) url = "https://" + url;
+        var list = current();
+        list.push({
+          id: "c" + Math.random().toString(36).slice(2, 9),
+          name: name,
+          url: url,
+          kind: selectedKind || "link"
+        });
+        saveConnections(list);
+        document.getElementById("conn-name").value = "";
+        document.getElementById("conn-url").value = "";
+        renderList();
+        self.onToast("Connection saved on this phone.");
+      };
+    }
+    renderIcons();
+    renderList();
+  };
+
   FridaySettings.prototype.shortcutName = function () {
     return this.values.shortcutName || "Friday";
   };
@@ -493,6 +636,7 @@
   };
 
   FridaySettings.prototype.setIcon = function (id) {
+    if (isNativeApp()) return;
     var self = this;
     this.values.iconId = id;
     saveSettings(this.values);

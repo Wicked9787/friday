@@ -101,6 +101,22 @@
         </div>
       </details>
 
+      <details class="accord" id="accord-connections">
+        <summary>Connections <span class="accord-current" id="connections-current">None</span></summary>
+        <div class="accord-body">
+          <p class="hint">Add other agents or services by name and a link or app scheme. Open one with a tap, or pin it as a bubble.</p>
+          <div id="connections-list"></div>
+          <div class="row row-col" style="margin-top:12px">
+            <label for="conn-name">New connection</label>
+            <input type="text" id="conn-name" placeholder="Name">
+            <input type="text" id="conn-url" placeholder="https://… or an app scheme" style="margin-top:8px">
+            <div class="sub">Optional icon</div>
+            <div id="conn-icons" class="icon-pick"></div>
+            <button class="btn gold" type="button" id="btn-conn-add">Save connection</button>
+          </div>
+        </div>
+      </details>
+
       <div class="row row-col">
         <label class="toggle-row">Morning briefing
           <input type="checkbox" id="set-briefing">
@@ -285,10 +301,14 @@
     <div class="body">
       <div id="bubble-presets"></div>
       <div class="row row-col">
-        <label>Custom link</label>
-        <input type="text" id="custom-label" placeholder="Label">
-        <input type="text" id="custom-url" placeholder="tel:, sms:, mailto:, or a website" style="margin-top:8px">
-        <button class="btn gold" type="button" id="btn-custom-bubble">Add custom bubble</button>
+        <label>Add any app</label>
+        <p class="hint">Pick a common app, or type a name and any URL or app scheme (spotify://, youtube://, https://…).</p>
+        <div id="app-scheme-list" class="scheme-list"></div>
+        <input type="text" id="custom-label" placeholder="Name">
+        <input type="text" id="custom-url" placeholder="spotify://, youtube://, or https://…" style="margin-top:8px">
+        <div class="sub">Icon</div>
+        <div id="custom-icon-pick" class="icon-pick"></div>
+        <button class="btn gold" type="button" id="btn-custom-bubble">Add app bubble</button>
       </div>
     </div>
   </section>

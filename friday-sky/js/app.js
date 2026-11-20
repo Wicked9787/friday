@@ -179,7 +179,16 @@
 
   function openUrl(url) {
     if (!url) return;
-    location.href = url;
+    // Capacitor's WKWebView hands non-http schemes off to iOS; same path works on the web PWA.
+    try { location.href = url; } catch (e) {}
+  }
+
+  function normalizeEnteredUrl(url) {
+    url = String(url || "").trim();
+    if (!url) return "";
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return url;
+    if (/^[\w.-]+\.[a-z]{2,}([\/:?#]|$)/i.test(url)) return "https://" + url;
+    return url;
   }
 
   function honorific() {
@@ -405,10 +414,19 @@
       } else if (result.kind === "phone") {
         setCaption(result.text);
         await voice.speak(result.text, profile);
+        if (bubbles && result.command) bubbles.noteUsage("cmd:" + String(result.command).toLowerCase());
+        if (bubbles) bubbles.noteAppMentions(text);
+        if (bubbles) bubbles.refreshSuggestions();
         runShortcut(result.command);
+      } else if (result.kind === "memory") {
+        setCaption(result.text || "");
+        renderMemory();
+        if (bubbles) bubbles.refreshSuggestions();
+        await voice.speak(result.text, profile);
       } else {
         setCaption(result.text || "");
         renderChat();
+        if (bubbles && bubbles.noteAppMentions(text)) bubbles.refreshSuggestions();
         await voice.speak(result.text, profile);
       }
     } catch (err) {
@@ -535,7 +553,13 @@
       onIcon: function (id) { applyAppIcon(id); },
       onChips: function () { renderChips(); },
       onReset: function () { toast("Reset. Reloading."); setTimeout(function () { location.reload(); }, 400); },
-      onToast: toast
+      onToast: toast,
+      onAddBubble: function (spec) {
+        bubbles.add(spec);
+        closePanels();
+        bubbles.setEdit(true);
+        toast("Added to the map.");
+      }
     });
 
     applyLayout(settings.values.layout || "orbit", true);
@@ -640,16 +664,62 @@
       });
       presets.appendChild(btn);
     });
+
+    var selectedKind = "link";
+    var iconPick = document.getElementById("custom-icon-pick");
+    function renderCustomIcons() {
+      if (!iconPick || !window.FridayBubbleIcons) return;
+      iconPick.innerHTML = "";
+      Object.keys(FridayBubbleIcons).forEach(function (kind) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = kind === selectedKind ? "on" : "";
+        btn.setAttribute("data-kind", kind);
+        btn.setAttribute("aria-label", kind);
+        btn.innerHTML = FridayBubbleIcons[kind];
+        btn.addEventListener("click", function () {
+          selectedKind = kind;
+          renderCustomIcons();
+        });
+        iconPick.appendChild(btn);
+      });
+    }
+    renderCustomIcons();
+
+    var schemeList = document.getElementById("app-scheme-list");
+    if (schemeList && window.FridayAppSchemes) {
+      FridayAppSchemes.forEach(function (app) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn";
+        btn.textContent = app.name;
+        btn.addEventListener("click", function () {
+          document.getElementById("custom-label").value = app.name;
+          document.getElementById("custom-url").value = app.url;
+          selectedKind = app.kind || "link";
+          renderCustomIcons();
+        });
+        schemeList.appendChild(btn);
+      });
+    }
+
     document.getElementById("btn-custom-bubble").onclick = function () {
-      var label = document.getElementById("custom-label").value.trim() || "Link";
-      var url = document.getElementById("custom-url").value.trim();
-      if (!url) { toast("Add a link first."); return; }
-      bubbles.add({ kind: "link", label: label, gold: true, size: "lg", action: "url", url: url });
+      var label = document.getElementById("custom-label").value.trim() || "App";
+      var url = normalizeEnteredUrl(document.getElementById("custom-url").value);
+      if (!url) { toast("Add a link or app scheme first."); return; }
+      bubbles.add({ kind: selectedKind || "link", label: label, gold: true, size: "lg", action: "url", url: url, custom: true });
+      document.getElementById("custom-label").value = "";
+      document.getElementById("custom-url").value = "";
+      selectedKind = "link";
+      renderCustomIcons();
       closePanels();
       bubbles.setEdit(true);
     };
 
     window.addEventListener("friday:daddy", function () { bubbles.syncDaddy(); });
+    window.addEventListener("friday:memory", function () {
+      if (bubbles) bubbles.refreshSuggestions();
+    });
 
     document.getElementById("setup-form").addEventListener("submit", function (ev) {
       ev.preventDefault();
