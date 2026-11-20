@@ -1313,12 +1313,54 @@
     if (hd === this.hd) return;
     this.hd = hd;
     if (!this._thumb) this.quality = hd ? QUALITY.ultra : QUALITY.high;
+    if (!this._thumb && this._light) { this._qFull = this.quality; this.quality = QUALITY.med; }
     this._fpsWin = [];
     this._freeTargets();
     this.canvas.width = 1;
     this.resize();
     this._rebuild();
   };
+
+  /* Battery modes. rest: nobody has talked or touched for a while.
+     night: night hours (lighter quality, dimmer). lowPower: iPhone Low Power Mode. */
+  var POWER = {
+    full:      { cap: 0,  speed: 1,    dim: 1 },
+    rest:      { cap: 30, speed: 0.6,  dim: 0.85 },
+    night:     { cap: 30, speed: 0.75, dim: 0.8,  light: true },
+    nightrest: { cap: 24, speed: 0.45, dim: 0.55, light: true },
+    saver:     { cap: 30, speed: 0.8,  dim: 0.95, light: true }
+  };
+  FridayOrb.prototype.setPower = function (state) {
+    state = state || {};
+    var key = state.night ? (state.rest ? "nightrest" : "night") : (state.rest ? "rest" : (state.saver ? "saver" : "full"));
+    var sig = key + (state.saver ? "|saver" : "");
+    if (sig === this._powerSig) return key;
+    this._powerSig = sig;
+    this._power = key;
+    var p = POWER[key];
+    this._fpsCap = p.cap;
+    this._speed = p.speed;
+    this._dim = p.dim;
+    this._fpsWin = [];
+    var light = !!(p.light || state.saver);
+    if (!this._thumb && light !== !!this._light) {
+      this._light = light;
+      if (light) {
+        this._qFull = this.quality;
+        var order = this._qOrder || ["ultra", "high", "med", "low"];
+        if (order.indexOf(this.quality.name) < order.indexOf("med")) this.quality = QUALITY.med;
+      } else if (this._qFull) {
+        this.quality = this._qFull;
+        this._qFull = null;
+      }
+      this._freeTargets();
+      this.canvas.width = 1;
+      this.resize();
+      this._rebuild();
+    }
+    return key;
+  };
+  FridayOrb.prototype.power = function () { return this._power || "full"; };
 
   FridayOrb.prototype.setTalking = function (who, volume) {
     if (!who || who === "idle") this.speaker = "idle";
@@ -1344,6 +1386,10 @@
     var loop = function (ts) {
       if (!self.running) return;
       self._raf = requestAnimationFrame(loop);
+      // Battery saver: when resting or at night, draw fewer frames per second.
+      var cap = self._fpsCap || 0;
+      if (cap && self._lastDraw && ts - self._lastDraw < 1000 / cap - 2) return;
+      self._lastDraw = ts;
       self._frame(ts);
     };
     this._raf = requestAnimationFrame(loop);
@@ -1635,13 +1681,16 @@
     else this._tint = this._idleTint || [0.06, 0.045, 0.02];
     this._exposure = talking ? (this.speaker === "friday" ? 2.3 : 2.1) : 1.9;
 
+    this._exposure *= (talking ? Math.max(this._dim || 1, 0.85) : (this._dim || 1));
+    var adt = talking ? dt : dt * (this._speed || 1);
+
     var sign = this.spinSign;
     for (var i = 0; i < 4; i++) {
-      this.angles[i] += dt * SHELLS4[i].speed * SHELLS4[i].spin * sign;
+      this.angles[i] += adt * SHELLS4[i].speed * SHELLS4[i].spin * sign;
     }
-    this.angH += dt * 0.11;
+    this.angH += adt * 0.11;
 
-    if (this._dustOn) this._updateDust(dt);
+    if (this._dustOn) this._updateDust(adt);
     if (this._follow && this.talk > 0.2) {
       for (var fi = 0; fi < 4; fi++) this.angles[fi] += dt * 0.12 * this.talk;
     }
@@ -1729,7 +1778,7 @@
 
     if (!this._thumb && this._fallbackStep < 9 && ++this._frames === 12) this._selfCheck();
     if (this._thumb) return;
-    this._fpsWin.push(dt);
+    if (!this._fpsCap) this._fpsWin.push(dt);
     if (this._fpsWin.length > 90) this._fpsWin.shift();
     this._checked += dt;
     if (this._checked > 2.2) {
@@ -1743,6 +1792,20 @@
     var s = 0, i;
     for (i = 0; i < this._fpsWin.length; i++) s += this._fpsWin[i];
     var fps = this._fpsWin.length / s;
+    // iPhone Low Power Mode holds apps to about 30 frames a second.
+    if (!this._fpsCap && fps > 25 && fps < 35) {
+      this._lpHits = (this._lpHits || 0) + 1;
+      if (this._lpHits >= 2 && !this.lowPower) {
+        this.lowPower = true;
+        try { window.dispatchEvent(new CustomEvent("friday:lowpower", { detail: { on: true } })); } catch (e) {}
+      }
+    } else if (fps > 50) {
+      this._lpHits = 0;
+      if (this.lowPower) {
+        this.lowPower = false;
+        try { window.dispatchEvent(new CustomEvent("friday:lowpower", { detail: { on: false } })); } catch (e) {}
+      }
+    }
     if (fps < 44) {
       var idx = this._qOrder.indexOf(this.quality.name);
       if (idx < this._qOrder.length - 1) {

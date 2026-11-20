@@ -6,10 +6,12 @@
   var profile = cfg.getProfile();
   var settingsData = window.FridayLoadSettings();
 
-  var orb, voice, chat, bubbles, tools, settings, neural, life, eyes;
-  var APP_VERSION = "2.0";
+  var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
+  var extras = window.FridayExtras || null;
+  var APP_VERSION = "3.0";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  var handsFree = cfg.queryParam("listen") === "1" || IS_NATIVE;
+  var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
+  function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
   var busy = false;
 
 
@@ -137,10 +139,12 @@
 
   function setCaption(line) {
     document.getElementById("caption-line").textContent = line || "Tap to talk";
+    if (bedside && bedside.on) bedside.caption(line);
   }
 
   function openPanel(id) {
     if (id === "photo-take") { if (eyes) eyes.open(""); return; }
+    if (id === "bedside") { openBedside(); return; }
     closePanels();
     var el = document.getElementById("panel-" + id);
     if (el) { el.classList.add("open"); if (orb) orb.stop(); }
@@ -153,6 +157,8 @@
     if (id === "lists" && life) life.renderLists(document.getElementById("lists-box"));
     if (id === "countdowns" && life) life.renderCountdowns(document.getElementById("countdowns-box"));
     if (id === "money" && life) life.renderBills(document.getElementById("bills-box"));
+    if (id === "money" && extras) extras.renderSpending(document.getElementById("spending-box"));
+    if (id === "habits" && extras) extras.renderHabits(document.getElementById("habits-box"));
     if (id === "timer" && life) { var tb = document.getElementById("timers-box"); tb._key = null; life.renderTimers(tb); }
   }
 
@@ -162,7 +168,8 @@
     var id = open.id.replace("panel-", "");
     if (id === "lists") life.renderLists(document.getElementById("lists-box"));
     else if (id === "countdowns") life.renderCountdowns(document.getElementById("countdowns-box"));
-    else if (id === "money") life.renderBills(document.getElementById("bills-box"));
+    else if (id === "money") { life.renderBills(document.getElementById("bills-box")); if (extras) extras.renderSpending(document.getElementById("spending-box")); }
+    else if (id === "habits" && extras) extras.renderHabits(document.getElementById("habits-box"));
     else if (id === "notes") renderNotes();
     else if (id === "memory") renderMemory();
   }
@@ -187,6 +194,50 @@
 
   function emitActivity(node, text, extra) {
     try { window.dispatchEvent(new CustomEvent("friday:activity", { detail: Object.assign({ node: node, text: text }, extra || {}) })); } catch (e) {}
+  }
+
+  /* 3.0: when one sentence needs several things outside the app (Shortcut jobs,
+     opening an app), they wait here. The first runs now; each time the Shortcut
+     hands back to Friday, the next one starts. */
+  function goShortcut(cmd, opts) {
+    if (opts && opts.collect) { opts.collect.push({ kind: "shortcut", value: cmd }); return; }
+    leftForApp = true;
+    runShortcut(cmd);
+  }
+  function goUrl(url, opts) {
+    if (opts && opts.collect) { opts.collect.push({ kind: "url", value: url }); return; }
+    leftForApp = true;
+    openUrl(url);
+  }
+  function runLeaveItem(it) {
+    if (!it) return;
+    if (it.kind === "url") openUrl(it.value);
+    else runShortcut(it.value);
+  }
+  function runLeaveQueue(items) {
+    items = (items || []).slice();
+    if (!items.length) return;
+    var first = items.shift();
+    FridayStorage.set("leaveQueue", items.length ? { items: items, at: Date.now() } : null);
+    leftForApp = true;
+    runLeaveItem(first);
+  }
+  var _leaveAt = 0;
+  function pendingLeave() {
+    var q = FridayStorage.get("leaveQueue", null);
+    if (!q || !Array.isArray(q.items) || !q.items.length) return null;
+    if (Date.now() - (q.at || 0) > 3 * 60 * 1000) { FridayStorage.set("leaveQueue", null); return null; }
+    return q;
+  }
+  function continueLeaveQueue() {
+    var q = pendingLeave();
+    if (!q || Date.now() - _leaveAt < 1500) return false;
+    _leaveAt = Date.now();
+    var next = q.items.shift();
+    FridayStorage.set("leaveQueue", q.items.length ? { items: q.items, at: Date.now() } : null);
+    setCaption(q.items.length ? "Next one…" : "Last one…");
+    setTimeout(function () { runLeaveItem(next); }, 700);
+    return true;
   }
 
   function runShortcut(command) {
@@ -397,6 +448,7 @@
       runBriefing();
       return;
     }
+    if (recapDue()) { runRecap(); return; }
     if (s.wakeGreeting !== false) speakLine(wakeLine());
   }
 
@@ -544,7 +596,16 @@
       return;
     }
     setCaption(text);
-    emitActivity("listening", "Heard: " + text.slice(0, 70));
+    if (!opts.part) emitActivity("listening", "Heard: " + text.slice(0, 70));
+    if (!opts.part && extras) {
+      var steps = extras.splitCommands(text);
+      if (steps.length > 1) {
+        chat._push("user", text);
+        emitActivity("thinking", "Doing " + steps.length + " things at once");
+        await runMany(steps, null);
+        return;
+      }
+    }
     if (opts.showChat !== false) {
       chat.history.push({ role: "user", content: text, at: new Date().toISOString() });
       chat.save();
@@ -558,16 +619,14 @@
     try {
       var camCmd = cameraCommand(text);
       if (camCmd) {
-        leftForApp = true;
         setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
-        runShortcut(camCmd);
+        goShortcut(camCmd, opts);
         return;
       }
       var direct = directAppUrl(text);
       if (direct) {
-        leftForApp = true;
         setCaption("Opening " + direct.name + ".");
-        openUrl(direct.url);
+        goUrl(direct.url, opts);
         return;
       }
       var low = text.toLowerCase().replace(/[.!?,]/g, "").trim();
@@ -586,6 +645,8 @@
         await voice.speak(wline, profile);
         return;
       }
+      var ex = extras ? extras.handle(text, profile) : null;
+      if (ex) { await runExtra(ex, text, opts); return; }
       var act = life ? life.handle(text) : null;
       if (!act && /^(run |start )?(a )?(diagnostics?|system check|self[- ]?check|health check)$|^check (yourself|your systems)$/.test(low)) {
         chat._push("user", text);
@@ -610,9 +671,9 @@
         if (act.panel) openPanel(act.panel);
         else refreshOpen();
         setCaption(act.say || "");
-        if (act.url) { leftForApp = true; await voice.speak(act.say, profile); openUrl(act.url); return; }
+        if (act.url) { await voice.speak(act.say, profile); goUrl(act.url, opts); return; }
         await voice.speak(act.say, profile);
-        if (act.shortcut) { leftForApp = true; runShortcut(act.shortcut); }
+        if (act.shortcut) goShortcut(act.shortcut, opts);
         return;
       }
       var spokeStream = false;
@@ -636,8 +697,8 @@
         if (bubbles && result.command) bubbles.noteUsage("cmd:" + String(result.command).toLowerCase());
         if (bubbles) bubbles.noteAppMentions(text);
         if (bubbles) bubbles.refreshSuggestions();
-        runShortcut(result.command);
-        if (result.kind === "messages") showMessagesButton(result.command);
+        goShortcut(result.command, opts);
+        if (result.kind === "messages" && !opts.collect) showMessagesButton(result.command);
       } else if (result.kind === "memory") {
         setCaption(result.text || "");
         renderMemory();
@@ -659,7 +720,9 @@
       busy = false;
       if (neural) neural.setActive(null);
       document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
-      if (leftForApp) {
+      if (opts.part) {
+        // a step inside a multi-task sentence: the caller decides what happens next
+      } else if (leftForApp) {
         leftForApp = false;
         orb.setTalking("idle", 0);
       } else if (handsFree && !voice.listening) {
@@ -669,6 +732,205 @@
       }
     }
   }
+
+  // ---------- 3.0: several steps, routines, messages, translator, recap ----------
+  function joinList(a) { return a.length < 2 ? (a[0] || "") : a.slice(0, -1).join(", ") + ", and " + a[a.length - 1]; }
+
+  async function runMany(steps, opener, outer) {
+    var collect = (outer && outer.collect) || [];
+    var own = !(outer && outer.collect);
+    if (opener) { setCaption(opener); await voice.speak(opener, profile); }
+    for (var i = 0; i < steps.length; i++) {
+      await handleUtterance(steps[i], { part: true, collect: collect, showChat: false });
+    }
+    if (!own) return;
+    if (collect.length) { runLeaveQueue(collect); orb.setTalking("idle", 0); return; }
+    if (outer && outer.part) return;
+    if (handsFree && !voice.listening) setTimeout(function () { beginListen(); }, 400);
+    else if (!voice.speaking) orb.setTalking("idle", 0);
+  }
+
+  function rainChanceToday() {
+    var t = new Promise(function (res) { setTimeout(function () { res(null); }, 4000); });
+    var w = fetchWeather().then(function (x) { return x && x.rain != null ? x.rain : null; }, function () { return null; });
+    return Promise.race([w, t]);
+  }
+
+  async function runRoutine(r, opts) {
+    var hon = honorific(), steps = (r.steps || []).slice(), opener;
+    if (r.builtin === "home") opener = "Welcome home" + (hon ? ", " + hon : "") + ".";
+    else if (r.builtin === "leaving") {
+      opener = "Have a good one" + (hon ? ", " + hon : "") + ".";
+      var rain = await rainChanceToday();
+      if (rain != null && rain >= 40) opener += " There's " + aPct(rain) + " percent chance of rain today, so grab an umbrella.";
+    } else {
+      if (!steps.length) {
+        var none = "The " + String(r.phrase || "").toLowerCase() + " routine doesn't have any steps yet. You can add them in Settings, under Routines.";
+        setCaption(none);
+        await voice.speak(none, profile);
+        return;
+      }
+      opener = "Starting " + String(r.phrase || "your routine").toLowerCase() + ".";
+    }
+    emitActivity("thinking", "Routine: " + (r.phrase || ""));
+    chat._push("assistant", opener);
+    if (!steps.length) { setCaption(opener); await voice.speak(opener, profile); return; }
+    await runMany(steps, opener, opts);
+  }
+
+  async function runTranslate(tr) {
+    setCaption("Translating…");
+    emitActivity("research", "Translating to " + tr.language);
+    var out = "";
+    try {
+      out = await window.FridayBrain.ask([
+        { role: "system", content: "You are a translator. Translate the user's text into " + tr.language + ". Reply with only the translation, natural and everyday. No quotes, no notes, no pronunciation guide." },
+        { role: "user", content: tr.text }
+      ], { purpose: "chat", temperature: 0.2 });
+    } catch (e) { out = ""; }
+    out = String(out || "").trim().replace(/^["\u201C]+|["\u201D]+$/g, "");
+    if (!out) {
+      var fail = navigator.onLine === false ? "I need the internet to translate." : "I couldn't translate that just now.";
+      setCaption(fail);
+      await voice.speak(fail, profile);
+      return;
+    }
+    var intro = "In " + tr.language + ", that's:";
+    chat._push("assistant", intro + " " + out);
+    setCaption(tr.language + ": " + out);
+    voice.stopSpeak();
+    voice.queue(intro, profile);
+    voice.queue(out, profile, tr.code);
+    await voice.whenDone();
+  }
+
+  function recapKey() {
+    var d = new Date();
+    if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+    return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate();
+  }
+  function recapDue() {
+    var s = (settings && settings.values) || settingsData || {};
+    if (s.nightlyRecap === false) return false;
+    var h = new Date().getHours(), at = s.recapHour == null ? 21 : +s.recapHour;
+    return (h >= at || h < 3) && FridayStorage.get("recapDate", "") !== recapKey();
+  }
+  async function runRecap() {
+    FridayStorage.set("recapDate", recapKey());
+    var hon = honorific(), bits = extras ? extras.recapBits() : { today: [], tomorrow: [] };
+    setCaption("Putting your recap together…");
+    emitActivity("weather", "Nightly recap");
+    var wx = "";
+    try { wx = await Promise.race([weatherSentence("tomorrow"), new Promise(function (r) { setTimeout(function () { r(""); }, 5000); })]); } catch (e) { wx = ""; }
+    var parts = ["Here's your day" + (hon ? ", " + hon : "") + "."];
+    parts.push(bits.today.length ? bits.today.join(" ") : "A quiet day. Nothing logged.");
+    if (wx && !/couldn't|need the internet/i.test(wx)) parts.push(wx);
+    if (bits.tomorrow.length) parts.push("For tomorrow, " + joinList(bits.tomorrow) + ".");
+    parts.push("Sleep well" + (hon ? ", " + hon : "") + ".");
+    var body = parts.join(" ");
+    chat._push("assistant", body);
+    setCaption(body);
+    await voice.speak(body, profile);
+  }
+
+  async function runExtra(ex, text, opts) {
+    if (ex.bedside) {
+      chat._push("user", text);
+      if (ex.bedside === "open") { openBedside(); var on = "Charging display on."; setCaption(on); await voice.speak(on, profile); }
+      else { closeBedside(); setCaption("Charging display off."); }
+      return;
+    }
+    if (ex.recap) { chat._push("user", text); await runRecap(); return; }
+    if (ex.partner) {
+      chat._push("user", text);
+      var line = "Sending that to " + ex.partner.to + ".";
+      chat._push("assistant", line);
+      setCaption(line);
+      emitActivity("shortcut", "Message for " + ex.partner.to);
+      await voice.speak(line, profile);
+      goShortcut(ex.partner.command, opts);
+      return;
+    }
+    if (ex.translate) { chat._push("user", text); await runTranslate(ex.translate); return; }
+    if (ex.routine) { chat._push("user", text); await runRoutine(ex.routine, opts); return; }
+    chat._push("user", text);
+    if (ex.say) chat._push("assistant", ex.say);
+    if (ex.panel) openPanel(ex.panel); else refreshOpen();
+    setCaption(ex.say || "");
+    if (ex.tool) emitActivity("thinking", ex.tool === "spending" ? "Logged spending" : "Updated habits");
+    await voice.speak(ex.say, profile);
+  }
+
+  // ---------- 3.0: links from Shortcuts automations (messages, charging) ----------
+  var pendingMessage = false;
+  function onIncomingMessage(L) {
+    var pc = extras ? extras.partnerCfg(profile) : { display: "" };
+    var who = pc.display || L.app || "your partner";
+    var line = "Message from " + who + ": " + L.text;
+    chat._push("assistant", line);
+    toast(line);
+    emitActivity("speaking", "Message from " + who);
+    if (bedside && bedside.on) bedside.message(who, L.text);
+    pendingMessage = true;
+    var tries = 0;
+    (function go() {
+      if ((busy || voice.speaking || document.visibilityState === "hidden") && tries++ < 40) { setTimeout(go, 700); return; }
+      if (voice.listening) { try { voice.stopListen().catch(function () {}); } catch (e) {} document.getElementById("listen-dot").classList.remove("on"); }
+      try { chime(); } catch (e) {}
+      setCaption(line);
+      setTimeout(function () {
+        voice.speak(line, profile).then(function () {
+          pendingMessage = false;
+          if (IS_NATIVE && handsFreeOn() && !voice.listening && !busy) { handsFree = true; beginListen(); }
+        });
+      }, 700);
+    })();
+  }
+  function handleLink(url) {
+    var L = extras ? extras.parseLink(url) : null;
+    if (!L) return;
+    if (L.action === "msg") { onIncomingMessage(L); return; }
+    if (L.action === "charging" || L.action === "bedside") { openBedside(); return; }
+    if (L.action === "unplugged") { closeBedside(); return; }
+    if ((L.action === "say" || L.action === "do") && (L.query.text || L.query.q)) { handleUtterance(L.query.text || L.query.q); return; }
+    if (!L.action) continueLeaveQueue();
+  }
+  window.__fridayHandleLink = handleLink;
+
+  // ---------- 3.0: charging display ----------
+  var bedsideWx = "";
+  function refreshBedsideWeather() {
+    fetchWeather().then(function (w) {
+      if (!w || w.temp == null) return;
+      bedsideWx = w.temp + "\u00B0 " + (w.phrase || "") + (w.rain != null && w.rain >= 30 ? " \u00B7 " + w.rain + "% rain" : "");
+    }, function () {});
+  }
+  function openBedside() {
+    if (!bedside) return;
+    closePanels();
+    refreshBedsideWeather();
+    clearInterval(openBedside._wx);
+    openBedside._wx = setInterval(refreshBedsideWeather, 30 * 60 * 1000);
+    bedside.open();
+  }
+  function closeBedside() {
+    if (!bedside) return;
+    clearInterval(openBedside._wx);
+    bedside.close();
+  }
+
+  // ---------- 3.0: battery savers for the orb ----------
+  var lastActivity = Date.now();
+  function applyPower() {
+    if (!orb || !orb.setPower) return;
+    var s = (settings && settings.values) || settingsData || {};
+    var active = busy || (voice && (voice.speaking || voice.listening));
+    if (active) lastActivity = Date.now();
+    var rest = s.restingOrb !== false && !active && Date.now() - lastActivity > 60000;
+    var night = s.nightOrb !== false && !!(window.FridayNight && window.FridayNight.isNight());
+    orb.setPower({ rest: rest, night: night, saver: !!orb.lowPower });
+  }
+  function noteActivity() { lastActivity = Date.now(); applyPower(); }
 
   async function beginListen() {
     if (busy || voice.listening) return;
@@ -727,7 +989,7 @@
       setCaption("Tap to talk");
       return;
     }
-    handsFree = true;
+    handsFree = handsFreeOn();
     beginListen();
   }
 
@@ -833,9 +1095,8 @@
     document.getElementById("btn-wn-shortcut").onclick = function () {
       done();
       openPanel("settings");
-      var acc = document.getElementById("accord-shortcut");
+      var acc = document.getElementById("accord-partner");
       if (acc) { acc.open = true; setTimeout(function () { acc.scrollIntoView({ block: "start", behavior: "smooth" }); }, 120); }
-      if (settings && settings.copyShortcutPrompt) settings.copyShortcutPrompt();
     };
   }
 
@@ -861,6 +1122,10 @@
       onState: function (st) {
         if (st === "speak-start") emitActivity("speaking", null, { quiet: true });
         else if (st === "listen-start") emitActivity("listening", null, { quiet: true });
+        if (st === "speak-start" || st === "listen-start") {
+          noteActivity();
+          if (bedside && bedside.on) bedside.wake();
+        }
       },
       onSilence: function () { if (voice.listening) endListen(); },
       onBargeIn: function () {
@@ -1218,9 +1483,12 @@
           return;
         }
         busy = false;
+        if (continueLeaveQueue()) return;
         if (!FridayStorage.hasApiKey() || document.querySelector(".panel.open")) return;
         setTimeout(function () {
-          if (!voice.listening && !voice.speaking && !busy) { handsFree = true; beginListen(); }
+          if (pendingMessage || voice.listening || voice.speaking || busy) return;
+          if (recapDue()) { runRecap(); return; }
+          if (handsFreeOn()) { handsFree = true; beginListen(); }
         }, 600);
       });
     }
@@ -1234,10 +1502,41 @@
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
 
+    // ---------- 3.0 ----------
+    if (extras) {
+      bedside = new extras.Bedside({
+        weather: function () { return bedsideWx; },
+        onTalk: function () { toggleListen(); },
+        onDim: function () { if (orb) orb.stop(); },
+        onWake: function () { if (orb && !orb.running && !document.querySelector(".panel.open") && document.visibilityState !== "hidden") orb.start(); },
+        busy: function () { return busy || voice.speaking || voice.listening; }
+      });
+      if (window.__friday) window.__friday.bedside = bedside;
+      var bb = document.getElementById("btn-bedside");
+      if (bb) bb.onclick = function () { openBedside(); };
+      window.addEventListener("friday:habits", function () { refreshOpen(); });
+      window.addEventListener("friday:spending", function () { refreshOpen(); });
+    }
+    ["touchstart", "mousedown", "keydown"].forEach(function (ev) { document.addEventListener(ev, noteActivity, { passive: true }); });
+    document.addEventListener("touchend", function () { if (voice && voice.unlockAudio) voice.unlockAudio(); }, { passive: true });
+    window.addEventListener("friday:lowpower", function (e) {
+      applyPower();
+      if (e.detail && e.detail.on && !applyPower._told) { applyPower._told = true; toast("Low Power Mode noticed. Using the lighter orb."); }
+    });
+    setInterval(applyPower, 5000);
+    applyPower();
+    var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (CapApp) {
+      try { CapApp.addListener("appUrlOpen", function (e) { handleLink(e && e.url); }); } catch (e) {}
+      try { var lu = CapApp.getLaunchUrl(); if (lu && lu.then) lu.then(function (r) { if (r && r.url) handleLink(r.url); }, function () {}); } catch (e) {}
+    }
+    var qlink = cfg.queryParam("link");
+    if (qlink) setTimeout(function () { handleLink(qlink); }, 900);
+
     setTimeout(maybeGreet, 700);
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
-// build 3 (v2.0)
+// build 4 (v3.0)

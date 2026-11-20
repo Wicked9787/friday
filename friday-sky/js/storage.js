@@ -60,7 +60,7 @@
 
   function exportBackup(includeKey) {
     var data = {
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
       profile: get("profile", "sky"),
       settings: get("settings", {}),
@@ -73,6 +73,9 @@
       lists: get("lists", null),
       bills: get("bills", []),
       countdowns: get("countdowns", []),
+      spending: get("spending", []),
+      habits: get("habits", null),
+      routines: get("routines", null),
       summary: get("summary", null),
       usage: get("usage", {}),
       dismissedSuggestions: get("dismissedSuggestions", [])
@@ -109,6 +112,9 @@
     if (data.lists) set("lists", data.lists);
     if (data.bills) set("bills", data.bills);
     if (data.countdowns) set("countdowns", data.countdowns);
+    if (data.spending) set("spending", data.spending);
+    if (data.habits) set("habits", data.habits);
+    if (data.routines) set("routines", data.routines);
     if (data.summary) set("summary", data.summary);
     if (data.usage) set("usage", data.usage);
     if (data.dismissedSuggestions) set("dismissedSuggestions", data.dismissedSuggestions);

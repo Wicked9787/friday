@@ -1,5 +1,5 @@
 /* Friday service worker: cache the app shell so the home screen still opens offline. */
-var CACHE = "friday-shell-v10";
+var CACHE = "friday-shell-v11";
 var SHELL = [
   "./",
   "./index.html",
@@ -13,6 +13,7 @@ var SHELL = [
   "./js/brain.js",
   "./js/chat.js",
   "./js/life.js",
+  "./js/extras.js",
   "./js/eyes.js",
   "./js/neural.js",
   "./js/tools.js",

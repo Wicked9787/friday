@@ -193,6 +193,76 @@
         <div class="sub">A short line in her voice each time you open the app. The lines live on this phone — she does not call the internet for them.</div>
       </div>
       <div class="row row-col">
+        <label class="toggle-row">Nightly recap
+          <input type="checkbox" id="set-recap">
+        </label>
+        <div class="sub">The first time you open the app after this time, she sums up your day (things checked off, bills paid, spending, habits) and what's coming tomorrow, with tomorrow's weather. You can also say “recap my day” any time.</div>
+        <select id="set-recap-hour" aria-label="Recap time"></select>
+      </div>
+      <div class="row row-col">
+        <label class="toggle-row">Hands-free conversation
+          <input type="checkbox" id="set-handsfree">
+        </label>
+        <div class="sub">On: she starts listening when you open the app and keeps listening after each answer, so you can just keep talking. Off: tap the orb each time you want to say something.</div>
+      </div>
+
+      <details class="accord" id="accord-routines">
+        <summary>Routines <span class="accord-current" id="routines-current"></span></summary>
+        <div class="accord-body">
+          <p class="hint">Say the phrase and she does every step, in order. Steps are ordinary commands, one per line. You can also say several things at once anytime, like “lights to 40%, add milk and set a timer for 10 minutes”.</p>
+          <div id="routines-box"></div>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-partner">
+        <summary>Messages <span class="accord-current" id="partner-current"></span></summary>
+        <div class="accord-body">
+          <label class="toggle-row">Send and read messages <input type="checkbox" id="set-partner-msgs"></label>
+          <div class="sub" id="partner-sub">Say “tell Batsie dinner's ready”. It goes as a normal text, and their app reads it out loud.</div>
+          <label for="set-partner-names" style="margin-top:10px">Names you'll say</label>
+          <input type="text" id="set-partner-names" placeholder="Batsie">
+          <div class="sub">Separate more than one with commas.</div>
+          <label for="set-partner-contact" style="margin-top:10px">Their name in your Contacts</label>
+          <input type="text" id="set-partner-contact" placeholder="Batsie">
+          <div class="sub">Your Shortcut texts this contact. It has to match exactly.</div>
+          <h2 class="life-h2">So messages get read out loud on this phone (one time)</h2>
+          <ol class="steps" id="partner-steps">
+            <li>Open <b>Shortcuts</b>, tap <b>Automation</b>, then <b>+</b> and choose <b>Message</b>.</li>
+            <li>Tap <b>Sender</b> and pick <b id="ps-sender">them</b>. Under <b>Message Contains</b> type <b id="ps-prefix">From Jarvis:</b></li>
+            <li>Choose <b>Run Immediately</b>, then <b>Next</b> and <b>New Blank Automation</b>.</li>
+            <li>Add <b>URL Encode</b> (it fills in Shortcut Input), then add <b>Open URLs</b>.</li>
+            <li>In Open URLs type <b id="ps-url">friday://msg?text=</b> and right after it insert the <b>URL Encoded Text</b> variable. Tap Done.</li>
+          </ol>
+          <button class="btn" type="button" id="btn-copy-msg-url">Copy the link part</button>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-bedside">
+        <summary>Charging display</summary>
+        <div class="accord-body">
+          <p class="hint">A bedside screen: big clock, the orb, the weather and what's next. After 30 seconds it fades to a faint clock; tap anywhere to bring it back. She lights it up herself when she talks or a message comes in. Say “bedside mode” or tap below.</p>
+          <button class="btn gold" type="button" id="btn-bedside">Open the charging display</button>
+          <h2 class="life-h2">Open it when you plug in (optional, one time)</h2>
+          <ol class="steps">
+            <li>In <b>Shortcuts</b>, tap <b>Automation</b>, <b>+</b>, then <b>Charger</b>.</li>
+            <li>Choose <b>Is Connected</b> and <b>Run Immediately</b>, then <b>New Blank Automation</b>.</li>
+            <li>Add <b>Open URLs</b> with <b id="bs-url">friday://charging</b> and tap Done.</li>
+          </ol>
+          <p class="hint">Your iPhone's own StandBy (charging, locked and turned sideways) can also show your Friday widget. That uses the least battery.</p>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-battery">
+        <summary>Battery</summary>
+        <div class="accord-body">
+          <label class="toggle-row">Resting orb <input type="checkbox" id="set-rest-orb"></label>
+          <div class="sub">After a minute with no talking or tapping, the orb slows down and draws fewer frames. It wakes up the moment you tap or speak.</div>
+          <label class="toggle-row" style="margin-top:12px">Calmer orb at night <input type="checkbox" id="set-night-orb"></label>
+          <div class="sub">During night mode hours, the orb keeps your look but glows softer and moves slower.</div>
+          <p class="hint">If your iPhone is in Low Power Mode, she notices and switches to a lighter orb by herself. The orb always stops when the app is in the background or a panel covers it.</p>
+        </div>
+      </details>
+      <div class="row row-col">
         <label>Quick replies</label>
         <div class="sub">These chips sit under the orb. If a chip runs your shortcut, that tap opens Shortcuts directly.</div>
         <div id="chip-editor"></div>
@@ -287,7 +357,7 @@
       </div>
       <div class="row row-col">
         <label>Backup and restore</label>
-        <div class="sub">Saves memory, notes, lists, bills, countdowns, timers, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
+        <div class="sub">Saves memory, notes, lists, bills, countdowns, spending, habits, routines, timers, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
         <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
           <input type="checkbox" id="backup-include-key"> Include API key in this backup
         </label>
@@ -406,6 +476,7 @@
     </header>
     <div class="body">
       <div id="bills-box"></div>
+      <div id="spending-box"></div>
       <h2 class="life-h2">Ask about money</h2>
       <p class="hint">Ask Friday about a bill, a budget, or a payment. She will use her money helper, then answer in her own voice.</p>
       <form id="money-form">
@@ -421,6 +492,14 @@
       <button class="icon-btn" data-close="lists" aria-label="Close">✕</button>
     </header>
     <div class="body" id="lists-box"></div>
+  </section>
+
+  <section class="panel" id="panel-habits" aria-label="Habits">
+    <header>
+      <h1>Habits</h1>
+      <button class="icon-btn" data-close="habits" aria-label="Close">✕</button>
+    </header>
+    <div class="body" id="habits-box"></div>
   </section>
 
   <section class="panel" id="panel-countdowns" aria-label="Countdowns">
@@ -460,17 +539,18 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new</h1>
+      <h1>What's new in 3.0</h1>
       <ul>
-        <li>HD realistic orbs, plus four new Nested fracture looks</li>
-        <li>Lists, bills, countdowns, and named timers, all by voice</li>
-        <li>More voices, including free AI voices</li>
-        <li>Backup brain, faster replies, and longer memory</li>
-        <li>Show her a photo with the camera button</li>
-        <li>Moods and night mode</li>
+        <li>Several things in one sentence: “lights to 40%, add milk and set a timer”</li>
+        <li>Routines, plus “I'm home” and “I'm leaving”</li>
+        <li>Messages between Friday and Jarvis, read out loud</li>
+        <li>Nightly recap and a charging display for your nightstand</li>
+        <li>Spending log, habit and water tracker, and a translator</li>
+        <li>Battery savers: a resting orb and a calmer night orb</li>
+        <li>Voices fixed: each voice really sounds different, and if an AI voice can't play she tells you why</li>
       </ul>
-      <p class="hint">Your Shortcut learned new tricks too (calendar and iPhone timers). Copy the new prompt into Shortcuts once to update it.</p>
-      <button class="btn gold" type="button" id="btn-wn-shortcut">Update my Shortcut</button>
+      <p class="hint">Your Shortcut doesn't need any changes. For messages to be read out loud, set up one small automation on each phone (Settings → Messages).</p>
+      <button class="btn gold" type="button" id="btn-wn-shortcut">Set up messages</button>
       <button class="btn" type="button" id="btn-wn-close">Later</button>
     </div>
   </div>
@@ -524,6 +604,7 @@
   <script src="js/brain.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/life.js"></script>
+  <script src="js/extras.js"></script>
   <script src="js/eyes.js"></script>
   <script src="js/neural.js"></script>
   <script src="js/tools.js"></script>

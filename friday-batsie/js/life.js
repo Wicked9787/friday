@@ -226,6 +226,7 @@
       var st = billStatus(b);
       var key = st.overdue || st.days <= 20 ? monthKey(st.due) : monthKey(now);
       b.paid = (b.paid || []).filter(function (k) { return k !== key; }).concat([key]).slice(-24);
+      b.paidAt = new Date().toISOString();
     }
     saveBills(list);
   }
@@ -419,7 +420,7 @@
         var f = findItem(l2, it);
         if (!f) return;
         if (/^(remove|take off|delete)/.test(t)) l2.items[f.key].splice(f.index, 1);
-        else l2.items[f.key][f.index].done = true;
+        else { l2.items[f.key][f.index].done = true; l2.items[f.key][f.index].doneAt = new Date().toISOString(); }
         hits.push(it);
       });
       if (hits.length) { saveLists(l2); return { say: (/^(remove|take off|delete)/.test(t) ? "Removed " : "Checked off ") + joinWords(hits) + "." }; }
@@ -627,6 +628,15 @@
     return arr.slice(0, -1).join(", ") + " and " + arr[arr.length - 1];
   }
   function fire(name) { try { root.dispatchEvent(new CustomEvent(name)); } catch (e) {} }
+  // Shared with extras.js (3.0): recap, routines and the charging display read these.
+  root.FridayLifeData = {
+    lists: function () { return lists(); }, bills: function () { return bills(); },
+    billStatus: function (b) { return billStatus(b); }, countdowns: function () { return countdowns(); },
+    countdownDays: function (c) { return countdownDays(c); }, timers: function () { return timers(); },
+    money: function (n) { return money(n); }, spokenDays: function (n) { return spokenDays(n); },
+    spokenDuration: function (s) { return spokenDuration(s); }, fmtLeft: function (s) { return fmtLeft(s); },
+    ymd: function (d) { return ymd(d); }, monthKey: function (d) { return monthKey(d); }
+  };
 
   // ---------- rendering for the panels ----------
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -676,7 +686,7 @@
       cb.setAttribute("aria-label", it.done ? "Uncheck " + it.text : "Check off " + it.text);
       cb.onclick = function () {
         var x = lists(), arr = x.items[key] || [];
-        arr.forEach(function (y) { if (y.id === it.id) y.done = !y.done; });
+        arr.forEach(function (y) { if (y.id === it.id) { y.done = !y.done; y.doneAt = y.done ? new Date().toISOString() : null; } });
         saveLists(x); self.renderLists(box);
       };
       var tx = el("span", "life-text", it.text);

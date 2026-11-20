@@ -15,6 +15,8 @@
     notes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M7 4h8l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><path d="M15 4v6h6M8 13h8M8 17h6"/></svg>',
     lists: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><path d="m3.8 6.4 1.3 1.3 2.3-2.5M3.8 11.9l1.3 1.3 2.3-2.5"/><circle cx="5.4" cy="17.5" r="1.3"/></svg>',
     countdown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M8 3.5v4M16 3.5v4M4 10h16"/><path d="M12 13v3l2 1.2"/></svg>',
+    habits: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3.5c3 3.6 5 6.4 5 9a5 5 0 0 1-10 0c0-2.6 2-5.4 5-9z"/><path d="m9.6 13.2 1.7 1.7 3.2-3.4"/></svg>',
+    bedside: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="6" width="17" height="11" rx="2.5"/><path d="M8 20h8M12 17v3"/><path d="M12 9v2.6l1.8 1"/></svg>',
     eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2.8 12S6.2 5.8 12 5.8 21.2 12 21.2 12 17.8 18.2 12 18.2 2.8 12 2.8 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     automations: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 8h6l2-3h6"/><path d="M4 16h7l2-3h7"/><circle cx="6" cy="8" r="2"/><circle cx="8" cy="16" r="2"/></svg>',
     weather: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 4.2V3M10 17v-1.2M4.2 10H3M17 10h-1.2M5.6 5.6 4.8 4.8M15.2 15.2l-.8-.8M15.2 5.6l.8-.8"/><path d="M14 13.5a4 4 0 0 1 1 7.5H8.5A3.5 3.5 0 0 1 8 14"/></svg>',
@@ -59,6 +61,8 @@
     { kind: "lists", label: "Lists", gold: true, size: "lg", action: "panel", panel: "lists" },
     { kind: "countdown", label: "Countdowns", gold: false, size: "sm", action: "panel", panel: "countdowns" },
     { kind: "eye", label: "Photo", gold: true, size: "sm", action: "panel", panel: "photo-take" },
+    { kind: "habits", label: "Habits", gold: false, size: "sm", action: "panel", panel: "habits" },
+    { kind: "bedside", label: "Bedside", gold: false, size: "sm", action: "panel", panel: "bedside" },
     { kind: "automations", label: "Automations", gold: false, size: "lg", action: "url", url: "shortcuts://" },
     { kind: "weather", label: "Weather", gold: true, size: "sm", action: "shortcut", command: "weather" },
     { kind: "messages", label: "Daddy", gold: true, size: "lg", action: "url", url: "sms:" }

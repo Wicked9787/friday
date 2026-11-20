@@ -36,7 +36,15 @@
       iphoneTimers: true,
       voiceSpeed: 1,
       fallbackVoiceURI: "",
-      webMode: "smart"
+      webMode: "smart",
+      handsFree: true,
+      nightlyRecap: true,
+      recapHour: 21,
+      restingOrb: true,
+      nightOrb: true,
+      partnerMessages: true,
+      partnerNames: "",
+      partnerContact: ""
     };
     var s = Object.assign(defaults, root.FridayStorage.get("settings", {}));
     if (!Array.isArray(s.chips)) {
@@ -159,6 +167,7 @@
     this.onAddBubble = opts.onAddBubble || function () {};
     this.onRender = opts.onRender || function () {};
     this.onNight = opts.onNight || function () {};
+    this.onChange30 = opts.onChange30 || function () {};
     this.values = loadSettings();
     if (!this.values.look) this.values.look = this.profile.defaultLook || "N";
     if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday";
@@ -337,6 +346,7 @@
     this._bindChips();
     this._bindConnections();
     this._bindShortcutSetup();
+    this._bind30();
     this._syncHeaders();
 
     var briefing = document.getElementById("set-briefing");
@@ -525,13 +535,13 @@
         e.stopPropagation();
         if (playing === pv) { stopPreview(); return; }
         stopPreview();
-        if (uri.indexOf("ai:") === 0) {
-          if (!root.FridayStorage.hasApiKey()) { self.onToast("AI voices need your Groq key."); return; }
-          var until = root.FridayStorage.get("aiVoicePauseUntil", 0) || 0;
-          if (until > Date.now()) { self.onToast("AI voices are resting for now; you'll hear the iPhone voice instead."); }
-        }
+        self.voice.unlockAudio();
+        if (uri.indexOf("ai:") === 0 && !root.FridayStorage.hasApiKey()) { self.onToast("AI voices need your Groq key."); return; }
         playing = pv; pv.textContent = "■"; pv.classList.add("on");
-        self.voice.preview(uri, self.profile).then(function () { if (playing === pv) { pv.textContent = "▶"; pv.classList.remove("on"); playing = null; } });
+        self.voice.preview(uri, self.profile).then(function (res) {
+          if (playing === pv) { pv.textContent = "▶"; pv.classList.remove("on"); playing = null; }
+          if (uri.indexOf("ai:") === 0) aiStatus(res && res.ok === false ? res.reason : "AI voices are working.", !(res && res.ok === false));
+        });
       };
       function choose() {
         stopPreview();
@@ -554,6 +564,12 @@
       h.textContent = text;
       listEl.appendChild(h);
     }
+    function aiStatus(text, good) {
+      var el = document.getElementById("ai-voice-status");
+      if (!el) return;
+      el.textContent = text || "";
+      el.className = "voice-status" + (text ? (good ? " good" : " bad") : "");
+    }
     function fill() {
       if (!listEl) return;
       var all = !!(allBox && allBox.checked);
@@ -561,6 +577,27 @@
       listEl.innerHTML = "";
       row("", "Automatic", "Best match: " + (self.profile.voiceHint || "this phone"), "");
       head("AI voices · free, about 100 replies a day");
+      var st = document.createElement("div");
+      st.id = "ai-voice-status";
+      listEl.appendChild(st);
+      var tb = document.createElement("button");
+      tb.type = "button";
+      tb.className = "btn";
+      tb.id = "btn-test-ai-voice";
+      tb.textContent = "Test AI voices";
+      tb.onclick = function () {
+        stopPreview();
+        self.voice.unlockAudio();
+        if (!root.FridayStorage.hasApiKey()) { aiStatus("AI voices need your Groq key.", false); return; }
+        aiStatus("Testing…", true);
+        var pick = (self.values.voiceURI || "").indexOf("ai:") === 0 ? self.values.voiceURI : "ai:troy";
+        self.voice.preview(pick, self.profile).then(function (res) {
+          aiStatus(res && res.ok === false ? res.reason : "AI voices are working.", !(res && res.ok === false));
+        });
+      };
+      listEl.appendChild(tb);
+      var why = V.aiVoiceReason ? V.aiVoiceReason() : "";
+      if (why) aiStatus(why, false);
       (V.AI_VOICES || []).forEach(function (a) { row(a.id, a.name, a.blurb.replace(/^AI voice · /, "") + " · " + a.gender, "AI"); });
       ["Premium", "Enhanced", "Siri", "Standard", "Fun"].forEach(function (q) {
         var items = cat.filter(function (c) { return c.quality === q; });
@@ -568,6 +605,10 @@
         head("iPhone · " + q);
         items.forEach(function (c) { row(c.uri, c.name, c.lang, q === "Premium" || q === "Enhanced" ? q : ""); });
       });
+      var hint = document.createElement("p");
+      hint.className = "hint";
+      hint.textContent = "Want better iPhone voices? Download Enhanced or Premium voices for free in iPhone Settings → Accessibility → Spoken Content → Voices → English. Then reopen this list.";
+      listEl.appendChild(hint);
       if (fbSel) {
         var fb = self.values.fallbackVoiceURI || "";
         fbSel.innerHTML = "";
@@ -578,6 +619,7 @@
     }
     fill();
     if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = fill;
+    root.addEventListener("friday:voices", fill);
     setTimeout(fill, 800);
     if (allBox) allBox.onchange = fill;
     if (fbSel) fbSel.onchange = function () { self.values.fallbackVoiceURI = fbSel.value; saveSettings(self.values); };
@@ -592,6 +634,79 @@
     if (acc) acc.addEventListener("toggle", function () { if (!acc.open) stopPreview(); });
     var hint = document.getElementById("voice-hint");
     if (hint) hint.textContent = "Tap a voice to choose it, or ▶ to hear it first. AI voices sound the most natural; Premium iPhone voices come next.";
+  };
+
+  // ---------- 3.0: recap, hands-free, routines, messages, charging display, battery ----------
+  FridaySettings.prototype._bind30 = function () {
+    var self = this, v = this.values, prof = this.profile || {};
+    function setText(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+    function bindTog(id, key) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.checked = v[key] !== false;
+      el.onchange = function () { v[key] = el.checked; saveSettings(v); self.onChange30(key); };
+    }
+    bindTog("set-recap", "nightlyRecap");
+    bindTog("set-handsfree", "handsFree");
+    bindTog("set-rest-orb", "restingOrb");
+    bindTog("set-night-orb", "nightOrb");
+    bindTog("set-partner-msgs", "partnerMessages");
+    var rh = document.getElementById("set-recap-hour");
+    if (rh) {
+      rh.innerHTML = "";
+      for (var h = 17; h <= 23; h++) {
+        var o = document.createElement("option");
+        o.value = String(h);
+        o.textContent = (h - 12) + ":00 PM";
+        rh.appendChild(o);
+      }
+      rh.value = String(v.recapHour == null ? 21 : v.recapHour);
+      rh.onchange = function () { v.recapHour = parseInt(rh.value, 10); saveSettings(v); };
+    }
+    var isB = prof.id === "batsie";
+    var other = isB ? "Friday" : "Jarvis";
+    var scheme = String(prof.assistantName || "Friday").toLowerCase();
+    var defNames = isB ? "Sky, Daddy" : "Batsie";
+    var pn = document.getElementById("set-partner-names"), pc = document.getElementById("set-partner-contact");
+    function firstName() { return String(v.partnerNames || defNames).split(",")[0].trim(); }
+    function syncPartner() {
+      var nm = firstName();
+      setText("partner-current", nm);
+      setText("partner-sub", "Say \u201Ctell " + nm + " dinner's ready\u201D. It goes to them as a normal text, and " + other + " reads it out loud on their phone.");
+      setText("ps-sender", v.partnerContact || nm);
+      setText("ps-prefix", "From " + other + ":");
+      setText("ps-url", scheme + "://msg?text=");
+      setText("bs-url", scheme + "://charging");
+      if (pc) pc.placeholder = nm;
+    }
+    if (pn) { pn.placeholder = defNames; pn.value = v.partnerNames || ""; pn.onchange = function () { v.partnerNames = pn.value.trim(); saveSettings(v); syncPartner(); }; }
+    if (pc) { pc.value = v.partnerContact || ""; pc.onchange = function () { v.partnerContact = pc.value.trim(); saveSettings(v); syncPartner(); }; }
+    var cu = document.getElementById("btn-copy-msg-url");
+    if (cu) cu.onclick = function () {
+      var text = scheme + "://msg?text=";
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+        try { document.execCommand("copy"); } catch (e) {}
+        ta.remove();
+        self.onToast("Copied. Paste it in Open URLs.");
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { self.onToast("Copied. Paste it in Open URLs."); }, fallback);
+      else fallback();
+    };
+    syncPartner();
+    var X = root.FridayExtras;
+    function syncRoutines() {
+      if (!X) return;
+      setText("routines-current", X.routines().length + " saved");
+      var box = document.getElementById("routines-box");
+      // redraw when routines change elsewhere (not while you're typing in one)
+      if (box && !box.contains(document.activeElement) && box.querySelectorAll(".routine-card").length !== X.routines().length) X.renderRoutines(box);
+    }
+    if (X) X.renderRoutines(document.getElementById("routines-box"));
+    syncRoutines();
+    root.addEventListener("friday:routines", syncRoutines);
   };
 
   FridaySettings.prototype._bindBrainMood = function () {

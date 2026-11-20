@@ -18,6 +18,44 @@
     return "";
   }
 
+  /* Inside the app, iOS often ignores which Web Speech voice is picked, so every
+     iPhone voice sounds the same. The TextToSpeech add-on talks to iOS directly. */
+  function nativeTTS() {
+    var c = root.Capacitor;
+    return c && c.isNativePlatform && c.isNativePlatform() && c.Plugins && c.Plugins.TextToSpeech ? c.Plugins.TextToSpeech : null;
+  }
+  var NATIVE_VOICES = null;
+  function loadNativeVoices() {
+    var T = nativeTTS();
+    if (!T || NATIVE_VOICES) return;
+    try {
+      T.getSupportedVoices().then(function (r) {
+        var list = (r && r.voices) || [];
+        NATIVE_VOICES = list.map(function (v, i) {
+          return { name: v.name || ("Voice " + (i + 1)), lang: v.lang || "", voiceURI: v.voiceURI || ("native:" + i), localService: true, "default": !!v["default"], _index: i, _native: true };
+        });
+        try { root.dispatchEvent(new CustomEvent("friday:voices")); } catch (e) {}
+      }, function () {});
+    } catch (e) {}
+  }
+  FridayVoice.hasNativeVoices = function () { return !!(NATIVE_VOICES && NATIVE_VOICES.length); };
+
+  // Why the last AI voice request failed, in plain words.
+  function aiVoiceReason() {
+    var e = root.FridayStorage.get("aiVoiceError", null);
+    if (!e) return "";
+    var m = String(e.msg || "");
+    if (e.status === 0) return "Couldn't reach Groq for the AI voice. Check the internet and try again.";
+    if (e.status === 401) return "Groq didn't accept your key. Check it in Settings, under Groq API key.";
+    if (/terms/i.test(m)) return "Groq needs a one-time OK before AI voices work. Open console.groq.com/playground?model=canopylabs/orpheus-v1-english, sign in, and accept the terms. Then tap Test again.";
+    if (e.status === 429 && /per day|daily|rpd|tpd/i.test(m)) return "AI voices used up today's free allowance. They'll be back tomorrow. Until then she uses the iPhone voice.";
+    if (e.status === 429) return "AI voices are busy right now. Try again in a few minutes.";
+    if (e.status === 404 || /model/i.test(m) && /not|exist|decommission/i.test(m)) return "Groq doesn't offer that AI voice right now.";
+    if (e.status === "audio") return "The phone didn't let the AI voice play. Tap the play button again.";
+    return "Groq said no to the AI voice" + (m ? ": " + m.slice(0, 140) : ".");
+  }
+  FridayVoice.aiVoiceReason = aiVoiceReason;
+
   function FridayVoice(opts) {
     this.opts = opts || {};
     this.listening = false;
@@ -37,10 +75,24 @@
     this._onVolume = this.opts.onVolume || function () {};
     this._onSyllable = this.opts.onSyllable || function () {};
     this._onState = this.opts.onState || function () {};
+    loadNativeVoices();
   }
 
   FridayVoice.prototype.listVoices = function () {
-    return speechSynthesis.getVoices() || [];
+    if (NATIVE_VOICES && NATIVE_VOICES.length) return NATIVE_VOICES;
+    try { return speechSynthesis.getVoices() || []; } catch (e) { return []; }
+  };
+
+  // iPhone only lets sound start from a tap. Call this on a tap so later audio can play.
+  FridayVoice.prototype.unlockAudio = function () {
+    try {
+      var ctx = this._outCtx();
+      if (ctx.state === "running" && this._unlocked) return;
+      this._unlocked = true;
+      if (ctx.state !== "running" && ctx.resume) ctx.resume();
+      var b = ctx.createBuffer(1, 1, 22050), src = ctx.createBufferSource();
+      src.buffer = b; src.connect(ctx.destination); src.start(0);
+    } catch (e) {}
   };
 
   FridayVoice.prototype.pickDefault = function (profile) {
@@ -345,12 +397,16 @@
     if (!res.ok) {
       var t = "";
       try { t = await res.text(); } catch (e) {}
+      var em = t;
+      try { var ej = JSON.parse(t); em = (ej.error && (ej.error.message || ej.error.code)) || t; } catch (e) {}
+      root.FridayStorage.set("aiVoiceError", { status: res.status, msg: String(em).slice(0, 400), at: Date.now() });
       var pause = /per day|daily|rpd|tpd/i.test(t) ? 3 * 3600 * 1000 : (res.status === 429 ? 10 * 60 * 1000 : 30 * 60 * 1000);
       if (res.status === 401) pause = 0;
       if (pause) root.FridayStorage.set("aiVoicePauseUntil", Date.now() + pause);
       throw new Error("tts " + res.status);
     }
     if (root.FridayBrain && root.FridayBrain.noteUse) root.FridayBrain.noteUse("", "tts");
+    root.FridayStorage.set("aiVoiceError", null);
     return res.arrayBuffer();
   };
 
@@ -419,11 +475,32 @@
     }, 33);
   };
 
-  FridayVoice.prototype._speakSystem = function (text, profile, mv) {
+  FridayVoice.prototype._speakSystem = function (text, profile, mv, lang) {
     var self = this;
     return new Promise(function (resolve) {
       var u = new SpeechSynthesisUtterance(text);
-      var voice = self.pickDefault(profile);
+      var voice = null;
+      if (lang) {
+        // Translator: use an iPhone voice for that language so it sounds right.
+        u.lang = lang;
+        var pre = lang.slice(0, 2).toLowerCase();
+        var all = self.listVoices();
+        voice = all.filter(function (v) { return (v.lang || "").toLowerCase() === lang.toLowerCase(); })[0] ||
+          all.filter(function (v) { return (v.lang || "").toLowerCase().indexOf(pre) === 0; })[0] || null;
+      } else {
+        voice = self.pickDefault(profile);
+      }
+      var T = nativeTTS();
+      if (voice && voice._native && T) {
+        self._fakeEnvelope(text);
+        var done = false;
+        var fin = function () { if (done) return; done = true; self._stopEnvelope(); resolve(); };
+        try {
+          T.speak({ text: text, lang: voice.lang || lang || "en-US", rate: mv.rate, pitch: mv.pitch, volume: mv.volume, voice: voice._index, category: "playback" }).then(fin, fin);
+        } catch (e) { fin(); }
+        setTimeout(fin, 6000 + text.length * 150);
+        return;
+      }
       if (voice) u.voice = voice;
       u.rate = mv.rate;
       u.pitch = mv.pitch;
@@ -440,8 +517,9 @@
     });
   };
 
-  FridayVoice.prototype._speakOne = async function (text, profile, gen) {
+  FridayVoice.prototype._speakOne = async function (text, profile, gen, lang) {
     var mv = this._moodVoice();
+    if (lang) { await this._speakSystem(text, profile, mv, lang); return; }
     if (this._aiAllowed()) {
       try {
         var parts = splitForTTS(text, 190);
@@ -464,11 +542,11 @@
   };
 
   // Queue a line. She speaks queued lines in order; used for streamed replies.
-  FridayVoice.prototype.queue = function (text, profile) {
+  FridayVoice.prototype.queue = function (text, profile, lang) {
     text = String(text || "").trim();
     if (!text) return this.whenDone();
     this._queue = this._queue || [];
-    this._queue.push({ text: text, profile: profile });
+    this._queue.push({ text: text, profile: profile, lang: lang || null });
     if (!this._pumping) this._pump();
     return this.whenDone();
   };
@@ -482,7 +560,7 @@
     try {
       while (this._queue && this._queue.length && gen === this._gen) {
         var item = this._queue.shift();
-        await this._speakOne(item.text, item.profile, gen);
+        await this._speakOne(item.text, item.profile, gen, item.lang);
       }
     } finally {
       if (gen === this._gen) {
@@ -516,11 +594,42 @@
     var name = (profile && profile.assistantName) || "Friday";
     var term = profile && profile.terms && profile.terms[0] ? ", " + profile.terms[0] : "";
     this.stopSpeak();
+    if (uri && uri.indexOf("ai:") === 0) return this._previewAI(uri.slice(3), "Hi" + term + ", I'm " + name + ". This is how I'd sound.");
     this.voiceURI = uri;
     var p = this.queue("Hi" + term + ", I'm " + name + ". This is how I'd sound.", profile);
     // Restore the chosen voice as soon as this line has started, so nothing else uses the preview voice.
     setTimeout(function () { if (self.voiceURI === uri) self.voiceURI = old; }, 50);
     return p.then(function () { if (self.voiceURI === uri) self.voiceURI = old; });
+  };
+
+  FridayVoice.prototype._previewAI = async function (voiceId, line) {
+    var gen = this._gen = (this._gen || 0) + 1;
+    this.speaking = true;
+    this._onState("speak-start");
+    try {
+      var buf;
+      try { buf = await this._fetchClip(line, voiceId, ""); }
+      catch (e) {
+        var last = root.FridayStorage.get("aiVoiceError", null);
+        if (!last || Date.now() - (last.at || 0) > 15000) root.FridayStorage.set("aiVoiceError", { status: 0, msg: String((e && e.message) || ""), at: Date.now() });
+        return { ok: false, reason: aiVoiceReason() };
+      }
+      if (gen !== this._gen) return { ok: true };
+      try { await this._playBuffer(buf, 1, gen); }
+      catch (e2) {
+        root.FridayStorage.set("aiVoiceError", { status: "audio", msg: "", at: Date.now() });
+        return { ok: false, reason: aiVoiceReason() };
+      }
+      root.FridayStorage.set("aiVoicePauseUntil", 0);
+      return { ok: true };
+    } finally {
+      if (gen === this._gen) {
+        this.speaking = false;
+        this._stopEnvelope();
+        this._onVolume(0, "idle");
+        this._onState("speak-end");
+      }
+    }
   };
 
   // ---------- Talk over her (barge-in) ----------
@@ -585,6 +694,8 @@
     this._pumping = false;
     this.speaking = false;
     try { speechSynthesis.cancel(); } catch (e) {}
+    var T = nativeTTS();
+    if (T) { try { T.stop(); } catch (e3) {} }
     if (this._src) { try { this._src.stop(); } catch (e2) {} this._src = null; }
     if (wasPumping) {
       var waiters = this._waiters || [];
