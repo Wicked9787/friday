@@ -199,6 +199,21 @@
     setTimeout(function () { if (a.parentNode) a.remove(); }, 30000);
   }
 
+  var DIRECT_APPS = [
+    ["apple music", "music://"], ["music", "music://"], ["spotify", "spotify://"], ["camera", "camera://"],
+    ["phone", "tel:"], ["messages", "sms:"], ["facetime", "facetime://"], ["mail", "mailto:"],
+    ["maps", "maps://"], ["photos", "photos-redirect://"], ["settings", "app-settings:"],
+    ["youtube", "youtube://"], ["netflix", "nflx://"], ["instagram", "instagram://"],
+    ["tiktok", "snssdk1233://"], ["facebook", "fb://"], ["twitter", "twitter://"], ["whatsapp", "whatsapp://"],
+    ["cash app", "cashme://"], ["shortcuts", "shortcuts://"], ["safari", "x-web-search://"]
+  ];
+  function directAppUrl(text) {
+    var m = String(text || "").toLowerCase().replace(/[.!?,]/g, "").match(/^(?:hey \w+ )?(?:please )?(?:open|launch|pull up|go to|start)(?: up)? (?:the |my )?(.+?)(?: app)?(?: please)?$/);
+    if (!m) return null;
+    for (var i = 0; i < DIRECT_APPS.length; i++) if (m[1] === DIRECT_APPS[i][0]) return { name: m[1], url: DIRECT_APPS[i][1] };
+    return null;
+  }
+
   function openUrl(url) {
     if (!url) return;
     // Capacitor's WKWebView hands non-http schemes off to iOS; same path works on the web PWA.
@@ -406,6 +421,7 @@
     });
   }
 
+  var leftForApp = false;
   async function handleUtterance(text, opts) {
     opts = opts || {};
     text = String(text || "").trim();
@@ -425,6 +441,13 @@
     if (neural) neural.setActive("thinking");
     document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
     try {
+      var direct = directAppUrl(text);
+      if (direct) {
+        leftForApp = true;
+        setCaption("Opening " + direct.name + ".");
+        openUrl(direct.url);
+        return;
+      }
       var result = await chat.ask(text);
       if (result.kind === "timer") {
         tools.startTimer(result.seconds);
@@ -460,7 +483,10 @@
       busy = false;
       if (neural) neural.setActive(null);
       document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
-      if (handsFree && !voice.listening) {
+      if (leftForApp) {
+        leftForApp = false;
+        orb.setTalking("idle", 0);
+      } else if (handsFree && !voice.listening) {
         setTimeout(function () { beginListen(); }, 400);
       } else if (!voice.speaking) {
         orb.setTalking("idle", 0);
