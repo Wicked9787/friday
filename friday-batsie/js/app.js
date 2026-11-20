@@ -157,6 +157,12 @@
   function shortcutUrl(command) {
     var name = encodeURIComponent(settings.shortcutName());
     var text = encodeURIComponent(command);
+    var isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    if (isNative) {
+      var back = encodeURIComponent((window.FRIDAY_BAKED_PROFILE === "batsie" ? "jarvis" : "friday") + "://");
+      return "shortcuts://x-callback-url/run-shortcut?name=" + name + "&input=text&text=" + text +
+        "&x-success=" + back + "&x-cancel=" + back + "&x-error=" + back;
+    }
     return "shortcuts://run-shortcut?name=" + name + "&input=text&text=" + text;
   }
 
@@ -175,6 +181,21 @@
     document.body.appendChild(a);
     setTimeout(function () { if (a.parentNode) a.remove(); }, 30000);
     try { location.href = url; } catch (e) {}
+  }
+
+  function showMessagesButton(cmd) {
+    var m = String(cmd || "").match(/\b(?:saying|that says|that|say)\b\s+(.+)$/i);
+    var body = m ? m[1] : String(cmd || "").replace(/^\s*(send\s+)?(a\s+)?(text|message)\s+(to\s+)?\S+\s*/i, "");
+    var old = document.getElementById("open-messages-btn");
+    if (old) old.remove();
+    var a = document.createElement("a");
+    a.id = "open-messages-btn";
+    a.href = "sms:&body=" + encodeURIComponent(body.trim());
+    a.textContent = "Open in Messages";
+    a.setAttribute("style", "position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 150px);transform:translateX(-50%);z-index:9999;padding:12px 22px;border-radius:999px;background:rgba(20,20,20,.85);border:1px solid rgba(214,180,110,.5);color:#e9d3a0;font:600 15px -apple-system,system-ui,sans-serif;text-decoration:none;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)");
+    a.addEventListener("click", function () { setTimeout(function () { a.remove(); }, 400); });
+    document.body.appendChild(a);
+    setTimeout(function () { if (a.parentNode) a.remove(); }, 30000);
   }
 
   function openUrl(url) {
@@ -418,6 +439,7 @@
         if (bubbles) bubbles.noteAppMentions(text);
         if (bubbles) bubbles.refreshSuggestions();
         runShortcut(result.command);
+        if (result.kind === "messages") showMessagesButton(result.command);
       } else if (result.kind === "memory") {
         setCaption(result.text || "");
         renderMemory();

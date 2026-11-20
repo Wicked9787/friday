@@ -15,5 +15,10 @@ for (const [k, v] of Object.entries(keys)) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>${k}</key>\n\t<string>${v}</string>\n` + xml.slice(i);
 }
+const scheme = name.toLowerCase();
+if (!xml.includes("<key>CFBundleURLTypes</key>")) {
+  const i = xml.lastIndexOf("</dict>");
+  xml = xml.slice(0, i) + `\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLName</key>\n\t\t\t<string>${scheme}</string>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array>\n\t\t\t\t<string>${scheme}</string>\n\t\t\t</array>\n\t\t</dict>\n\t</array>\n` + xml.slice(i);
+}
 fs.writeFileSync(plist, xml);
 console.log("Added mic permission to Info.plist");
