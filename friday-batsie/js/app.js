@@ -594,8 +594,11 @@
           cycleLook(dx < 0 ? 1 : -1);
           return;
         }
+        if (ev.type === "touchend") { window.__lastTouchEnd = Date.now(); }
+        else if (window.__lastTouchEnd && Date.now() - window.__lastTouchEnd < 800) return;
         if (!moved && Date.now() - t0 < 450) {
           if (document.querySelector(".panel.open")) return;
+          if (ev.type === "touchend" && ev.cancelable) ev.preventDefault();
           toggleListen();
         }
       }
