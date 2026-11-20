@@ -411,7 +411,7 @@
         if (result.seconds < 60) line = "Timer set for " + result.seconds + " seconds.";
         setCaption(line);
         await voice.speak(line, profile);
-      } else if (result.kind === "phone") {
+      } else if (result.kind === "phone" || (result.kind === "messages" && result.command)) {
         setCaption(result.text);
         await voice.speak(result.text, profile);
         if (bubbles && result.command) bubbles.noteUsage("cmd:" + String(result.command).toLowerCase());
