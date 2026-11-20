@@ -24,6 +24,7 @@
       iconId: "",
       morningBriefing: true,
       wakeGreeting: true,
+      learnHabits: true,
       chips: null
     };
     var s = Object.assign(defaults, root.FridayStorage.get("settings", {}));
@@ -304,6 +305,24 @@
       wake.onchange = function () {
         self.values.wakeGreeting = wake.checked;
         saveSettings(self.values);
+      };
+    }
+    var learn = document.getElementById("set-learn");
+    if (learn) {
+      learn.checked = this.values.learnHabits !== false;
+      learn.onchange = function () {
+        self.values.learnHabits = learn.checked;
+        saveSettings(self.values);
+      };
+    }
+    var clearHabits = document.getElementById("btn-clear-habits");
+    if (clearHabits) {
+      clearHabits.onclick = function () {
+        if (!window.confirm("Clear the habits she has learned? Your memory notes and routines stay.")) return;
+        root.FridayStorage.set("habits", []);
+        root.FridayStorage.set("habitPrefs", {});
+        window.dispatchEvent(new Event("friday:habits-cleared"));
+        self.onToast("Learned habits cleared.");
       };
     }
     var addChip = document.getElementById("btn-chip-add");

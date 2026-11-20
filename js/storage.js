@@ -58,7 +58,10 @@
       memory: get("memory", []),
       notes: get("notes", []),
       history: get("history", []),
-      timers: get("timers", [])
+      timers: get("timers", []),
+      routines: get("routines", []),
+      habits: get("habits", []),
+      habitPrefs: get("habitPrefs", {})
     };
     if (includeKey) data.apiKey = getApiKey();
     return data;
@@ -87,6 +90,9 @@
     if (data.notes) set("notes", data.notes);
     if (data.history) set("history", data.history);
     if (data.timers) set("timers", data.timers);
+    if (data.routines) set("routines", data.routines);
+    if (data.habits) set("habits", data.habits);
+    if (data.habitPrefs) set("habitPrefs", data.habitPrefs);
     if (data.profile) rawSet(PREFIX + "profile", data.profile);
     if (typeof data.apiKey === "string" && data.apiKey) setApiKey(data.apiKey);
   }
