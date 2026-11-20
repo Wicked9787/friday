@@ -7,7 +7,8 @@
   var settingsData = window.FridayLoadSettings();
 
   var orb, voice, chat, bubbles, tools, settings, neural;
-  var handsFree = cfg.queryParam("listen") === "1";
+  var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  var handsFree = cfg.queryParam("listen") === "1" || IS_NATIVE;
   var busy = false;
 
 
@@ -770,6 +771,16 @@
     });
 
     if (!FridayStorage.hasApiKey()) showSetup(true);
+
+    if (IS_NATIVE) {
+      document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState !== "visible") return;
+        if (!FridayStorage.hasApiKey() || document.querySelector(".panel.open")) return;
+        setTimeout(function () {
+          if (!voice.listening && !voice.speaking && !busy) { handsFree = true; beginListen(); }
+        }, 600);
+      });
+    }
 
     if (handsFree && FridayStorage.hasApiKey()) {
       setCaption("Listening…");
