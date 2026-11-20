@@ -1,0 +1,13 @@
+{
+  "name": "friday-home",
+  "version": "1.0.0",
+  "description": "Friday's own HomeKit add-on: lights to an exact brightness, on/off, and scenes.",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift", "FridayHome.podspec"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

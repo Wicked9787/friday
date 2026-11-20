@@ -88,6 +88,24 @@ jobs:
           cd build/ipa
           /usr/bin/zip -qry ../${{ matrix.artifact_name }}-unsigned.ipa Payload
 
+      - name: Package a Lights-test IPA (carries the HomeKit permission for AltStore to sign)
+        run: |
+          cd build
+          rm -rf lt && mkdir -p lt/Payload
+          cp -R ipa/Payload/App.app lt/Payload/
+          cat > ent.plist <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>com.apple.developer.homekit</key><true/></dict></plist>
+          PLIST
+          sed -i '' 's/^          //' ent.plist
+          if [ -d lt/Payload/App.app/Frameworks ]; then
+            for f in lt/Payload/App.app/Frameworks/*; do codesign --force --sign - --timestamp=none "$f" || true; done
+          fi
+          codesign --force --sign - --timestamp=none --entitlements ent.plist lt/Payload/App.app
+          codesign -d --entitlements :- lt/Payload/App.app | head -20
+          cd lt && /usr/bin/zip -qry ../${{ matrix.artifact_name }}-lightstest.ipa Payload
+
       - name: Save unsigned iPhone IPA
         uses: actions/upload-artifact@v4
         with:
@@ -103,6 +121,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/pub"
           cp "build/${{ matrix.artifact_name }}-unsigned.ipa" "$RUNNER_TEMP/pub/"
+          cp "build/${{ matrix.artifact_name }}-lightstest.ipa" "$RUNNER_TEMP/pub/" || true
           cd "$RUNNER_TEMP/pub"
           echo "${{ github.sha }}" > SOURCE_COMMIT.txt
           git init -q -b "$BRANCH"
