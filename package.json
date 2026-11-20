@@ -5,7 +5,8 @@
   "description": "Capacitor wrapper for the existing Friday and Jarvis web apps.",
   "scripts": {
     "build": "node scripts/prepare-web.js",
-    "cap:sync:ios": "cap sync ios"
+    "cap:sync:ios": "cap sync ios",
+    "capacitor:sync:after": "node scripts/ios-permissions.js"
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0",
