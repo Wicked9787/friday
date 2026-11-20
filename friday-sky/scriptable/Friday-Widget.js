@@ -7,14 +7,17 @@ void (async function () {
 //   tinted 40                   tint strength in percent (default 25)
 //   small-tl, medium-top, ...   which clear background to use
 //                               (the Clear Background script tells you what to type)
-//   app                         make taps open the Friday site instead of Talk
-// Example: clear medium-top
+//   app                         make taps open the app instead of Talk
+//   orb n | orb x1 | orb x2 | orb h2   which HD orb to show (default n)
+//   classic                     use the original drawn orb instead of the HD one
+// Example: clear medium-top orb x2
 // No API keys in this script.
 
 // ---- Profile ----
 const ASSISTANT = "Friday"
 const SHORTCUT = "Friday"
 const TERM = "boss"
+const APP_URL = "friday://"
 const SITE_URL = "https://wicked9787.github.io/friday/?u=sky"
 // -----------------
 
@@ -27,6 +30,8 @@ const STYLE = words.find(w => w === "clear" || w === "tinted" || w === "solid") 
 const TINT = Math.min(90, Math.max(0, parseInt(words.find(w => /^\d+$/.test(w)) || "25", 10))) / 100
 const SLOT = words.find(w => /^(small|medium|large)-[a-z]+$/.test(w))
 const TAP_APP = words.includes("app")
+const CLASSIC = words.includes("classic")
+const ORB_LOOK = (words[words.indexOf("orb") + 1] && words.includes("orb")) ? words[words.indexOf("orb") + 1] : "n"
 const FAMILY = config.widgetFamily || "large"
 
 function talkUrl(text) {
@@ -34,7 +39,7 @@ function talkUrl(text) {
   if (text) u += "&input=text&text=" + encodeURIComponent(text)
   return u
 }
-const TAP = TAP_APP ? SITE_URL : talkUrl()
+const TAP = TAP_APP ? APP_URL : talkUrl()
 
 // ---------- helpers ----------
 function seeded(seed) {
@@ -106,6 +111,26 @@ async function weather() {
 }
 
 // ---------- drawing: concept 25/28 dust wave + obsidian orb ----------
+
+// ---------- HD orb (rendered by the app's HD engine, downloaded once and kept) ----------
+const ORB_BASE = "https://raw.githubusercontent.com/wicked9787/friday/friday-native/icons/widget/orb-"
+async function hdOrb(look) {
+  look = (look || "n").toLowerCase()
+  const fm = FileManager.local()
+  const p = fm.joinPath(fm.documentsDirectory(), "Friday-HD-Orb-" + look + ".png")
+  const fresh = fm.fileExists(p) && (Date.now() - fm.modificationDate(p).getTime()) < 14 * 864e5
+  if (fresh) { try { return fm.readImage(p) } catch (e) {} }
+  try {
+    const r = new Request(ORB_BASE + look + ".png"); r.timeoutInterval = 10
+    const img = await withTimeout(r.loadImage(), 12000)
+    if (img && img.size && img.size.width > 50) { fm.writeImage(p, img); return img }
+  } catch (e) {}
+  if (fm.fileExists(p)) { try { return fm.readImage(p) } catch (e) {} }
+  return null
+}
+
+let HD_IMG = null
+
 function haze(ctx, cx, cy, rx, ry, hex, peak, steps) {
   for (let i = steps; i >= 1; i--) {
     const k = i / steps
@@ -180,6 +205,12 @@ function strands(ctx, cx, cy, R, seed, dustReach) {
 
 // Dark glass sphere with gold rim light, then the strands on top.
 function orb(ctx, cx, cy, R, seed, dustReach) {
+  if (HD_IMG) {
+    haze(ctx, cx, cy, R * 1.5, R * 1.5, "#c9a14e", 0.05, 40)
+    const D = R * 2.95
+    ctx.drawImageInRect(HD_IMG, new Rect(cx - D / 2, cy - D / 2, D, D))
+    return
+  }
   haze(ctx, cx, cy, R * 1.6, R * 1.6, "#c9a14e", 0.07, 50)
   for (let i = 40; i >= 0; i--) {
     const k = i / 40
@@ -317,7 +348,7 @@ function talkPill(parent, w, h) {
   p.borderColor = col(GOLD, 0.7)
   p.borderWidth = 1
   p.cornerRadius = h / 2
-  p.url = TAP_APP ? SITE_URL : talkUrl()
+  p.url = TAP_APP ? APP_URL : talkUrl()
   p.addSpacer()
   symbol(p, "mic.fill", h * 0.36, INK)
   p.addSpacer(6)
@@ -357,6 +388,7 @@ function bubble(parent, b, d) {
 
 // ---------- layouts ----------
 async function build() {
+  if (!CLASSIC) HD_IMG = await hdOrb(ORB_LOOK)
   const w = new ListWidget()
   const size = widgetSize(FAMILY)
   const W = size.width, H = size.height

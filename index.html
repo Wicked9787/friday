@@ -11,6 +11,8 @@
   <meta name="color-scheme" content="dark">
   <meta name="format-detection" content="telephone=no">
   <title>Friday</title>
+  <link rel="preconnect" href="https://api.groq.com" crossorigin>
+  <link rel="dns-prefetch" href="https://api.open-meteo.com">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
@@ -27,6 +29,11 @@
             <circle cx="12" cy="12" r="2.2"/><circle cx="5" cy="7" r="1.6"/><circle cx="19" cy="8" r="1.6"/>
             <circle cx="6" cy="17" r="1.6"/><circle cx="18" cy="17" r="1.6"/>
             <path d="M10.2 11.2 6.4 8.2M13.8 11 17.6 9M10.4 13.4 7.2 16.2M13.8 13.4 17 16.2"/>
+          </svg>
+        </button>
+        <button class="icon-btn" id="btn-eyes" title="Show her a photo" aria-label="Show her a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-1.8h5l1.4 1.8h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.4"/>
           </svg>
         </button>
         <button class="icon-btn" id="btn-chat" title="Chat" aria-label="Chat">
@@ -78,6 +85,11 @@
       <details class="accord" id="accord-looks">
         <summary>Looks <span class="accord-current" id="looks-current">Core &amp; shells</span></summary>
         <div class="accord-body">
+          <div class="seg" role="group" aria-label="Render style">
+            <button type="button" id="render-hd">HD realistic</button>
+            <button type="button" id="render-og">Original</button>
+          </div>
+          <p class="hint">HD realistic draws every look at full phone sharpness with depth, glass reflections and finer light. Original is the classic look, exactly as before.</p>
           <p class="hint">Switch Friday’s orb whenever you like. All the looks we made are here. You can also swipe left or right on the orb.</p>
           <div class="looks" id="looks"></div>
         </div>
@@ -104,23 +116,24 @@
       <details class="accord" id="accord-connections">
         <summary>Connections <span class="accord-current" id="connections-current">None</span></summary>
         <div class="accord-body">
-          <p class="hint">Add a link or app, or an AI agent like ChatGPT. For an agent, say “ask ChatGPT …” or “have &lt;name&gt; …” and she reads you its answer. Keys stay on this phone.</p>
+          <p class="hint">Add a link or app, or any AI. For an AI, say “ask Gemini …” or “have &lt;name&gt; …” and she reads you its answer. Turn on <b>Backup brain</b> and she switches to it by herself when Groq is at its limit. Keys stay on this phone.</p>
           <div id="connections-list"></div>
           <div class="row row-col" style="margin-top:12px">
             <label for="conn-name">New connection</label>
             <input type="text" id="conn-name" placeholder="Name">
             <select id="conn-type" style="margin-top:8px">
               <option value="link">Link or app</option>
-              <option value="openai">AI agent: ChatGPT (OpenAI)</option>
-              <option value="groq">AI agent: Groq</option>
-              <option value="custom">AI agent: other (OpenAI-compatible)</option>
             </select>
             <input type="text" id="conn-url" placeholder="https://… or an app scheme" style="margin-top:8px">
             <div id="conn-agent-fields" class="hidden">
               <input type="text" id="conn-base" placeholder="Base URL, like https://api.openai.com/v1" autocapitalize="off" autocorrect="off" style="margin-top:8px">
-              <input type="text" id="conn-model" placeholder="Model, like gpt-5-mini" autocapitalize="off" autocorrect="off" style="margin-top:8px">
               <input type="password" id="conn-key" placeholder="API key (saved only on this phone)" autocomplete="off" style="margin-top:8px">
-              <div class="sub">For Groq you can leave the key blank to use your main Groq key.</div>
+              <div class="sub" id="conn-keyhint">For Groq you can leave the key blank to use your main Groq key.</div>
+              <input type="text" id="conn-model" placeholder="Model, like gpt-5-mini" autocapitalize="off" autocorrect="off" style="margin-top:8px" list="conn-models">
+              <datalist id="conn-models"></datalist>
+              <button class="btn" type="button" id="btn-conn-models">Find models</button>
+              <label class="toggle-row" style="margin-top:12px">Backup brain <input type="checkbox" id="conn-backup"></label>
+              <div class="sub">When Groq is at its limit, she uses this AI on her own, in the order you add them.</div>
             </div>
             <div class="sub">Optional icon</div>
             <div id="conn-icons" class="icon-pick"></div>
@@ -137,10 +150,33 @@
             <li>Open the Shortcuts app. Delete your old shortcut named <b class="sc-setup-name">Friday</b> (press and hold it, then Delete).</li>
             <li>Tap <b>+</b> to make a new shortcut, and paste the prompt into the box that asks what the shortcut should do.</li>
             <li>Name the new shortcut exactly <b class="sc-setup-name">Friday</b>.</li>
-            <li>Check there is no Speak Text step. Run it once from Shortcuts and allow Home, Messages, and Contacts when it asks.</li>
+            <li>Check there is no Speak Text step. Run it once from Shortcuts and allow Home, Messages, Contacts, Calendar, Reminders, Music, Clock, and Focus when it asks.</li>
           </ol>
           <textarea id="shortcut-prompt" readonly style="min-height:160px;font-size:12px"></textarea>
           <button class="btn gold" type="button" id="btn-shortcut-copy" style="margin-top:8px">Copy prompt</button>
+          <button class="btn" type="button" id="btn-shortcut-open">Open Shortcuts</button>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-widgets">
+        <summary>Widgets and Control Center</summary>
+        <div class="accord-body about-copy">
+          <p><strong>Home Screen and Lock Screen</strong></p>
+          <ol>
+            <li>Install the free <b>Scriptable</b> app.</li>
+            <li>Tap <b>Copy widget script</b> below, open Scriptable, tap <b>+</b>, paste, and name it <b class="assist-name">Friday</b> Widget.</li>
+            <li>Long-press your Home Screen → <b>Edit</b> → <b>Add Widget</b> → Scriptable. Pick a size, add it, tap it, and choose the script.</li>
+            <li>Lock Screen: long-press the Lock Screen → <b>Customize</b> → Lock Screen → add Scriptable widgets, then pick <b class="assist-name">Friday</b> Lock Screen for each.</li>
+          </ol>
+          <button class="btn gold" type="button" id="btn-copy-widget">Copy widget script</button>
+          <button class="btn" type="button" id="btn-copy-lock">Copy Lock Screen script</button>
+          <p style="margin-top:14px"><strong>Control Center</strong></p>
+          <ol>
+            <li>Swipe down from the top-right corner, tap <b>+</b> at the top left, then <b>Add a Control</b>.</li>
+            <li>Search <b>Open App</b>, add it, and choose <b class="assist-name">Friday</b>. One tap opens her listening.</li>
+            <li>Add another control, search <b>Shortcut</b>, and choose your <b class="sc-setup-name">Friday</b> shortcut to run phone commands from anywhere.</li>
+            <li>You can also put these on the Lock Screen's bottom buttons and the Action button.</li>
+          </ol>
         </div>
       </details>
 
@@ -148,7 +184,7 @@
         <label class="toggle-row">Morning briefing
           <input type="checkbox" id="set-briefing">
         </label>
-        <div class="sub">The first time you open the app between 5 and 11 in the morning, she tells you the time, the weather, and any notes or timers for today. Weather comes from Open-Meteo. If the phone won’t share a location, she uses Cumberland Gap.</div>
+        <div class="sub">The first time you open the app between 5 and 11 in the morning, she tells you the time, today's weather with the high, low and rain chance, bills due soon, countdowns, birthdays she knows about, your to-do list, and timers. Weather comes from Open-Meteo. If the phone won’t share a location, she uses Cumberland Gap.</div>
       </div>
       <div class="row row-col">
         <label class="toggle-row">Wake greeting
@@ -163,10 +199,64 @@
         <button class="btn" type="button" id="btn-chip-add">Add a chip</button>
       </div>
 
+      <details class="accord" id="accord-voice">
+        <summary>Voice <span class="accord-current" id="voice-current">Automatic</span></summary>
+        <div class="accord-body">
+          <div class="field-label">Speaking voice</div>
+          <div class="sub" id="voice-hint"></div>
+          <div id="voice-list" class="voice-list" role="radiogroup" aria-label="Speaking voice"></div>
+          <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="set-voice-all"> Show voices in every language</label>
+          <label class="field-label" for="set-voice-fallback" style="margin-top:8px;display:block">iPhone voice when the AI voice is resting</label>
+          <select id="set-voice-fallback"></select>
+          <div class="sub">AI voices are free for about 100 replies a day. After that she uses this voice until they're back.</div>
+          <label class="field-label" for="set-voice-speed" style="margin-top:14px;display:block">Speed <span id="voice-speed-val">1.0×</span></label>
+          <input type="range" id="set-voice-speed" min="0.8" max="1.3" step="0.05" value="1">
+          <p class="hint" style="margin-top:12px">More iPhone voices: iPhone Settings → Accessibility → Spoken Content → Voices → English. Download any <b>Premium</b> or <b>Enhanced</b> voice, then come back and pick it here. They're free.</p>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-brain">
+        <summary>Brain <span class="accord-current" id="brain-current">Groq</span></summary>
+        <div class="accord-body">
+          <p class="hint">Her main brain is Groq. If one Groq model is at its limit she tries the next one, then any connection you marked <b>Backup brain</b> in Connections.</p>
+          <div id="brain-status" class="sub"></div>
+          <label class="field-label" style="display:block;margin-top:12px">Internet</label>
+          <div class="life-tabs" id="web-mode">
+            <button type="button" class="life-tab" data-web="smart">When needed</button>
+            <button type="button" class="life-tab" data-web="always">Always check</button>
+            <button type="button" class="life-tab" data-web="off">Off</button>
+          </div>
+          <div class="sub">She searches the web for anything current, reads links you paste, and opens websites (“open amazon.com”). Say “search for …” or “look up …” to make her check online. “Always check” is the most up to date but a little slower and uses more of the free limit.</div>
+          <label class="toggle-row" style="margin-top:12px">Faster replies <input type="checkbox" id="set-fast"></label>
+          <div class="sub">She starts talking while the rest of the answer is still coming in.</div>
+          <label class="toggle-row" style="margin-top:12px">Talk over her <input type="checkbox" id="set-barge"></label>
+          <div class="sub">Start talking while she's speaking and she stops to listen. Works best with headphones or a quiet room.</div>
+          <label class="toggle-row" style="margin-top:12px">Headlines in the briefing <input type="checkbox" id="set-news"></label>
+          <div class="sub">She looks up a couple of top stories for the morning briefing.</div>
+          <button class="btn" type="button" id="btn-diag">Run diagnostics</button>
+          <div class="sub">Checks her key, brains, voices, vision, microphone, Shortcut name and storage. You can also say “run diagnostics”.</div>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-mood">
+        <summary>Mood and night <span class="accord-current" id="mood-current">Normal</span></summary>
+        <div class="accord-body">
+          <div class="mood-row" id="mood-row"></div>
+          <p class="hint">You can also say “focus mode”, “hype mode”, “calm mode”, “bedtime mode”, or “back to normal”.</p>
+          <label class="toggle-row" style="margin-top:12px">Night mode <input type="checkbox" id="set-night"></label>
+          <div class="sub">At night the orb dims, her voice is softer and slower, and she keeps it short.</div>
+          <div class="life-two" style="margin-top:8px">
+            <select id="set-night-from" aria-label="Night starts"></select>
+            <select id="set-night-to" aria-label="Night ends"></select>
+          </div>
+        </div>
+      </details>
+
       <div class="row row-col">
-        <label for="set-voice">Speaking voice</label>
-        <select id="set-voice"></select>
-        <div class="sub" id="voice-hint"></div>
+        <label class="toggle-row">Also set long timers on the iPhone
+          <input type="checkbox" id="set-iphone-timers">
+        </label>
+        <div class="sub">Timers of 10 minutes or more are also handed to your Shortcut, so they ring even if the app is closed.</div>
       </div>
       <div class="row row-col">
         <label for="set-shortcut">Shortcut name</label>
@@ -197,7 +287,7 @@
       </div>
       <div class="row row-col">
         <label>Backup and restore</label>
-        <div class="sub">Saves memory, notes, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
+        <div class="sub">Saves memory, notes, lists, bills, countdowns, timers, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
         <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
           <input type="checkbox" id="backup-include-key"> Include API key in this backup
         </label>
@@ -275,7 +365,15 @@
         <textarea id="memory-text" placeholder="Something Friday should remember"></textarea>
         <button class="btn gold" type="submit">Add to memory</button>
       </form>
-      <div id="memory-list" style="margin-top:18px"></div>
+      <input type="search" id="memory-search" placeholder="Search memories" style="margin-top:18px">
+      <div class="life-tabs" id="memory-filter" style="margin-top:10px">
+        <button type="button" class="life-tab on" data-f="all">All</button>
+        <button type="button" class="life-tab" data-f="pinned">Pinned</button>
+        <button type="button" class="life-tab" data-f="learned">Learned</button>
+        <button type="button" class="life-tab" data-f="az">A–Z</button>
+      </div>
+      <div id="memory-list" style="margin-top:12px"></div>
+      <p class="hint" id="memory-summary"></p>
     </div>
   </section>
 
@@ -285,13 +383,19 @@
       <button class="icon-btn" data-close="timer" aria-label="Close">✕</button>
     </header>
     <div class="body">
-      <div id="timer-display">00:00</div>
-      <div class="timer-row">
-        <input type="text" inputmode="numeric" id="timer-min" placeholder="min" value="5">
-        <input type="text" inputmode="numeric" id="timer-sec" placeholder="sec" value="0">
+      <div id="timers-box"></div>
+      <div id="timer-display" class="hidden">00:00</div>
+      <label class="field-label" style="display:block;margin-top:16px">New timer</label>
+      <input type="text" id="timer-name" placeholder="Name (optional), like Pasta">
+      <div class="timer-row" style="margin-top:8px">
+        <input type="text" inputmode="numeric" id="timer-min" placeholder="min" value="5" aria-label="Minutes">
+        <input type="text" inputmode="numeric" id="timer-sec" placeholder="sec" value="0" aria-label="Seconds">
       </div>
       <button class="btn gold" type="button" id="timer-start">Start</button>
-      <button class="btn" type="button" id="timer-cancel">Cancel</button>
+      <div class="life-quick" id="timer-quick"></div>
+      <button class="btn" type="button" id="timer-cancel">Cancel all</button>
+      <h2 class="life-h2">Countdowns</h2>
+      <button class="btn" type="button" id="btn-open-countdowns">Open countdowns</button>
     </div>
   </section>
 
@@ -301,6 +405,8 @@
       <button class="icon-btn" data-close="money" aria-label="Close">✕</button>
     </header>
     <div class="body">
+      <div id="bills-box"></div>
+      <h2 class="life-h2">Ask about money</h2>
       <p class="hint">Ask Friday about a bill, a budget, or a payment. She will use her money helper, then answer in her own voice.</p>
       <form id="money-form">
         <textarea id="money-text" placeholder="What should I know about this bill?"></textarea>
@@ -309,14 +415,82 @@
     </div>
   </section>
 
+  <section class="panel" id="panel-lists" aria-label="Lists">
+    <header>
+      <h1>Lists</h1>
+      <button class="icon-btn" data-close="lists" aria-label="Close">✕</button>
+    </header>
+    <div class="body" id="lists-box"></div>
+  </section>
+
+  <section class="panel" id="panel-countdowns" aria-label="Countdowns">
+    <header>
+      <h1>Countdowns</h1>
+      <button class="icon-btn" data-close="countdowns" aria-label="Close">✕</button>
+    </header>
+    <div class="body" id="countdowns-box"></div>
+  </section>
+
+  <section class="panel" id="panel-diag" aria-label="Diagnostics">
+    <header>
+      <h1>Diagnostics</h1>
+      <button class="icon-btn" data-close="diag" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <div id="diag-list" class="diag-list"></div>
+      <button class="btn gold" type="button" id="btn-diag-again">Run again</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-photo" aria-label="Photo">
+    <header>
+      <h1>What she sees</h1>
+      <button class="icon-btn" data-close="photo" aria-label="Close">✕</button>
+    </header>
+    <div class="body">
+      <img id="photo-img" alt="" class="photo-img">
+      <div class="msg friday" id="photo-answer" style="margin-top:14px"></div>
+      <form id="photo-form" style="margin-top:14px">
+        <input type="text" id="photo-q" placeholder="Ask something else about it">
+        <button class="btn gold" type="submit">Ask</button>
+      </form>
+      <button class="btn" type="button" id="btn-photo-again">Take another photo</button>
+    </div>
+  </section>
+
+  <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
+    <div class="whatsnew-card">
+      <h1>What's new</h1>
+      <ul>
+        <li>HD realistic orbs, plus four new Nested fracture looks</li>
+        <li>Lists, bills, countdowns, and named timers, all by voice</li>
+        <li>More voices, including free AI voices</li>
+        <li>Backup brain, faster replies, and longer memory</li>
+        <li>Show her a photo with the camera button</li>
+        <li>Moods and night mode</li>
+      </ul>
+      <p class="hint">Your Shortcut learned new tricks too (calendar and iPhone timers). Copy the new prompt into Shortcuts once to update it.</p>
+      <button class="btn gold" type="button" id="btn-wn-shortcut">Update my Shortcut</button>
+      <button class="btn" type="button" id="btn-wn-close">Later</button>
+    </div>
+  </div>
+
+  <input type="file" id="eyes-file" accept="image/*" capture="environment" class="hidden">
+
   <section class="panel" id="panel-neural" aria-label="Neural map">
     <header>
       <h1>Neural map</h1>
       <button class="icon-btn" data-close="neural" aria-label="Close">✕</button>
     </header>
-    <div class="body" style="position:relative;flex:1">
-      <canvas id="neural-canvas"></canvas>
-      <div id="neural-caption">FRIDAY · THINKING</div>
+    <div class="body neural-body">
+      <div class="neural-stage">
+        <canvas id="neural-canvas"></canvas>
+        <div id="neural-caption">FRIDAY · THINKING</div>
+        <div id="neural-card" class="neural-card hidden"></div>
+      </div>
+      <div id="neural-stats" class="neural-stats"></div>
+      <div class="neural-log-head">Activity · drag the map to turn it, tap a node for details</div>
+      <div id="neural-log" class="neural-log"></div>
     </div>
   </section>
 
@@ -347,7 +521,10 @@
   <script src="js/orb.js"></script>
   <script src="js/bubbles.js"></script>
   <script src="js/voice.js"></script>
+  <script src="js/brain.js"></script>
   <script src="js/chat.js"></script>
+  <script src="js/life.js"></script>
+  <script src="js/eyes.js"></script>
   <script src="js/neural.js"></script>
   <script src="js/tools.js"></script>
   <script src="js/settings.js"></script>

@@ -1,5 +1,7 @@
-/* Friday orb — cinematic WebGL particle renderer (looks N, F, M, H).
+/* Friday orb — cinematic WebGL particle renderer (all looks).
    Additive particles, glossy black core, bloom, filmic tone, auto quality.
+   HD mode: full phone resolution, depth of field, glass core reflections,
+   lens dispersion, wider bloom and soft light streaks. Original mode is untouched.
    No keys. Procedural and time-driven so it never loops like a video. */
 (function (root) {
   "use strict";
@@ -16,6 +18,7 @@
   ];
 
   var QUALITY = {
+    ultra: { name: "ultra", dpr: 3.0, dens: 1.3, dust: 3800, streams: 4200, bloom: 4, point: 0.94 },
     high: { name: "high", dpr: 2.5, dens: 1.0, dust: 2800, streams: 3200, bloom: 3, point: 1.0 },
     med:  { name: "med",  dpr: 2.0, dens: 0.62, dust: 1600, streams: 1800, bloom: 2, point: 1.08 },
     low:  { name: "low",  dpr: 1.5, dens: 0.36, dust: 800, streams: 900, bloom: 1, point: 1.18 }
@@ -559,6 +562,132 @@
     }
   }
 
+
+  // Nested fractured spheres: several shells inside one another, each cracked into
+  // plates with bright crack lines, lifting shards, light filaments and a lens core.
+  function buildNested(buf, dens, user, opt) {
+    opt = opt || {};
+    var rng = rngAt(opt.seed || 404);
+    var radii = opt.radii || [0.40, 0.62, 0.84, 1.06];
+    var svBias = (opt.silver || 0.12) + (user ? 0.35 : 0);
+    var i, p, pl, sv, r;
+    function addP(pt, rad, I, H, S, sil, shell) {
+      buf.add([pt[0] * rad, pt[1] * rad, pt[2] * rad], I, H, S, sil, shell, null);
+    }
+    radii.forEach(function (R, si) {
+      var fr = new Fracture(rngAt(900 + si * 31 + (opt.seed || 0)), 26 + si * 6, 0.24 + si * 0.04, 0.038);
+      var lift = {};
+      fr.centers.forEach(function (c, ci) { lift[ci] = rng() < 0.22 ? urand(rng, 0.03, 0.10) : 0; });
+      var shellW = 0.55 + si * 0.15;
+      // crack lines: dense, bright, thin
+      var nCrack = Math.max(600, (14000 * dens * R) | 0);
+      for (i = 0; i < nCrack; i++) {
+        p = unitRand(rng);
+        pl = fr.plate(p);
+        if (!pl.gap || fr._deadSet[pl.id]) continue;
+        sv = rng() < svBias ? 1 : 0;
+        r = R * (1 + lift[pl.id] * 0.5);
+        addP(p, r, 1.25 * shellW * urand(rng, 0.6, 1.15), urand(rng, 0.74, 0.98), rng() < 0.03 ? 1 : 0, sv, si);
+      }
+      // panel lines (broken latitude / longitude), like a hologram grid
+      var nfn;
+      for (var g = 0; g < 9; g++) {
+        var lat0 = (g / 8 - 0.5) * Math.PI * 0.9;
+        nfn = noise1d(0, rng, 4, urand(rng, 4, 10));
+        var nn = Math.max(60, (420 * dens * R * Math.max(0.3, Math.cos(lat0))) | 0);
+        for (var t = 0; t < nn; t++) {
+          var th = (t / nn) * TAU;
+          if (!dashedKeep(th, nfn, urand(rng, 0.35, 0.65))) continue;
+          p = sph(lat0, th);
+          pl = fr.plate(p);
+          if (fr._deadSet[pl.id] || pl.gap) continue;
+          r = R * (1 + lift[pl.id]);
+          addP(p, r, 0.42 * shellW * urand(rng, 0.5, 1.0), urand(rng, 0.55, 0.85), 0, rng() < svBias ? 1 : 0, si);
+        }
+      }
+      for (var m = 0; m < 8; m++) {
+        var lon = m * Math.PI / 8 + urand(rng, -0.05, 0.05);
+        nfn = noise1d(0, rng, 4, urand(rng, 4, 9));
+        var nm = Math.max(60, (380 * dens * R) | 0);
+        for (var u = 0; u < nm; u++) {
+          var tt = u / nm;
+          if (!dashedKeep(tt * TAU, nfn, urand(rng, 0.3, 0.6))) continue;
+          p = sph((tt - 0.5) * TAU, lon);
+          pl = fr.plate(p);
+          if (fr._deadSet[pl.id] || pl.gap) continue;
+          r = R * (1 + lift[pl.id]);
+          addP(p, r, 0.36 * shellW * urand(rng, 0.5, 1.0), urand(rng, 0.5, 0.8), 0, rng() < svBias ? 1 : 0, si);
+        }
+      }
+      // a bright broken band around each sphere so every layer reads on its own
+      var bandLat = urand(rng, -0.35, 0.35);
+      nfn = noise1d(0, rng, 4, 3);
+      var nb = Math.max(120, (900 * dens * R) | 0);
+      for (i = 0; i < nb; i++) {
+        var thb = urand(rng, 0, TAU);
+        if (!dashedKeep(thb, nfn, 0.7)) continue;
+        p = sph(bandLat + gauss(rng, 0, 0.004), thb);
+        addP(p, R * 1.012, 1.3 * shellW * urand(rng, 0.5, 1.0), urand(rng, 0.65, 0.95), 0, rng() < svBias ? 1 : 0, si);
+      }
+      // plate glitter and lifted shard edges
+      var nFill = Math.max(160, (1500 * dens * R) | 0);
+      for (i = 0; i < nFill; i++) {
+        p = unitRand(rng);
+        pl = fr.plate(p);
+        if (fr._deadSet[pl.id]) continue;
+        var big = rng() < 0.04;
+        r = R * (1 + lift[pl.id]);
+        addP(p, r, (big ? 0.75 : 0.14) * shellW * urand(rng, 0.4, 1.4), urand(rng, 0.45, 0.9), big ? 1 : 0, rng() < svBias ? 1 : 0, si);
+      }
+    });
+    // straight light filaments through the volume (rotate with the outer shell)
+    var nChord = opt.chords == null ? 7 : opt.chords;
+    var Rout = radii[radii.length - 1];
+    for (var c = 0; c < nChord; c++) {
+      var a = unitRand(rng), b = unitRand(rng);
+      if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] > 0.2) b = [-b[0], -b[1], -b[2]];
+      var nl = Math.max(80, (700 * dens) | 0);
+      var bright = urand(rng, 0.18, 0.5);
+      for (i = 0; i < nl; i++) {
+        var f = rng();
+        if (Math.sin(f * 40 + c) < -0.75) continue;
+        p = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+        addP(p, Rout * 1.02, bright * urand(rng, 0.4, 1.0), urand(rng, 0.75, 1.0), 0, 0, 3);
+      }
+    }
+    // spokes from the core
+    for (var sp = 0; sp < (opt.spokes == null ? 5 : opt.spokes); sp++) {
+      var d = unitRand(rng);
+      var ns = Math.max(60, (420 * dens) | 0);
+      for (i = 0; i < ns; i++) {
+        var q = urand(rng, 0.16, Rout * 1.08);
+        if (rng() < 0.3) continue;
+        addP(d, q, 0.28 * urand(rng, 0.4, 1.0) * (1.15 - q / Rout * 0.6), urand(rng, 0.7, 0.95), 0, rng() < svBias ? 1 : 0, 2);
+      }
+    }
+    // lens core: concentric glowing rings receding into the middle
+    var M = rot(0.25, -0.35, 0);
+    for (var k = 0; k < 7; k++) {
+      var rr = 0.075 + k * 0.021;
+      var zz = -0.06 * k;
+      var nk = Math.max(50, (380 * dens * (0.6 + rr * 4)) | 0);
+      for (i = 0; i < nk; i++) {
+        var th2 = urand(rng, 0, TAU);
+        var rad = rr + gauss(rng, 0, 0.0035);
+        var pt = applym(M, [rad * Math.cos(th2), rad * Math.sin(th2), zz]);
+        buf.add(pt, (0.62 - k * 0.05) * urand(rng, 0.6, 1.0), urand(rng, 0.8, 1.0), 0, rng() < svBias * 0.5 ? 1 : 0, 5, null);
+      }
+    }
+    // floating sparks in the volume
+    var nv = Math.max(80, (900 * dens) | 0);
+    for (i = 0; i < nv; i++) {
+      p = unitRand(rng);
+      var rv = Math.pow(rng(), 0.6) * Rout * 1.1;
+      var big2 = rng() < 0.08;
+      buf.add([p[0] * rv, p[1] * rv, p[2] * rv], (big2 ? 0.7 : 0.12) * urand(rng, 0.3, 1.3), urand(rng, 0.4, 0.95), big2 ? 1 : 0, rng() < svBias ? 1 : 0, 17, [rng() * 6, rng() * 6, rng() * 6, 0]);
+    }
+  }
+
   function buildLook(buf, look, dens, user, quality) {
     var S = {
       N: { core: 1, shells: 1, dust: 1, tint: [0.06, 0.045, 0.02] },
@@ -575,7 +704,11 @@
       V2: { hshell: 1, ring: 1, dust: 1, follow: 1 },
       I1: { core: 1, inner: 1, wire: 0.85, ring: 1, dust: 1 },
       I3: { core: 1, wrap: 1, wire: 0.5, ring: 1, dust: 1 },
-      R:  { core: 0.5, wire2: 1, ring: 1, volume: 1, dust: 1 }
+      R:  { core: 0.5, wire2: 1, ring: 1, volume: 1, dust: 1 },
+      X1: { nested: { silver: 0.10 }, core: 0, dust: 1, tint: [0.09, 0.055, 0.015] },
+      X2: { nested: { silver: 0.18, radii: [0.52, 0.72, 0.92, 1.1], spokes: 6 }, core: 1, dust: 1, tint: [0.07, 0.05, 0.02] },
+      X3: { nested: { silver: 0.55, seed: 77, chords: 22 }, core: 0, dust: 1, tint: [0.05, 0.055, 0.065] },
+      X4: { nested: { silver: 0.12, radii: [0.30, 0.46, 0.62, 0.78, 0.94, 1.1], seed: 9, chords: 10, spokes: 14 }, core: 0, dust: 1, follow: 1, tint: [0.09, 0.055, 0.015] }
     };
     var s = S[look];
     if (!s) s = conceptSpec(look);
@@ -585,6 +718,7 @@
     if (s.hshell) buildHShell(buf, dens * (s.hshell === 1 ? 1 : s.hshell), 1, user && look !== "F" && look !== "F1");
     if (s.ring) buildRingCore(buf, s.silverRing ? 0.16 : (s.core ? 0.14 : 0.105), dens * (typeof s.ring === "number" ? s.ring : 1), 1.2, s.silverRing || user ? 0.7 : 0, 5, [0.25, -0.35, 0]);
     if (s.streams) buildStreams(buf, quality.streams);
+    if (s.nested) buildNested(buf, dens, user, s.nested);
     if (s.inner) buildInnerCords(buf, dens, user);
     if (s.wrap) buildWrap(buf, dens, user);
     if (s.wire) buildWire(buf, dens, 6, 3, 0.97, user);
@@ -668,7 +802,9 @@
     "uniform float uTime,uScale,uCam,uRadius,uCoreR,uDpr,uPointScale,uTalk,uAmp,uWarm,uHasCore,uK,uSpeaker;",
     "uniform vec3 uAxis0,uAxis1,uAxis2,uAxis3;",
     "uniform float uAng0,uAng1,uAng2,uAng3,uAngH;",
+    "uniform mediump float uHD;",
     "varying vec3 vCol;",
+    "varying float vDof;",
     "vec3 goldRamp(float t){",
     "  t=clamp(t,0.0,1.0)*3.0; vec3 a,b; float f;",
     "  if(t<1.0){a=vec3(0.85,0.22,0.00);b=vec3(1.00,0.42,0.02);f=t;}",
@@ -783,6 +919,17 @@
     "  vec2 clip=vec2((uCenter.x+xy.x)/uRes.x*2.0-1.0,(uCenter.y+xy.y)/uRes.y*2.0-1.0);",
     "  gl_Position=vec4(clip,0.5-z*0.08,1.0);",
     "  float sz=mix(1.25,4.0,aData.z)*persp*uDpr*uPointScale*(0.85+0.35*zn);",
+    "  vDof=0.0;",
+    "  if(uHD>0.5){",
+    "    float foc=abs(z-0.25);",
+    "    float dof=smoothstep(0.6,1.45,foc);",
+    "    if(sh>8.5&&sh<16.5) dof*=0.35;",
+    "    vDof=dof;",
+    "    float grow=1.0+dof*0.85;",
+    "    sz*=grow;",
+    "    vCol/=mix(1.0,grow*grow*0.75,dof);",
+    "    vCol*=1.0+0.22*(1.0-dof);",
+    "  }",
     "  gl_PointSize=max(sz,0.75*uDpr);",
     "}"
   ].join("\n");
@@ -790,10 +937,22 @@
   var FRAG = [
     "precision mediump float;",
     "varying vec3 vCol;",
+    "varying float vDof;",
+    "uniform float uHD;",
     "void main(){",
     "  vec2 uv=gl_PointCoord*2.0-1.0;",
     "  float d=dot(uv,uv);",
     "  if(d>1.0) discard;",
+    "  if(uHD>0.5){",
+    "    float sharp=1.0-vDof;",
+    "    float halo=exp(-d*mix(2.4,3.3,sharp));",
+    "    float core=exp(-d*mix(6.0,16.0,sharp));",
+    "    float bokeh=vDof*smoothstep(1.0,0.72,d)*(0.55+0.45*smoothstep(0.35,0.95,d));",
+    "    float a=halo*0.95+core*0.85+bokeh*0.45;",
+    "    vec3 hot=mix(vCol,vec3(max(max(vCol.r,vCol.g),vCol.b)),0.18*core*sharp);",
+    "    gl_FragColor=vec4(hot*a*1.12,min(a,1.0));",
+    "    return;",
+    "  }",
     "  float a=exp(-d*3.15);",
     "  float c=exp(-d*12.0);",
     "  vec3 col=vCol*(a+c*0.55);",
@@ -810,7 +969,7 @@
   var BODY_FRAG = [
     "precision mediump float;",
     "uniform vec2 uRes,uCenter;",
-    "uniform float uRadius,uScale,uCoreR,uWarm,uSpec;",
+    "uniform float uRadius,uScale,uCoreR,uWarm,uSpec,uHD,uTime,uTalk;",
     "uniform vec3 uTint;",
     "void main(){",
     "  vec2 pix=gl_FragCoord.xy;",
@@ -831,6 +990,23 @@
     "  float g=exp(-0.5*(pow((pix.x-uCenter.x)/(uRadius*uScale*1.55),2.0)+pow((pix.y-uCenter.y)/(uRadius*uScale*0.85),2.0)));",
     "  light+=uTint*g*0.42;",
     "  float alpha=inside*0.88*disc;",
+    "  if(uHD>0.5&&uSpec>0.01){",
+    "    float rr=clamp(r,0.0,1.0);",
+    "    float nz=sqrt(max(1.0-rr*rr,0.0));",
+    "    float fres=pow(1.0-nz,4.0);",
+    "    vec3 tintc=mix(silv,gold,0.3+0.5*uWarm);",
+    "    float lit=clamp(0.5-0.5*(dxy.x*0.6+dxy.y*0.8),0.0,1.0);",
+    "    light+=tintc*fres*mix(0.025,0.11,lit)*inside;",
+    "    vec2 bc=dxy-vec2(-0.30,-0.36);",
+    "    float band=exp(-pow((length(bc)-0.30)/0.05,2.0))*smoothstep(0.1,-0.35,bc.x+bc.y)*inside;",
+    "    light+=vec3(0.9,0.92,0.96)*band*0.020;",
+    "    float glow=(1.0-smoothstep(0.0,0.85,rr))*(0.006+0.03*uTalk*(0.6+0.4*sin(uTime*7.0)));",
+    "    light+=tintc*glow*inside;",
+    "    float rimL=smoothstep(0.86,0.995,rr)*smoothstep(-0.2,0.6,dxy.x*0.55+dxy.y*0.85)*inside;",
+    "    light+=tintc*rimL*0.06;",
+    "    float shadow=smoothstep(1.0,1.12,r)*(1.0-smoothstep(1.12,1.55,r));",
+    "    alpha=max(alpha,shadow*0.28);",
+    "  }",
     "  gl_FragColor=vec4(light*2.0,alpha);",
     "}"
   ].join("\n");
@@ -853,8 +1029,10 @@
   var COMP_FRAG = [
     "precision mediump float;",
     "varying vec2 vUv;",
-    "uniform sampler2D uScene,uBloom1,uBloom2,uBloom3;",
-    "uniform float uBloomLevels,uTime,uExposure;",
+    "uniform sampler2D uScene,uBloom1,uBloom2,uBloom3,uBloom4;",
+    "uniform float uBloomLevels,uTime,uExposure,uHD;",
+    "uniform vec2 uCenterN,uTexel;",
+    "vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }",
     "vec3 filmic(vec3 lit){",
     "  vec3 tm=1.0-exp(-lit);",
     "  float L=max(max(lit.r,lit.g),lit.b);",
@@ -865,6 +1043,29 @@
     "  return mix(tm,vec3(lum),hot);",
     "}",
     "void main(){",
+    "  if(uHD>0.5){",
+    "    vec2 dir=vUv-uCenterN;",
+    "    float dl=length(dir);",
+    "    vec2 ca=dir*uTexel*2.2*(0.4+dl*1.6);",
+    "    vec3 sc=vec3(texture2D(uScene,vUv+ca).r,texture2D(uScene,vUv).g,texture2D(uScene,vUv-ca).b);",
+    "    vec3 b=0.62*texture2D(uBloom1,vUv).rgb;",
+    "    b+=0.46*texture2D(uBloom2,vUv+ca*2.0).rgb;",
+    "    b+=0.30*texture2D(uBloom3,vUv+ca*3.0).rgb;",
+    "    b+=0.16*texture2D(uBloom4,vUv).rgb;",
+    "    vec2 sx=vec2(uTexel.x*36.0,0.0);",
+    "    vec3 st=texture2D(uBloom3,vUv+sx).rgb+texture2D(uBloom3,vUv-sx).rgb+0.6*(texture2D(uBloom3,vUv+sx*2.2).rgb+texture2D(uBloom3,vUv-sx*2.2).rgb);",
+    "    vec3 hl=sc*1.12+b+st*vec3(0.05,0.038,0.02);",
+    "    hl*=uExposure*0.9;",
+    "    vec3 t2=filmic(hl);",
+    "    vec2 q=vUv*2.0-1.0;",
+    "    t2*=1.0-0.30*pow(dot(q,q),1.2);",
+    "    float gr=fract(sin(dot(gl_FragCoord.xy+fract(uTime*7.31)*91.0,vec2(12.9898,78.233)))*43758.5453);",
+    "    t2+=(gr-0.5)*0.022*(0.25+t2);",
+    "    t2=mix(t2,t2*vec3(1.035,0.995,0.94),0.2);",
+    "    t2=pow(t2,vec3(0.98));",
+    "    gl_FragColor=vec4(clamp(t2,0.0,1.0),1.0);",
+    "    return;",
+    "  }",
     "  vec3 lit=texture2D(uScene,vUv).rgb;",
     "  if(uBloomLevels>0.5) lit+=0.70*texture2D(uBloom1,vUv).rgb;",
     "  if(uBloomLevels>1.5) lit+=0.55*texture2D(uBloom2,vUv).rgb;",
@@ -932,6 +1133,13 @@
     return applym(M, [0, 1, 0]);
   }
 
+  function readHD() {
+    try {
+      var s = JSON.parse(localStorage.getItem("friday.settings") || "{}");
+      return s.render !== "original";
+    } catch (e) { return true; }
+  }
+
   function FridayOrb(canvas, opts) {
     opts = opts || {};
     this.canvas = canvas;
@@ -982,8 +1190,9 @@
     this.dust = null;
 
     this.look = "N";
-    this.quality = opts.thumb ? QUALITY.med : QUALITY.high;
-    this._qOrder = ["high", "med", "low"];
+    this.hd = opts.hd == null ? readHD() : !!opts.hd;
+    this.quality = opts.thumb ? QUALITY.med : (this.hd ? QUALITY.ultra : QUALITY.high);
+    this._qOrder = ["ultra", "high", "med", "low"];
     this.speaker = "idle";
     this.volume = 0;
     this.talk = 0;
@@ -1025,19 +1234,22 @@
   var thumbOrb = null, thumbCache = {};
   FridayOrb.thumbnail = function (look, size) {
     size = size || 160;
-    if (thumbCache[look]) return thumbCache[look];
+    var hd = readHD();
+    var key = look + (hd ? ":hd" : ":og");
+    if (thumbCache[key]) return thumbCache[key];
     try {
       if (!thumbOrb) {
         var c = document.createElement("canvas");
-        thumbOrb = new FridayOrb(c, { thumb: true, width: size, height: size });
+        thumbOrb = new FridayOrb(c, { thumb: true, width: size, height: size, hd: hd });
       }
+      thumbOrb.hd = hd;
       thumbOrb.speaker = "idle";
       thumbOrb.look = null;
       thumbOrb.setLook(look);
       thumbOrb._t0 = 0; thumbOrb._last = 0;
       for (var i = 0; i < 24; i++) thumbOrb._frame(1000 + i * 33);
-      thumbCache[look] = thumbOrb.canvas.toDataURL("image/jpeg", 0.8);
-      return thumbCache[look];
+      thumbCache[key] = thumbOrb.canvas.toDataURL("image/jpeg", 0.85);
+      return thumbCache[key];
     } catch (e) {
       return "";
     }
@@ -1092,6 +1304,19 @@
     this.look = id;
     this._frames = 0;
     if (this._fallbackStep === 9) this._fallbackStep = 1;
+    this._rebuild();
+  };
+
+  // "hd" (realistic, full resolution) or "original" (the classic look).
+  FridayOrb.prototype.setRender = function (mode) {
+    var hd = mode !== "original";
+    if (hd === this.hd) return;
+    this.hd = hd;
+    if (!this._thumb) this.quality = hd ? QUALITY.ultra : QUALITY.high;
+    this._fpsWin = [];
+    this._freeTargets();
+    this.canvas.width = 1;
+    this.resize();
     this._rebuild();
   };
 
@@ -1183,7 +1408,12 @@
     var t1 = tryMake(Math.max(1, w >> 1), Math.max(1, h >> 1));
     var t2 = tryMake(Math.max(1, w >> 2), Math.max(1, h >> 2));
     var t3 = tryMake(Math.max(1, w >> 3), Math.max(1, h >> 3));
-    this._targets = { scene: scene, b1: b1, b2: b2, b3: b3, t1: t1, t2: t2, t3: t3 };
+    var b4 = null, t4 = null;
+    if (this.quality.bloom >= 4) {
+      b4 = tryMake(Math.max(1, w >> 4), Math.max(1, h >> 4));
+      t4 = tryMake(Math.max(1, w >> 4), Math.max(1, h >> 4));
+    }
+    this._targets = { scene: scene, b1: b1, b2: b2, b3: b3, t1: t1, t2: t2, t3: t3, b4: b4, t4: t4 };
   };
 
   FridayOrb.prototype._freeTargets = function () {
@@ -1260,6 +1490,7 @@
     gl.uniform1f(u.uWarm, this.warm);
     gl.uniform1f(u.uHasCore, this.hasCore);
     gl.uniform1f(u.uK, this.k);
+    if (u.uHD) gl.uniform1f(u.uHD, this.hd ? 1 : 0);
     if (u.uSpeaker) gl.uniform1f(u.uSpeaker, this.speaker === "friday" ? 1 : this.speaker === "user" ? -1 : 0);
     function ax(loc, v) { gl.uniform3f(loc, v[0], v[1], v[2]); }
     ax(u.uAxis0, this.axes[0]); ax(u.uAxis1, this.axes[1]);
@@ -1435,6 +1666,9 @@
       gl.uniform1f(bu.uCoreR, CORE_R);
       gl.uniform1f(bu.uWarm, this.warm);
       gl.uniform1f(bu.uSpec, 0.8);
+      gl.uniform1f(bu.uHD, this.hd ? 1 : 0);
+      gl.uniform1f(bu.uTime, time);
+      gl.uniform1f(bu.uTalk, this.talk);
       gl.uniform3f(bu.uTint, this._tint[0], this._tint[1], this._tint[2]);
       this._drawQuad(this.progBody);
     } else {
@@ -1450,6 +1684,9 @@
       gl.uniform1f(bu2.uCoreR, 0.02);
       gl.uniform1f(bu2.uWarm, this.warm);
       gl.uniform1f(bu2.uSpec, 0.0);
+      gl.uniform1f(bu2.uHD, this.hd ? 1 : 0);
+      gl.uniform1f(bu2.uTime, time);
+      gl.uniform1f(bu2.uTalk, this.talk);
       gl.uniform3f(bu2.uTint, this._tint[0], this._tint[1], this._tint[2]);
       this._drawQuad(this.progBody);
     }
@@ -1471,6 +1708,7 @@
     if (levels >= 1 && T.b1) this._blur(T.scene, T.t1, T.b1);
     if (levels >= 2 && T.b2) this._blur(T.b1 || T.scene, T.t2, T.b2);
     if (levels >= 3 && T.b3) this._blur(T.b2 || T.b1, T.t3, T.b3);
+    if (levels >= 4 && T.b4) this._blur(T.b3 || T.b2, T.t4, T.b4);
 
     this._bindFbo(null);
     gl.disable(gl.BLEND);
@@ -1480,6 +1718,10 @@
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, (T.b1 || T.scene).tex); gl.uniform1i(cu.uBloom1, 1);
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, (T.b2 || T.b1 || T.scene).tex); gl.uniform1i(cu.uBloom2, 2);
     gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, (T.b3 || T.b2 || T.b1 || T.scene).tex); gl.uniform1i(cu.uBloom3, 3);
+    gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, (T.b4 || T.b3 || T.b2 || T.b1 || T.scene).tex); gl.uniform1i(cu.uBloom4, 4);
+    gl.uniform1f(cu.uHD, this.hd ? 1 : 0);
+    gl.uniform2f(cu.uCenterN, this._cx / Math.max(1, T.scene.w), this._cy / Math.max(1, T.scene.h));
+    gl.uniform2f(cu.uTexel, 1 / Math.max(1, T.scene.w), 1 / Math.max(1, T.scene.h));
     gl.uniform1f(cu.uBloomLevels, levels);
     gl.uniform1f(cu.uTime, time);
     gl.uniform1f(cu.uExposure, this._exposure * 0.85);

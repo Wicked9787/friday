@@ -24,7 +24,19 @@
       iconId: "",
       morningBriefing: true,
       wakeGreeting: true,
-      chips: null
+      chips: null,
+      render: "hd",
+      mood: "normal",
+      nightMode: false,
+      nightFrom: 22,
+      nightTo: 7,
+      fastReplies: true,
+      bargeIn: false,
+      briefingNews: true,
+      iphoneTimers: true,
+      voiceSpeed: 1,
+      fallbackVoiceURI: "",
+      webMode: "smart"
     };
     var s = Object.assign(defaults, root.FridayStorage.get("settings", {}));
     if (!Array.isArray(s.chips)) {
@@ -81,12 +93,12 @@
     return location.protocol === "capacitor:";
   }
 
-  var SHORTCUT_PROMPT = "Get the Shortcut Input as text. If Shortcut Input has any value, use it as the request. Otherwise, Dictate Text and use that as the request. Change the request to lowercase, then check it in this order and only do the first one that matches:\n1. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n2. If it contains \"lock\" and (\"door\" or \"house\" or \"it\"): if it contains \"unlock\", unlock the front door lock in the Home app; otherwise lock it.\n3. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n4. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. If it says \"off\", turn those lights off. If it says a percent or number, turn them on and set their brightness to that number. If it says a color (like red, blue, warm white), turn them on and set that color. Otherwise, if it says \"on\", turn them on.\n6. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n7. If it contains \"weather\", get the current weather for my current location and show it as a notification.\n8. If it contains \"cameras\", open the app Roku Smart Home.\n9. If it contains \"camera\", open the app Camera.\n10. If it starts with \"text\" or \"message\" (or \"send a text to\"), the next word is the contact name and the rest is the message body; send that body to that contact with Send Message, without showing the compose sheet if possible.\n11. If it starts with \"call\", the rest is a contact name; call that contact.\n12. Otherwise, do nothing.\nDo not add any Speak Text step anywhere; the app does all the talking. Do not show alerts or ask questions except Dictate Text when there is no input.";
+  var SHORTCUT_PROMPT = "Get the Shortcut Input as text. If Shortcut Input has any value, use it as the request. Otherwise, Dictate Text and use that as the request. Change the request to lowercase, then check it in this order and only do the first one that matches:\n1. If it contains \"remind me\" or \"reminder\": take what to be reminded about and the date and time from the request, and add it to the Reminders app with an alert at that time (if no time is said, alert in one hour).\n2. If it starts with \"text\" or \"message\" (or \"send a text to\"), the next word is the contact name and the rest is the message body; send that body to that contact with Send Message, without showing the compose sheet if possible.\n3. If it starts with \"call\", the rest is a contact name; call that contact.\n4. If it contains \"calendar\", \"schedule\", \"appointment\" or \"what's on\": if it says \"add\" or \"schedule a\" or \"schedule an\", take the event name and the date and time from the request and add a calendar event with them (if no time is said, use tomorrow at 9 AM), then show a quiet notification that it was added. Otherwise find calendar events for today (or tomorrow if the request says tomorrow) and show their titles and times as a quiet notification.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\", \"brighten\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. Then: if it has a number with a percent sign or the word percent, or says \"to\" followed by a number (like \"50%\", \"50 percent\", \"set the lights to 50\"), turn those lights on and set their brightness to exactly that number. Otherwise if it says \"dim\", set their brightness to 30. Otherwise if it says \"brighten\", \"full\" or \"all the way up\", set their brightness to 100. Otherwise if it says \"off\", turn them off. Otherwise if it says a color (like red, blue, warm white), turn them on and set that color. Otherwise if it says \"on\", turn them on.\n6. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n7. If it contains \"homepod\", \"music\", \"song\", \"playlist\", \"album\", \"pause\", \"resume\", \"skip\", \"next song\", \"previous song\" or \"volume\": if it says \"homepod\", set the playback destination to the HomePod first. Then if it says \"pause\", pause; if it says \"resume\", play; if it says \"skip\" or \"next\", skip forward; if it says \"previous\" or \"back\", skip back; if it says \"volume\" or \"turn it up\" or \"turn it down\" with a number, set the volume to that percent (up means 80, down means 30 if no number is said). Otherwise if it says \"play\" followed by words, search Apple Music for those words and play the first result; otherwise shuffle and play my music library.\n8. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n9. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n10. If it contains \"timer\", find the number of minutes in the request and start a timer in the Clock app for that many minutes.\n11. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n12. If it contains \"do not disturb\", \"don't disturb\" or \"dnd\": if it says \"off\", turn the Do Not Disturb focus off; otherwise turn it on.\n13. If it contains \"battery\", get the battery level and show it as a quiet notification.\n14. If it contains \"cameras\", open the app Roku Smart Home.\n15. If it contains \"camera\", open the app Camera.\n16. Otherwise, do nothing.\nDo not add any Speak Text step anywhere; the app does all the talking. Do not show alerts or ask questions except Dictate Text when there is no input. Make every notification silent.";
 
-  var AGENT_PRESETS = {
-    openai: { name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini" },
-    groq: { name: "Groq", base: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
-    custom: { name: "", base: "", model: "" }
+  var AGENT_PRESETS = (root.FridayBrain && root.FridayBrain.PRESETS) || {
+    openai: { label: "ChatGPT / OpenAI", name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini" },
+    groq: { label: "Groq", name: "Groq", base: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
+    custom: { label: "Any other (OpenAI-compatible)", name: "", base: "", model: "" }
   };
 
   function loadConnections() {
@@ -145,6 +157,8 @@
     this.onReset = opts.onReset || function () {};
     this.onToast = opts.onToast || function () {};
     this.onAddBubble = opts.onAddBubble || function () {};
+    this.onRender = opts.onRender || function () {};
+    this.onNight = opts.onNight || function () {};
     this.values = loadSettings();
     if (!this.values.look) this.values.look = this.profile.defaultLook || "N";
     if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday";
@@ -352,33 +366,9 @@
       };
     }
 
-    var voiceSel = document.getElementById("set-voice");
-    function fillVoices() {
-      var voices = self.voice.listVoices();
-      var cur = self.values.voiceURI;
-      voiceSel.innerHTML = "";
-      var opt0 = document.createElement("option");
-      opt0.value = "";
-      opt0.textContent = "Automatic (" + (self.profile.voiceHint || "best match") + ")";
-      voiceSel.appendChild(opt0);
-      voices.forEach(function (v) {
-        var o = document.createElement("option");
-        o.value = v.voiceURI;
-        o.textContent = v.name + " · " + v.lang;
-        if (v.voiceURI === cur) o.selected = true;
-        voiceSel.appendChild(o);
-      });
-    }
-    fillVoices();
-    if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = fillVoices;
-    }
-    voiceSel.onchange = function () {
-      self.values.voiceURI = voiceSel.value;
-      self.voice.setVoiceURI(voiceSel.value);
-      saveSettings(self.values);
-    };
-    document.getElementById("voice-hint").textContent = "Suggested for this phone: " + (this.profile.voiceHint || "") + ".";
+    this._bindVoice();
+    this._bindBrainMood();
+    this._bindWidgets();
 
     var sc = document.getElementById("set-shortcut");
     sc.value = this.values.shortcutName;
@@ -488,6 +478,239 @@
     };
   };
 
+  FridaySettings.prototype._bindVoice = function () {
+    var self = this;
+    var listEl = document.getElementById("voice-list");
+    var fbSel = document.getElementById("set-voice-fallback");
+    var allBox = document.getElementById("set-voice-all");
+    var cur = document.getElementById("voice-current");
+    var V = root.FridayVoice;
+    var playing = null;
+    function label(uri) {
+      if (!uri) return "Automatic";
+      if (uri.indexOf("ai:") === 0) {
+        var a = (V.AI_VOICES || []).filter(function (x) { return x.id === uri; })[0];
+        return a ? a.name + " (AI)" : "AI voice";
+      }
+      var v = self.voice.listVoices().filter(function (x) { return x.voiceURI === uri; })[0];
+      return v ? v.name.replace(/\s*\((enhanced|premium)\)/i, "") : "Automatic";
+    }
+    function stopPreview() {
+      self.voice.stopSpeak();
+      if (playing) { playing.textContent = "▶"; playing.classList.remove("on"); playing = null; }
+    }
+    function row(uri, name, sub, tag) {
+      var chosen = (self.values.voiceURI || "") === uri;
+      var r = document.createElement("div");
+      r.className = "voice-row" + (chosen ? " on" : "");
+      r.setAttribute("role", "radio");
+      r.setAttribute("aria-checked", chosen ? "true" : "false");
+      r.tabIndex = 0;
+      var check = document.createElement("span");
+      check.className = "voice-check";
+      check.textContent = chosen ? "✓" : "";
+      var txt = document.createElement("span");
+      txt.className = "voice-txt";
+      var b = document.createElement("b"); b.textContent = name;
+      txt.appendChild(b);
+      if (tag) { var t = document.createElement("span"); t.className = "life-tag"; t.textContent = tag; b.appendChild(t); }
+      var sm = document.createElement("small"); sm.textContent = sub;
+      txt.appendChild(sm);
+      var pv = document.createElement("button");
+      pv.type = "button";
+      pv.className = "voice-play";
+      pv.textContent = "▶";
+      pv.setAttribute("aria-label", "Preview " + name);
+      pv.onclick = function (e) {
+        e.stopPropagation();
+        if (playing === pv) { stopPreview(); return; }
+        stopPreview();
+        if (uri.indexOf("ai:") === 0) {
+          if (!root.FridayStorage.hasApiKey()) { self.onToast("AI voices need your Groq key."); return; }
+          var until = root.FridayStorage.get("aiVoicePauseUntil", 0) || 0;
+          if (until > Date.now()) { self.onToast("AI voices are resting for now; you'll hear the iPhone voice instead."); }
+        }
+        playing = pv; pv.textContent = "■"; pv.classList.add("on");
+        self.voice.preview(uri, self.profile).then(function () { if (playing === pv) { pv.textContent = "▶"; pv.classList.remove("on"); playing = null; } });
+      };
+      function choose() {
+        stopPreview();
+        self.values.voiceURI = uri;
+        self.voice.setVoiceURI(uri);
+        saveSettings(self.values);
+        if (uri.indexOf("ai:") === 0) root.FridayStorage.set("aiVoicePauseUntil", 0);
+        listEl.querySelectorAll(".voice-row").forEach(function (x) { x.classList.remove("on"); x.setAttribute("aria-checked", "false"); x.querySelector(".voice-check").textContent = ""; });
+        r.classList.add("on"); r.setAttribute("aria-checked", "true"); check.textContent = "✓";
+        if (cur) cur.textContent = label(uri);
+      }
+      r.onclick = choose;
+      r.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); choose(); } };
+      r.appendChild(check); r.appendChild(txt); r.appendChild(pv);
+      listEl.appendChild(r);
+    }
+    function head(text) {
+      var h = document.createElement("div");
+      h.className = "voice-head";
+      h.textContent = text;
+      listEl.appendChild(h);
+    }
+    function fill() {
+      if (!listEl) return;
+      var all = !!(allBox && allBox.checked);
+      var cat = self.voice.catalog(all);
+      listEl.innerHTML = "";
+      row("", "Automatic", "Best match: " + (self.profile.voiceHint || "this phone"), "");
+      head("AI voices · free, about 100 replies a day");
+      (V.AI_VOICES || []).forEach(function (a) { row(a.id, a.name, a.blurb.replace(/^AI voice · /, "") + " · " + a.gender, "AI"); });
+      ["Premium", "Enhanced", "Siri", "Standard", "Fun"].forEach(function (q) {
+        var items = cat.filter(function (c) { return c.quality === q; });
+        if (!items.length) return;
+        head("iPhone · " + q);
+        items.forEach(function (c) { row(c.uri, c.name, c.lang, q === "Premium" || q === "Enhanced" ? q : ""); });
+      });
+      if (fbSel) {
+        var fb = self.values.fallbackVoiceURI || "";
+        fbSel.innerHTML = "";
+        var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Automatic (" + (self.profile.voiceHint || "best match") + ")"; if (!fb) o0.selected = true; fbSel.appendChild(o0);
+        cat.forEach(function (c) { var o = document.createElement("option"); o.value = c.uri; o.textContent = c.name + " · " + c.lang + (c.quality !== "Standard" ? " · " + c.quality : ""); if (fb === c.uri) o.selected = true; fbSel.appendChild(o); });
+      }
+      if (cur) cur.textContent = label(self.values.voiceURI || "");
+    }
+    fill();
+    if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = fill;
+    setTimeout(fill, 800);
+    if (allBox) allBox.onchange = fill;
+    if (fbSel) fbSel.onchange = function () { self.values.fallbackVoiceURI = fbSel.value; saveSettings(self.values); };
+    var sp = document.getElementById("set-voice-speed"), spv = document.getElementById("voice-speed-val");
+    if (sp) {
+      sp.value = self.values.voiceSpeed || 1;
+      if (spv) spv.textContent = (+sp.value).toFixed(2).replace(/0$/, "") + "×";
+      sp.oninput = function () { if (spv) spv.textContent = (+sp.value).toFixed(2).replace(/0$/, "") + "×"; };
+      sp.onchange = function () { self.values.voiceSpeed = +sp.value; saveSettings(self.values); };
+    }
+    var acc = document.getElementById("accord-voice");
+    if (acc) acc.addEventListener("toggle", function () { if (!acc.open) stopPreview(); });
+    var hint = document.getElementById("voice-hint");
+    if (hint) hint.textContent = "Tap a voice to choose it, or ▶ to hear it first. AI voices sound the most natural; Premium iPhone voices come next.";
+  };
+
+  FridaySettings.prototype._bindBrainMood = function () {
+    var self = this, v = this.values;
+    function tog(id, key, after) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.checked = v[key] !== false && v[key] !== undefined ? !!v[key] : false;
+      if (key === "fastReplies" || key === "briefingNews" || key === "iphoneTimers") el.checked = v[key] !== false;
+      el.onchange = function () { v[key] = el.checked; saveSettings(v); if (after) after(); };
+    }
+    tog("set-fast", "fastReplies");
+    tog("set-barge", "bargeIn");
+    tog("set-news", "briefingNews");
+    tog("set-iphone-timers", "iphoneTimers");
+    tog("set-night", "nightMode", function () { self.onNight(); syncMood(); });
+
+    var wm = document.getElementById("web-mode");
+    function syncWeb() { if (wm) wm.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-web") === (v.webMode || "smart")); }); }
+    if (wm) wm.addEventListener("click", function (e) { var b = e.target.closest("button[data-web]"); if (!b) return; v.webMode = b.getAttribute("data-web"); saveSettings(v); syncWeb(); });
+    syncWeb();
+
+    var hd = document.getElementById("render-hd"), og = document.getElementById("render-og");
+    function syncRender() {
+      var isHd = v.render !== "original";
+      if (hd) hd.classList.toggle("on", isHd);
+      if (og) og.classList.toggle("on", !isHd);
+    }
+    if (hd) hd.onclick = function () { v.render = "hd"; saveSettings(v); syncRender(); self.onRender("hd"); };
+    if (og) og.onclick = function () { v.render = "original"; saveSettings(v); syncRender(); self.onRender("original"); };
+    syncRender();
+
+    var row = document.getElementById("mood-row"), cur = document.getElementById("mood-current");
+    var moods = root.FridayMoods || { normal: { name: "Normal" } };
+    function syncMood() {
+      var m = v.mood || "normal";
+      if (row) row.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-mood") === m); });
+      if (cur) cur.textContent = (moods[m] ? moods[m].name : "Normal") + (v.nightMode ? " · night mode" : "");
+    }
+    if (row) {
+      row.innerHTML = "";
+      Object.keys(moods).forEach(function (k) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "life-tab"; b.setAttribute("data-mood", k); b.textContent = moods[k].name;
+        b.onclick = function () { v.mood = k; saveSettings(v); syncMood(); };
+        row.appendChild(b);
+      });
+    }
+    root.addEventListener("friday:mood", function () { var fresh = root.FridayStorage.get("settings", {}) || {}; v.mood = fresh.mood || "normal"; syncMood(); });
+    syncMood();
+
+    function hours(sel, val) {
+      if (!sel) return;
+      sel.innerHTML = "";
+      for (var h = 0; h < 24; h++) {
+        var o = document.createElement("option");
+        o.value = h;
+        o.textContent = (h % 12 || 12) + ":00 " + (h < 12 ? "AM" : "PM");
+        if (+val === h) o.selected = true;
+        sel.appendChild(o);
+      }
+    }
+    var nf = document.getElementById("set-night-from"), nt = document.getElementById("set-night-to");
+    hours(nf, v.nightFrom == null ? 22 : v.nightFrom);
+    hours(nt, v.nightTo == null ? 7 : v.nightTo);
+    if (nf) nf.onchange = function () { v.nightFrom = +nf.value; saveSettings(v); self.onNight(); };
+    if (nt) nt.onchange = function () { v.nightTo = +nt.value; saveSettings(v); self.onNight(); };
+
+    var bs = document.getElementById("brain-status"), bc = document.getElementById("brain-current");
+    function syncBrain() {
+      var backups = loadConnections().filter(function (c) { return c.type === "agent" && c.backup; }).map(function (c) { return c.name; });
+      var u = root.FridayStorage.get("usage.brain", null);
+      var today = u && u.date === new Date().toDateString() ? u : { total: 0, tts: 0, models: {} };
+      var per = Object.keys(today.models || {}).map(function (k) { return k.replace(/^.*\//, "") + " " + today.models[k]; }).join(", ");
+      var meter = "Today: " + (today.total || 0) + " replies" + (per ? " (" + per + ")" : "") + " · AI voice " + (today.tts || 0) + " of about 100 clips. Each Groq brain has its own free daily limit, about 1,000 replies.";
+      if (bs) bs.textContent = (backups.length ? "Backup brains: " + backups.join(", ") + ". " : "No backup brain yet. Add a free one (Gemini, OpenRouter, Cerebras, Mistral) in Connections and turn on Backup brain. ") + meter;
+      if (bc) bc.textContent = backups.length ? "Groq + " + backups.length + " backup" + (backups.length > 1 ? "s" : "") : "Groq";
+    }
+    this._syncBrain = syncBrain;
+    syncBrain();
+    var accB = document.getElementById("accord-brain");
+    if (accB) accB.addEventListener("toggle", function () { if (accB.open) syncBrain(); });
+  };
+
+  FridaySettings.prototype._bindWidgets = function () {
+    var self = this;
+    var nm = this.profile.assistantName || "Friday";
+    document.querySelectorAll(".assist-name").forEach(function (el) { el.textContent = nm; });
+    var texts = {};
+    function load(file) {
+      return fetch(file).then(function (r) { return r.ok ? r.text() : ""; }).catch(function () { return ""; });
+    }
+    var acc = document.getElementById("accord-widgets");
+    var dir = window.FRIDAY_BAKED_PROFILE === "batsie" ? "friday-batsie/scriptable/" : "scriptable/";
+    function prefetch() {
+      if (texts.w != null) return;
+      texts.w = ""; texts.l = "";
+      load(dir + "Friday-Widget.js").then(function (t) { texts.w = t; });
+      load(dir + "Friday-LockScreen.js").then(function (t) { texts.l = t; });
+    }
+    if (acc) acc.addEventListener("toggle", function () { if (acc.open) prefetch(); });
+    function copy(text, what) {
+      if (!text) { self.onToast("Still loading. Tap again in a second."); prefetch(); return; }
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+        var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+        ta.remove();
+        self.onToast(ok ? what + " copied. Paste it in Scriptable." : "Couldn't copy. Try again.");
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { self.onToast(what + " copied. Paste it in Scriptable."); }, fallback);
+      else fallback();
+    }
+    var bw = document.getElementById("btn-copy-widget"), bl = document.getElementById("btn-copy-lock");
+    if (bw) bw.onclick = function () { copy(texts.w, "Widget script"); };
+    if (bl) bl.onclick = function () { copy(texts.l, "Lock Screen script"); };
+  };
+
   FridaySettings.prototype._syncConnectionsHeader = function () {
     var el = document.getElementById("connections-current");
     if (!el) return;
@@ -549,8 +772,17 @@
         add.type = "button";
         add.className = "btn gold";
         add.textContent = "Add bubble";
-        if (c.type === "agent") add.style.display = "none";
-        add.addEventListener("click", function () {
+        if (c.type === "agent") {
+          add.textContent = "Test";
+          add.className = "btn";
+          add.onclick = function () {
+            add.disabled = true; add.textContent = "Testing…";
+            root.FridayBrain.test(c).then(function () {
+              self.onToast(c.name + " is working.");
+            }, function (e) { self.onToast(e.message || (c.name + " didn't answer.")); }).then(function () { add.disabled = false; add.textContent = "Test"; });
+          };
+        }
+        if (c.type !== "agent") add.addEventListener("click", function () {
           self.onAddBubble({
             kind: c.kind || "link",
             label: c.name || "Connection",
@@ -574,13 +806,30 @@
         var url = document.createElement("div");
         url.className = "conn-url";
         url.textContent = c.type === "agent"
-          ? "AI agent · " + (c.model || "") + " · say “ask " + (c.name || "") + " …”"
+          ? "AI · " + (c.model || "") + " · say “ask " + (c.name || "") + " …”" + (c.backup ? " · backup brain" : "")
           : (c.url || "");
         row.appendChild(name);
         row.appendChild(open);
         row.appendChild(add);
         row.appendChild(del);
         row.appendChild(url);
+        if (c.type === "agent") {
+          var bk = document.createElement("label");
+          bk.className = "toggle-row conn-backup";
+          bk.textContent = "Backup brain";
+          var cb = document.createElement("input");
+          cb.type = "checkbox";
+          cb.checked = !!c.backup;
+          cb.onchange = function () {
+            var all = current();
+            all.forEach(function (x) { if (x.id === c.id) x.backup = cb.checked; });
+            saveConnections(all);
+            renderList();
+            if (self._syncBrain) self._syncBrain();
+          };
+          bk.appendChild(cb);
+          row.appendChild(bk);
+        }
         listEl.appendChild(row);
       });
       self._syncConnectionsHeader();
@@ -602,14 +851,17 @@
           if (!base) { self.onToast("Add the agent's base URL."); return; }
           if (!/^https?:\/\//i.test(base)) base = "https://" + base;
           if (!model) { self.onToast("Add a model name."); return; }
-          if (!akey && type !== "groq") { self.onToast("Paste the agent's API key."); return; }
+          if (!akey && type !== "groq") { self.onToast("Paste the AI's API key."); return; }
           var agentId = "a" + Math.random().toString(36).slice(2, 9);
           var alist = current();
-          alist.push({ id: agentId, name: name, type: "agent", provider: type, baseUrl: base, model: model, kind: selectedKind || "chat" });
+          var pr0 = AGENT_PRESETS[type] || {};
+          var backupBox = document.getElementById("conn-backup");
+          alist.push({ id: agentId, name: name, type: "agent", provider: type, style: pr0.style || "openai", baseUrl: base, model: model, kind: selectedKind || "chat", backup: !!(backupBox && backupBox.checked) });
           saveConnections(alist);
           if (akey) root.FridayStorage.setAgentKey(agentId, akey);
           ["conn-name", "conn-key"].forEach(function (id) { document.getElementById(id).value = ""; });
           renderList();
+          if (self._syncBrain) self._syncBrain();
           self.onToast(name + " added. Say “ask " + name + " …”.");
           return;
         }
@@ -630,6 +882,41 @@
       };
     }
     var typeEl = document.getElementById("conn-type");
+    if (typeEl && typeEl.options.length < 3) {
+      var gFree = document.createElement("optgroup"); gFree.label = "AI · free";
+      var gPaid = document.createElement("optgroup"); gPaid.label = "AI · paid or other";
+      Object.keys(AGENT_PRESETS).forEach(function (k) {
+        var pr = AGENT_PRESETS[k];
+        var o = document.createElement("option");
+        o.value = k; o.textContent = pr.label || pr.name || k;
+        (pr.free ? gFree : gPaid).appendChild(o);
+      });
+      typeEl.appendChild(gFree); typeEl.appendChild(gPaid);
+    }
+    var findBtn = document.getElementById("btn-conn-models");
+    if (findBtn) findBtn.onclick = function () {
+      var t = typeEl ? typeEl.value : "custom";
+      var pr = AGENT_PRESETS[t] || {};
+      var base = String(document.getElementById("conn-base").value || "").trim();
+      var key = String(document.getElementById("conn-key").value || "").trim();
+      if (!key && t === "groq") key = root.FridayStorage.getApiKey();
+      if (!base) { self.onToast("Add the base URL first."); return; }
+      if (!key) { self.onToast("Paste the API key first, then Find models."); return; }
+      findBtn.disabled = true; findBtn.textContent = "Looking…";
+      root.FridayBrain.listModels(pr.style || "openai", base, key).then(function (ids) {
+        var dl = document.getElementById("conn-models");
+        dl.innerHTML = "";
+        ids.forEach(function (id) { var o = document.createElement("option"); o.value = id; dl.appendChild(o); });
+        self.onToast(ids.length ? ids.length + " models found. Tap the model box to pick one." : "No models came back. Check the key.");
+        var mi = document.getElementById("conn-model");
+        if (ids.length && ids.indexOf(mi.value) < 0) {
+          var free = ids.filter(function (x) { return /:free$/.test(x); });
+          mi.value = (free[0] || ids[0]);
+        }
+      }, function () {
+        self.onToast("Couldn't list models. Check the key and address.");
+      }).then(function () { findBtn.disabled = false; findBtn.textContent = "Find models"; });
+    };
     if (typeEl) {
       typeEl.onchange = function () {
         var t = typeEl.value;
@@ -641,7 +928,21 @@
           document.getElementById("conn-base").value = pr.base;
           document.getElementById("conn-model").value = pr.model;
           var nm = document.getElementById("conn-name");
-          if (!nm.value.trim()) nm.value = pr.name;
+          var names = Object.keys(AGENT_PRESETS).map(function (k) { return AGENT_PRESETS[k].name; });
+          if (!nm.value.trim() || names.indexOf(nm.value.trim()) >= 0) nm.value = pr.name;
+          var kh = document.getElementById("conn-keyhint");
+          if (kh) {
+            kh.innerHTML = "";
+            if (t === "groq") kh.textContent = "Leave the key blank to use your main Groq key. ";
+            if (pr.keyUrl) {
+              var a = document.createElement("a");
+              a.href = pr.keyUrl; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Get a key";
+              kh.appendChild(document.createTextNode((pr.free ? "Free key, no card needed in most cases. " : "")));
+              kh.appendChild(a);
+            }
+          }
+          var bb = document.getElementById("conn-backup");
+          if (bb) bb.checked = !!pr.free;
         }
       };
     }
@@ -656,6 +957,8 @@
     ta.value = SHORTCUT_PROMPT;
     var nm = this.shortcutName();
     document.querySelectorAll(".sc-setup-name").forEach(function (el) { el.textContent = nm; });
+    var openBtn = document.getElementById("btn-shortcut-open");
+    if (openBtn) openBtn.onclick = function () { try { location.href = "shortcuts://create-shortcut"; } catch (e) {} };
     var btn = document.getElementById("btn-shortcut-copy");
     if (btn) btn.onclick = function () {
       function fallback() {
@@ -674,6 +977,11 @@
         }, fallback);
       } else fallback();
     };
+  };
+
+  FridaySettings.prototype.copyShortcutPrompt = function () {
+    var b = document.getElementById("btn-shortcut-copy");
+    if (b) b.click();
   };
 
   FridaySettings.prototype.shortcutName = function () {

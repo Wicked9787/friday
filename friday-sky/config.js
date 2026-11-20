@@ -49,6 +49,10 @@
     I1: { id:"I1", group:"orbs", name:"I1 Inside strands", blurb:"A glossy black orb with gold and silver strands glowing inside." },
     I3: { id:"I3", group:"orbs", name:"I3 Wrapping strands", blurb:"A glossy black orb with strands wrapping the surface." },
     R:  { id:"R",  group:"orbs", name:"R Holographic", blurb:"A translucent holographic wireframe sphere, dense meridians and dust." },
+    X1: { id:"X1", group:"nested", name:"X1 Nested fracture", blurb:"Gold spheres inside one another, all fractured, with crack lines, light filaments and a lens core." },
+    X2: { id:"X2", group:"nested", name:"X2 Nested + black orb", blurb:"The nested fractured spheres around a glossy black glass core." },
+    X3: { id:"X3", group:"nested", name:"X3 Nested silver", blurb:"Nested fractured spheres in silver and gold, with more light filaments." },
+    X4: { id:"X4", group:"nested", name:"X4 Six-layer fracture", blurb:"Six fractured spheres stacked inside each other that drift as she talks." },
 
     "1":  { id:"1",  group:"concepts", name:"1 Soft violet", blurb:"A minimal, soft violet glow." },
     "2":  { id:"2",  group:"concepts", name:"2 Teal rings", blurb:"Dark glass with teal sound-wave rings." },
@@ -97,6 +101,7 @@
 
   var LOOK_GROUPS = [
     { id:"neural", name:"Neural", ids:["12","24"] },
+    { id:"nested", name:"Nested fracture (new)", ids:["X1","X2","X3","X4"] },
     { id:"orbs", name:"Orbs", ids:["N","M","F","H","F1","F2","H1","H2","H3","H4","V1","V2","I1","I3","R"] },
     { id:"concepts", name:"Concepts", ids:["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","23","24","25","26","27","28","28A","28B","28C","28D","29"] },
     { id:"cords", name:"Voice cords", ids:["C1","C2","C3","C4"] },

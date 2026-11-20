@@ -34,7 +34,11 @@ Press the widget, **Edit Widget**, pick the script, then type in **Parameter**:
 - `clear` (default), `tinted`, or `solid`
 - add a number for tint strength, e.g. `tinted 40` (default 25)
 - add the spot word the Clear Background helper gives you, e.g. `clear medium-top`
-- add `app` to make taps open the Friday site instead of Talk
+- add `app` to make taps open the app (friday:// or jarvis://) instead of Talk
+- add `orb n`, `orb x1`, `orb x2` or `orb h2` to pick the **HD orb** (v2). The widget downloads it once from this repo (`icons/widget/`) and keeps it. Default is `orb n`.
+- add `classic` to use the original drawn orb instead of the HD one
+
+Lock Screen script (v2): circular slots also take `timer` (tap for a 10 minute timer), `hd` (the HD orb), and the word `app` (taps open the app).
 
 Lock Screen circular: `orb` (default), `weather`, or `alarm`.
 

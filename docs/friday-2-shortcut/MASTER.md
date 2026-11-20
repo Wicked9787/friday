@@ -46,6 +46,8 @@ Version 2, chunked. Built for the Apple Shortcuts describe box (iOS 27). This fi
 | 26 | Goodbye | goodbye | chunks/26-goodbye.txt | - |
 | 27 | Run diagnostics | run diagnostics | chunks/27-diagnostics.txt | - |
 | 28 | BATSIE MODE (Batsie's phone only) | - | chunks/28-batsie-mode.txt | - |
+| 29 | Calendar today (new in v2) | what's on my calendar / my schedule | chunks/29-calendar-today.txt | Paste right after 02 remind-me, so words in an event never trigger another command. |
+| 30 | Add a calendar event (new in v2) | add an event … / schedule a … | chunks/30-add-event.txt | Paste right after 29. |
 
 ## Order rules
 
@@ -55,6 +57,7 @@ Version 2, chunked. Built for the Apple Shortcuts describe box (iOS 27). This fi
 - **06 lights-percent** before **07 lights-on** and **08 lights-off** ("lights on to 50 percent" contains "lights on").
 - **14 open-cash-app** and every app made from **15 template** go before **16 open-app**. "open smart home" goes before "open home", and "open grok bot" before "open grok".
 - **22 morning-briefing** before **23 weather**.
+- **29 calendar-today** and **30 add-event** go right after **02 remind-me** (drag them up after they build).
 - **24 / 25 do not disturb on / off** do not overlap, so either order works.
 - Everything else can go in any order.
 
@@ -269,6 +272,22 @@ Under "System checklist": Set Variable failed to Number 0. Set Variable report_l
 Do this on Batsie's phone, not Sky's. Build 00 CORE there, but in the describe text change every "sir" to "ma'am", change "for Sky" to "for Batsie", and change "UK English male voice" to "UK English female voice". Then paste the same chunks in the same order, with the same three changes made in each chunk before pasting. Skip 01 text-batsie on her phone (or make a copy that says "text sky" and sends to the contact Sky).
 ```
 
+### 29 · Calendar today (new in v2)
+
+_Note: Paste right after 02 remind-me. The Friday and Jarvis apps send "what's on my calendar today" here. Silent: it shows a notification, and the app does the talking._
+
+```
+In my Friday shortcut, add above the comment COMMANDS GO ABOVE THIS LINE, without changing any other steps: If cmd contains "calendar" or cmd contains "schedule" or cmd contains "appointment" or cmd contains "what's on", and cmd does not contain "add": If cmd contains "tomorrow", Adjust Date Current Date by adding 1 day and Set Variable day to it, Otherwise Set Variable day to Current Date, End If. Find Calendar Events where Start Date is in day (the whole day), sorted by Start Date, oldest first. If Calendar Events has any value: Repeat with Each Calendar Event: Format the Start Date of the Repeat Item as a short time (no date), and Add "[Title of Repeat Item] at [Formatted Date]" to the variable agenda; End Repeat. Combine agenda with New Lines and Show Notification with the title "Today" (or "Tomorrow") and the combined text as the body, with Play Sound turned off. Otherwise Show Notification "Nothing on the calendar." with Play Sound turned off. End If. Do not add any Speak Text step; the app does the talking. Stop this shortcut. End If.
+```
+
+### 30 · Add a calendar event (new in v2)
+
+_Note: Paste right after 29. The apps send things like "add an event dentist on Friday at 3pm" here. Silent: it shows a quiet notification._
+
+```
+In my Friday shortcut, add above the comment COMMANDS GO ABOVE THIS LINE, without changing any other steps: If cmd contains "add" and (cmd contains "event" or cmd contains "appointment" or cmd contains "calendar"), or cmd begins with "schedule a" or cmd begins with "schedule an": Get Dates from cmd and Set Variable when to the first date. Replace in cmd the words "add an event", "add a event", "add an appointment", "add to my calendar", "add to calendar", "schedule an", "schedule a", "for", "on my calendar" with nothing, and remove the date and time words, then Set Variable title to the trimmed result. If when has no value, Set Variable when to tomorrow at 9:00 AM. Add New Event to the default calendar with Title title, Start Date when, End Date when plus 1 hour. Show Notification "Added [title] for [when formatted as a medium date and short time]" with Play Sound turned off. Do not add any Speak Text step; the app does the talking. Stop this shortcut. End If.
+```
+
 ## AUTOMATIONS (set up in Shortcuts > Automation, not the describe box)
 
 For each: open Shortcuts, tap **Automation**, tap **+**, pick the trigger, choose **Run Immediately**, then add **Run Shortcut** (pick Friday) or the actions listed.
@@ -289,4 +308,4 @@ For each: open Shortcuts, tap **Automation**, tap **+**, pick the trigger, choos
 - **Back Tap:** Settings > Accessibility > Touch > Back Tap > Double Tap > Friday.
 - **Action Button** (iPhone 15 Pro and newer): Settings > Action Button > swipe to Shortcut > choose Friday.
 - **Widget:** long-press the home screen > Edit > Add Widget > Shortcuts > pick the single-shortcut size > tap it and choose Friday. Lock screen: long-press lock screen > Customize > Add Widgets > Shortcuts > Friday.
-- **Control Center:** open Control Center > tap + > Add a Control > Shortcuts > Shortcut > choose Friday.
+- **Control Center:** open Control Center > tap + > Add a Control > Shortcuts > Shortcut > choose Friday. Add a second control: search **Open App** and choose the Friday app, so one tap opens her listening.

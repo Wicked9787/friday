@@ -7,18 +7,24 @@ void (async function () {
 //   orb      the Friday orb, tap to talk (default)
 //   weather  temperature with the weather symbol
 //   alarm    alarm bell, tap to ask for an alarm
+//   timer    timer, tap to start a 10 minute timer
+//   hd       the HD orb image instead of the line-art orb
+//   app      add this word to make taps open the app (for example: orb app)
 // No API keys in this script.
 
 // ---- Profile ----
 const ASSISTANT = "Jarvis"
 const SHORTCUT = "Jarvis"
 const TERM = "ma'am"
+const APP_URL = "jarvis://"
 const SITE_URL = "https://wicked9787.github.io/friday/?u=batsie"
 // -----------------
 
 const FALLBACK = { lat: 36.6, lon: -83.66 }
 const S = 3
-const MODE = ((args.widgetParameter || "").trim().toLowerCase().split(/\s+/)[0]) || "orb"
+const WORDS = (args.widgetParameter || "").trim().toLowerCase().split(/\s+/).filter(Boolean)
+const MODE = WORDS.filter(w => w !== "app")[0] || "orb"
+const TAP_APP = WORDS.includes("app")
 const FAMILY = config.widgetFamily || "accessoryCircular"
 
 function talkUrl(text) {
@@ -101,6 +107,24 @@ function miniOrb(pt) {
   return ctx.getImage()
 }
 
+
+// ---------- HD orb (rendered by the app's HD engine, downloaded once and kept) ----------
+const ORB_BASE = "https://raw.githubusercontent.com/wicked9787/friday/friday-native/icons/widget/orb-"
+async function hdOrb(look) {
+  look = (look || "n").toLowerCase()
+  const fm = FileManager.local()
+  const p = fm.joinPath(fm.documentsDirectory(), "Friday-HD-Orb-" + look + ".png")
+  const fresh = fm.fileExists(p) && (Date.now() - fm.modificationDate(p).getTime()) < 14 * 864e5
+  if (fresh) { try { return fm.readImage(p) } catch (e) {} }
+  try {
+    const r = new Request(ORB_BASE + look + ".png"); r.timeoutInterval = 10
+    const img = await withTimeout(r.loadImage(), 12000)
+    if (img && img.size && img.size.width > 50) { fm.writeImage(p, img); return img }
+  } catch (e) {}
+  if (fm.fileExists(p)) { try { return fm.readImage(p) } catch (e) {} }
+  return null
+}
+
 function sym(stack, name, size) {
   const s = SFSymbol.named(name); if (!s) return
   s.applyFont(Font.mediumSystemFont(size))
@@ -109,7 +133,7 @@ function sym(stack, name, size) {
 function centered(stack, fn) { const r = stack.addStack(); r.addSpacer(); fn(r); r.addSpacer(); return r }
 
 const widget = new ListWidget()
-widget.url = talkUrl()
+widget.url = TAP_APP ? APP_URL : talkUrl()
 widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000)
 
 if (FAMILY === "accessoryInline") {
@@ -138,6 +162,18 @@ if (FAMILY === "accessoryInline") {
     centered(widget, r => sym(r, wx ? wx.sym : "cloud.fill", 18))
     widget.addSpacer(1)
     centered(widget, r => { const t = r.addText(wx ? wx.temp + "°" : "--"); t.font = Font.semiboldSystemFont(15) })
+    widget.addSpacer()
+  } else if (MODE === "timer") {
+    widget.url = TAP_APP ? APP_URL : talkUrl("10 minute timer")
+    widget.addSpacer()
+    centered(widget, r => sym(r, "timer", 26))
+    widget.addSpacer()
+  } else if (MODE === "hd") {
+    widget.addAccessoryWidgetBackground = false
+    widget.setPadding(0, 0, 0, 0)
+    const hd = await hdOrb("n")
+    widget.addSpacer()
+    centered(widget, r => { const i = r.addImage(hd || miniOrb(76)); i.imageSize = new Size(76, 76) })
     widget.addSpacer()
   } else if (MODE === "alarm") {
     widget.url = talkUrl("set an alarm")

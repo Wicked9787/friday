@@ -6,7 +6,8 @@
   var profile = cfg.getProfile();
   var settingsData = window.FridayLoadSettings();
 
-  var orb, voice, chat, bubbles, tools, settings, neural;
+  var orb, voice, chat, bubbles, tools, settings, neural, life, eyes;
+  var APP_VERSION = "2.0";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || IS_NATIVE;
   var busy = false;
@@ -139,20 +140,37 @@
   }
 
   function openPanel(id) {
+    if (id === "photo-take") { if (eyes) eyes.open(""); return; }
     closePanels();
     var el = document.getElementById("panel-" + id);
-    if (el) el.classList.add("open");
+    if (el) { el.classList.add("open"); if (orb) orb.stop(); }
     if (id === "neural") {
       if (neural) neural.start();
     } else if (neural) neural.stop();
     if (id === "chat") renderChat();
     if (id === "notes") renderNotes();
     if (id === "memory") renderMemory();
+    if (id === "lists" && life) life.renderLists(document.getElementById("lists-box"));
+    if (id === "countdowns" && life) life.renderCountdowns(document.getElementById("countdowns-box"));
+    if (id === "money" && life) life.renderBills(document.getElementById("bills-box"));
+    if (id === "timer" && life) { var tb = document.getElementById("timers-box"); tb._key = null; life.renderTimers(tb); }
+  }
+
+  function refreshOpen() {
+    var open = document.querySelector(".panel.open");
+    if (!open || !life) return;
+    var id = open.id.replace("panel-", "");
+    if (id === "lists") life.renderLists(document.getElementById("lists-box"));
+    else if (id === "countdowns") life.renderCountdowns(document.getElementById("countdowns-box"));
+    else if (id === "money") life.renderBills(document.getElementById("bills-box"));
+    else if (id === "notes") renderNotes();
+    else if (id === "memory") renderMemory();
   }
 
   function closePanels() {
     document.querySelectorAll(".panel.open").forEach(function (p) { p.classList.remove("open"); });
     if (neural) neural.stop();
+    if (orb && !orb.running && document.visibilityState !== "hidden") orb.start();
   }
 
   function shortcutUrl(command) {
@@ -167,8 +185,14 @@
     return "shortcuts://run-shortcut?name=" + name + "&input=text&text=" + text;
   }
 
+  function emitActivity(node, text, extra) {
+    try { window.dispatchEvent(new CustomEvent("friday:activity", { detail: Object.assign({ node: node, text: text }, extra || {}) })); } catch (e) {}
+  }
+
   function runShortcut(command) {
     var url = shortcutUrl(command);
+    FridayStorage.set("lastShortcut", String(command).slice(0, 60));
+    emitActivity("shortcut", "Sent to Shortcut: " + String(command).slice(0, 60));
     // iOS blocks app links that don't come straight from a tap, so show a
     // tap-to-run button (a real link) and also try opening it right away.
     var old = document.getElementById("run-shortcut-btn");
@@ -269,28 +293,47 @@
   function fetchWeather() {
     return getCoords().then(function (pos) {
       var url = "https://api.open-meteo.com/v1/forecast?latitude=" + pos.lat +
-        "&longitude=" + pos.lon + "&current=temperature_2m,weather_code&temperature_unit=fahrenheit";
+        "&longitude=" + pos.lon + "&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=2&timezone=auto&temperature_unit=fahrenheit";
       return fetch(url).then(function (r) { return r.json(); }).then(function (data) {
         var t = data && data.current ? Math.round(data.current.temperature_2m) : null;
         var code = data && data.current ? data.current.weather_code : null;
         var phrase = WMO[code] || "the weather you'd expect";
-        return { temp: t, phrase: phrase, fallback: pos.fallback, label: pos.label || "Cumberland Gap" };
+        var dly = data && data.daily;
+        var hi = dly && dly.temperature_2m_max ? Math.round(dly.temperature_2m_max[0]) : null;
+        var lo = dly && dly.temperature_2m_min ? Math.round(dly.temperature_2m_min[0]) : null;
+        var rain = dly && dly.precipitation_probability_max ? dly.precipitation_probability_max[0] : null;
+        var tom = null;
+        if (dly && dly.temperature_2m_max && dly.temperature_2m_max.length > 1) {
+          tom = { hi: Math.round(dly.temperature_2m_max[1]), lo: Math.round(dly.temperature_2m_min[1]), rain: dly.precipitation_probability_max ? dly.precipitation_probability_max[1] : null, phrase: WMO[dly.weather_code ? dly.weather_code[1] : -1] || "" };
+        }
+        return { temp: t, phrase: phrase, hi: hi, lo: lo, rain: rain, tomorrow: tom, fallback: pos.fallback, label: pos.label || "Cumberland Gap" };
       });
     });
   }
 
-  function weatherSentence() {
+  function aPct(n) { return (/^(8|11|18)/.test(String(n)) ? "an " : "a ") + n; }
+
+  function weatherSentence(when) {
     return fetchWeather().then(function (w) {
+      if (when === "tomorrow" && w.tomorrow) {
+        var tm = w.tomorrow;
+        var line = (w.fallback ? "In " + w.label + ", tomorrow's" : "Tomorrow's") + " forecast is " + (tm.phrase || "about the same as today") + ", with a high of " + tm.hi + "° and a low of " + tm.lo + "°.";
+        if (tm.rain != null && tm.rain >= 30) line += " There's " + aPct(tm.rain) + " percent chance of rain" + (tm.rain >= 60 ? ", so plan for an umbrella." : ".");
+        return line;
+      }
       var where = w.fallback ? ("In " + w.label + ", it's ") : "It's ";
       if (w.temp == null) return "I couldn't get the weather just now.";
-      return where + w.temp + "° and " + w.phrase + ".";
+      var extra = "";
+      if (w.hi != null && w.lo != null) extra += " Today's high is " + w.hi + "°, low " + w.lo + "°.";
+      if (w.rain != null && w.rain >= 30) extra += " There's " + aPct(w.rain) + " percent chance of rain" + (w.rain >= 60 ? ", so grab an umbrella." : ".");
+      return where + w.temp + "° and " + w.phrase + "." + extra;
     }).catch(function () {
-      return "I couldn't get the weather just now.";
+      return navigator.onLine === false ? "I need the internet for the weather." : "I couldn't get the weather just now.";
     });
   }
 
   function todayNotesAndTimers() {
-    var bits = [];
+    var bits = life ? life.briefingBits(chat ? chat.memory : []) : [];
     var notes = (tools && tools.notes()) || [];
     var start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -304,11 +347,7 @@
       if (today.length === 1) bits.push("You have a note: " + first);
       else bits.push("You have " + today.length + " notes for today. The first is: " + first);
     }
-    if (tools && tools._timer && tools._remain > 0) {
-      var m = Math.floor(tools._remain / 60), s = tools._remain % 60;
-      bits.push("A timer is running, with " + (m ? (m + " minutes ") : "") + s + " seconds left.");
-    }
-    if (!bits.length) bits.push("No notes or timers for today.");
+    if (!bits.length) bits.push("Nothing on the books for today.");
     return bits.join(" ");
   }
 
@@ -355,13 +394,36 @@
     var briefDue = s.morningBriefing !== false && hour >= 5 && hour < 11 && FridayStorage.get("briefingDate", "") !== dayKey;
     if (briefDue) {
       FridayStorage.set("briefingDate", dayKey);
-      var hello = "Good morning" + (honorific() ? ", " + honorific() : "") + ". " + clockPhrase(now);
-      weatherSentence().then(function (wx) {
-        speakLine(hello + " " + wx + " " + todayNotesAndTimers());
-      });
+      runBriefing();
       return;
     }
     if (s.wakeGreeting !== false) speakLine(wakeLine());
+  }
+
+  function runBriefing() {
+    var now = new Date();
+    var h = now.getHours();
+    var part = h < 12 ? "Good morning" : (h < 17 ? "Good afternoon" : "Good evening");
+    var hello = part + (honorific() ? ", " + honorific() : "") + ". " + clockPhrase(now);
+    setCaption("Getting your briefing…");
+    emitActivity("weather", "Morning briefing");
+    return new Promise(function (done) {
+      weatherSentence().then(function (wx) {
+        var body = hello + " " + wx + " " + todayNotesAndTimers();
+        var st = (settings && settings.values) || {};
+        if (st.briefingNews === false || !FridayStorage.hasApiKey()) { setCaption(body); done(voice.speak(body, profile)); return; }
+        var news = window.FridayBrain.ask([
+          { role: "system", content: "Search the web for the top two news headlines in the United States today. Reply with one short spoken sentence for each, no links, no lists, no citations." },
+          { role: "user", content: "Top headlines today?" }
+        ], { purpose: "chat", tools: [{ type: "browser_search" }], reasoning_effort: "low", temperature: 0.4, noBackup: true });
+        var timeout = new Promise(function (res) { setTimeout(function () { res(""); }, 6000); });
+        Promise.race([news, timeout]).then(function (n) {
+          n = window.FridayGroq ? window.FridayGroq.cleanSpoken(n || "") : "";
+          var full = body + (n ? " In the news: " + n : "");
+          setCaption(full); done(voice.speak(full, profile));
+        }, function () { setCaption(body); done(voice.speak(body, profile)); });
+      });
+    });
   }
 
   function renderChips() {
@@ -422,11 +484,55 @@
     });
   }
 
+  var memFilter = "all";
   function renderMemory() {
-    tools.renderList(document.getElementById("memory-list"), chat.memory, function (i) {
-      chat.removeMemory(i);
-      renderMemory();
+    var box = document.getElementById("memory-list");
+    if (!box) return;
+    var q = String((document.getElementById("memory-search") || {}).value || "").toLowerCase().trim();
+    var items = chat.memory.map(function (m, i) { return { m: m, i: i }; });
+    if (q) items = items.filter(function (x) { return String(x.m.text).toLowerCase().indexOf(q) >= 0; });
+    if (memFilter === "pinned") items = items.filter(function (x) { return x.m.pinned; });
+    if (memFilter === "learned") items = items.filter(function (x) { return x.m.auto; });
+    if (memFilter === "az") items.sort(function (a, b) { return String(a.m.text).localeCompare(String(b.m.text)); });
+    else items.sort(function (a, b) { return ((b.m.pinned ? 1 : 0) - (a.m.pinned ? 1 : 0)) || String(b.m.at || "").localeCompare(String(a.m.at || "")); });
+    box.innerHTML = "";
+    if (!items.length) { box.innerHTML = '<p class="hint">' + (q || memFilter !== "all" ? "No memories match." : "Nothing here yet. Say “remember that …” or add one above.") + "</p>"; }
+    items.forEach(function (x) {
+      var card = document.createElement("div");
+      card.className = "list-card mem-card";
+      var p = document.createElement("p");
+      p.textContent = x.m.text;
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      var when = "";
+      try { when = new Date(x.m.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch (e) {}
+      meta.textContent = when + (x.m.auto ? " · learned on her own" : "") + (x.m.pinned ? " · pinned" : "");
+      var acts = document.createElement("div");
+      acts.className = "mem-acts";
+      [["Edit", function () {
+        var ta = document.createElement("textarea");
+        ta.value = x.m.text;
+        var save = document.createElement("button"); save.className = "btn gold"; save.type = "button"; save.textContent = "Save";
+        var cancel = document.createElement("button"); cancel.className = "btn"; cancel.type = "button"; cancel.textContent = "Cancel";
+        card.innerHTML = ""; card.appendChild(ta); card.appendChild(save); card.appendChild(cancel);
+        ta.focus();
+        save.onclick = function () { chat.editMemory(x.i, ta.value); renderMemory(); };
+        cancel.onclick = renderMemory;
+      }], [x.m.pinned ? "Unpin" : "Pin", function () { chat.togglePin(x.i); renderMemory(); }],
+        ["Delete", function () { chat.removeMemory(x.i); renderMemory(); }]].forEach(function (a) {
+        var b = document.createElement("button");
+        b.type = "button"; b.textContent = a[0]; b.onclick = a[1];
+        if (a[0] === "Delete") b.className = "danger";
+        acts.appendChild(b);
+      });
+      card.appendChild(p); card.appendChild(meta); card.appendChild(acts);
+      box.appendChild(card);
     });
+    var sum = document.getElementById("memory-summary");
+    if (sum) {
+      var smry = (chat.summary && chat.summary.text) || "";
+      sum.textContent = chat.memory.length + " things remembered." + (smry ? " She also keeps a short summary of your older chats so she remembers past conversations." : "");
+    }
   }
 
   var leftForApp = false;
@@ -438,6 +544,7 @@
       return;
     }
     setCaption(text);
+    emitActivity("listening", "Heard: " + text.slice(0, 70));
     if (opts.showChat !== false) {
       chat.history.push({ role: "user", content: text, at: new Date().toISOString() });
       chat.save();
@@ -463,9 +570,61 @@
         openUrl(direct.url);
         return;
       }
-      var result = await chat.ask(text);
+      var low = text.toLowerCase().replace(/[.!?,]/g, "").trim();
+      if (/^(good morning|morning briefing|(give me |run |start )?(my |the )?(morning )?briefing|brief me|what'?s (my day|today) look(ing)? like)$/.test(low)) {
+        chat._push("user", text);
+        await runBriefing();
+        return;
+      }
+      if (/\b(weather|forecast|temperature outside|how (hot|cold) is it|is it (going to )?(rain|snow)|will it (rain|snow)|do i need (a |an )?(umbrella|jacket|coat))\b/.test(low) && !/\b(in|for) (?!the morning|tomorrow|today|tonight)[a-z]+/.test(low.replace(/^.*?(weather|forecast)/, "$1"))) {
+        chat._push("user", text);
+        setCaption("Checking the weather…");
+        emitActivity("weather", /\btomorrow\b/.test(low) ? "Checked tomorrow's weather" : "Checked the weather");
+        var wline = await weatherSentence(/\btomorrow\b/.test(low) ? "tomorrow" : "today");
+        chat._push("assistant", wline);
+        setCaption(wline);
+        await voice.speak(wline, profile);
+        return;
+      }
+      var act = life ? life.handle(text) : null;
+      if (!act && /^(run |start )?(a )?(diagnostics?|system check|self[- ]?check|health check)$|^check (yourself|your systems)$/.test(low)) {
+        chat._push("user", text);
+        await runDiagnostics(true);
+        return;
+      }
+      if (!act && navigator.onLine === false) {
+        var off = "I'm offline right now. I can still do lists, timers, notes, bills and countdowns, and I'll be back to normal when the internet returns.";
+        setCaption(off);
+        await voice.speak(off, profile);
+        return;
+      }
+      if (act) {
+        chat._push("user", text);
+        if (act.say) chat._push("assistant", act.say);
+        if (act.photo) {
+          setCaption(act.say);
+          if (eyes) eyes.offer(text);
+          await voice.speak(act.say, profile);
+          return;
+        }
+        if (act.panel) openPanel(act.panel);
+        else refreshOpen();
+        setCaption(act.say || "");
+        if (act.url) { leftForApp = true; await voice.speak(act.say, profile); openUrl(act.url); return; }
+        await voice.speak(act.say, profile);
+        if (act.shortcut) { leftForApp = true; runShortcut(act.shortcut); }
+        return;
+      }
+      var spokeStream = false;
+      var result = await chat.ask(text, {
+        onSentence: function (sentence) {
+          spokeStream = true;
+          setCaption(sentence);
+          voice.queue(sentence, profile);
+        }
+      });
       if (result.kind === "timer") {
-        tools.startTimer(result.seconds);
+        life.startTimer(result.seconds);
         openPanel("timer");
         var line = "Timer set for " + Math.round(result.seconds / 60) + " minutes.";
         if (result.seconds < 60) line = "Timer set for " + result.seconds + " seconds.";
@@ -488,7 +647,8 @@
         setCaption(result.text || "");
         renderChat();
         if (bubbles && bubbles.noteAppMentions(text)) bubbles.refreshSuggestions();
-        await voice.speak(result.text, profile);
+        if (result.streamed || spokeStream) await voice.whenDone();
+        else await voice.speak(result.text, profile);
       }
     } catch (err) {
       var msg = (err && err.message) || "Something went wrong.";
@@ -571,6 +731,114 @@
     beginListen();
   }
 
+  var lastPhoto = null;
+
+  function chime() {
+    var Ctx = window.AudioContext || window.webkitAudioContext;
+    var ctx = new Ctx();
+    [0, 0.28, 0.56].forEach(function (t, i) {
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = [880, 1108.73, 1318.51][i];
+      g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.22, ctx.currentTime + t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.6);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.65);
+    });
+    setTimeout(function () { try { ctx.close(); } catch (e) {} }, 1600);
+  }
+
+  function applyNight() {
+    var on = !!(window.FridayNight && window.FridayNight.isNight());
+    document.body.classList.toggle("night", on);
+  }
+
+  // ---------- diagnostics ----------
+  async function runDiagnostics(speak) {
+    var lines = [], problems = 0;
+    function add(ok, text) { lines.push((ok ? "✓ " : "✗ ") + text); if (!ok) problems++; }
+    setCaption("Running diagnostics…");
+    emitActivity("thinking", "Ran diagnostics");
+    add(navigator.onLine !== false, navigator.onLine !== false ? "Internet connected" : "No internet connection");
+    var key = FridayStorage.getApiKey();
+    var models = [];
+    if (!key) add(false, "No Groq key saved (Settings → Groq API key)");
+    else {
+      try {
+        var r = await fetch(window.FridayBrain.GROQ_BASE + "/models", { headers: { Authorization: "Bearer " + key } });
+        if (r.status === 401) add(false, "Groq key was rejected — replace it in Settings");
+        else if (r.ok) { var j = await r.json(); models = (j.data || []).map(function (m) { return m.id; }); add(true, "Groq key works"); }
+        else add(false, "Groq answered with an error (" + r.status + ")");
+      } catch (e) { add(false, "Couldn't reach Groq"); }
+    }
+    if (models.length) {
+      var want = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+      var have = want.filter(function (m) { return models.indexOf(m) >= 0; });
+      add(have.length >= 2, have.length + " of " + want.length + " chat brains available");
+      var hasVoice = models.some(function (m) { return /orpheus/.test(m); });
+      add(hasVoice, hasVoice ? "AI voices available" : "AI voices not offered on this key (iPhone voices still work)");
+      var hasVision = models.some(function (m) { return /qwen3\.\d|llama-4|vision/.test(m); });
+      add(hasVision, hasVision ? "Photo vision available" : "No vision model found for photos");
+    }
+    var st = window.FridayBrain.status();
+    add(true, st.backups.length ? "Backup brains: " + st.backups.join(", ") : "No backup brain (optional, Settings → Connections)");
+    if (st.busy.length) add(false, st.busy.length + " brain" + (st.busy.length > 1 ? "s are" : " is") + " resting after hitting a limit");
+    var pause = FridayStorage.get("aiVoicePauseUntil", 0) || 0;
+    if (pause > Date.now()) add(false, "AI voice resting until " + new Date(pause).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+    add(!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia), navigator.mediaDevices ? "Microphone available" : "Microphone not available in this app");
+    add(!!settings.shortcutName(), "Shortcut name: " + settings.shortcutName());
+    var used = 0;
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); used += (localStorage.getItem(k) || "").length + k.length; } } catch (e) {}
+    add(used < 4000000, "Storage used: " + Math.round(used / 1024) + " KB");
+    var u = FridayStorage.get("usage.brain", null);
+    if (u && u.date === new Date().toDateString()) add(true, "Today: " + (u.total || 0) + " replies, " + (u.tts || 0) + " AI voice clips");
+    var box = document.getElementById("diag-list");
+    if (box) { box.innerHTML = ""; lines.forEach(function (l) { var d = document.createElement("div"); d.className = "diag-row" + (l.charAt(0) === "✗" ? " bad" : ""); d.textContent = l; box.appendChild(d); }); }
+    openPanel("diag");
+    var summary = problems ? "Diagnostics done. I found " + problems + " thing" + (problems > 1 ? "s" : "") + " to look at; they're on screen." : "All systems normal" + (honorific() ? ", " + honorific() : "") + ".";
+    setCaption(summary);
+    if (speak) await voice.speak(summary, profile);
+    return problems;
+  }
+
+  function maybeBackupReminder() {
+    var last = FridayStorage.get("lastBackupAt", 0) || 0;
+    var nag = FridayStorage.get("backupNagAt", 0) || 0;
+    var mem = (chat && chat.memory && chat.memory.length) || 0;
+    var week = 7 * 864e5;
+    if (!mem && !FridayStorage.get("lists", null)) return;
+    if (!last) { FridayStorage.set("lastBackupAt", Date.now()); return; }
+    if (Date.now() - last > week && Date.now() - nag > 864e5) {
+      FridayStorage.set("backupNagAt", Date.now());
+      setTimeout(function () { toast("It's been a week since your last backup. Settings → Download backup."); }, 4000);
+    }
+  }
+
+  function warmUp() {
+    var key = FridayStorage.getApiKey();
+    if (!key || navigator.onLine === false) return;
+    try { fetch(window.FridayBrain.GROQ_BASE + "/models", { headers: { Authorization: "Bearer " + key } }).catch(function () {}); } catch (e) {}
+  }
+
+  function maybeWhatsNew() {
+    var seen = FridayStorage.get("seenVersion", "");
+    if (seen === APP_VERSION) return;
+    var box = document.getElementById("whatsnew");
+    if (!box) return;
+    if (!FridayStorage.hasApiKey()) { FridayStorage.set("seenVersion", APP_VERSION); return; }
+    box.classList.remove("hidden");
+    function done() { box.classList.add("hidden"); FridayStorage.set("seenVersion", APP_VERSION); }
+    document.getElementById("btn-wn-close").onclick = done;
+    document.getElementById("btn-wn-shortcut").onclick = function () {
+      done();
+      openPanel("settings");
+      var acc = document.getElementById("accord-shortcut");
+      if (acc) { acc.open = true; setTimeout(function () { acc.scrollIntoView({ block: "start", behavior: "smooth" }); }, 120); }
+      if (settings && settings.copyShortcutPrompt) settings.copyShortcutPrompt();
+    };
+  }
+
   function showSetup(on) {
     document.getElementById("setup").classList.toggle("open", !!on);
   }
@@ -590,8 +858,17 @@
         else orb.setTalking(who || (voice.speaking ? "friday" : "user"), v);
       },
       onSyllable: function () { orb.notifySyllable(); },
-      onState: function () {},
-      onSilence: function () { if (voice.listening) endListen(); }
+      onState: function (st) {
+        if (st === "speak-start") emitActivity("speaking", null, { quiet: true });
+        else if (st === "listen-start") emitActivity("listening", null, { quiet: true });
+      },
+      onSilence: function () { if (voice.listening) endListen(); },
+      onBargeIn: function () {
+        voice.stopSpeak();
+        busy = false;
+        handsFree = true;
+        setTimeout(function () { beginListen(); }, 60);
+      }
     });
     voice.setVoiceURI(settingsData.voiceURI || "");
 
@@ -607,12 +884,54 @@
     });
 
     tools = new FridayTools({ onToast: toast });
+    window.__fridayTools = tools;
+
+    life = new FridayLife({
+      profile: profile,
+      onToast: toast,
+      onTimerDone: function (t, missed) {
+        var name = /^Timer( \d+)?$/.test(t.name) ? "Your timer" : "Your " + t.name.toLowerCase() + " timer";
+        var line = missed ? name + " finished while you were away." : name + " is done" + (honorific() ? ", " + honorific() : "") + ".";
+        try { chime(); } catch (e) {}
+        toast(line);
+        speakLine(line);
+        var tb = document.getElementById("timers-box"); if (tb) tb._key = null;
+      }
+    });
+
+    eyes = new FridayEyes({
+      profile: profile,
+      onStart: function () {
+        emitActivity("vision", "Looking at a photo");
+        setCaption("Looking…");
+        if (neural) neural.setActive("research");
+        orb.setTalking("user", 0.3);
+      },
+      onAnswer: function (text, q, data) {
+        if (neural) neural.setActive(null);
+        lastPhoto = data;
+        chat._push("user", "(showed a photo) " + q);
+        chat._push("assistant", text);
+        openPanel("photo");
+        var img = document.getElementById("photo-img"); if (img) img.src = data;
+        var ans = document.getElementById("photo-answer"); if (ans) ans.textContent = text;
+        speakLine(text);
+      },
+      onError: function (msg) {
+        if (neural) neural.setActive(null);
+        orb.setTalking("idle", 0);
+        setCaption(msg); toast(msg); speakLine(msg);
+      }
+    });
 
     bubbles = new FridayBubbles({
       el: document.getElementById("bubbles"),
       profile: profile,
       onAction: function (act) {
         if (act.type === "panel") openPanel(act.panel);
+        else if (act.type === "shortcut" && /^weather$/i.test(String(act.command || "").trim())) {
+          handleUtterance("weather");
+        }
         else if (act.type === "shortcut") {
           setCaption("On it.");
           runShortcut(act.command);
@@ -632,6 +951,11 @@
       onChips: function () { renderChips(); },
       onReset: function () { toast("Reset. Reloading."); setTimeout(function () { location.reload(); }, 400); },
       onToast: toast,
+      onRender: function (mode) {
+        if (orb && orb.setRender) orb.setRender(mode);
+        if (settings && settings._bindLooks) settings._bindLooks();
+      },
+      onNight: function () { applyNight(); },
       onAddBubble: function (spec) {
         bubbles.add(spec);
         closePanels();
@@ -646,6 +970,7 @@
     renderChips();
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
+    neural.onOpen = function (panel) { openPanel(panel); };
 
     document.getElementById("orb-canvas").addEventListener("click", function () {
       if (document.querySelector(".panel.open")) return;
@@ -721,9 +1046,61 @@
     document.getElementById("timer-start").onclick = function () {
       var m = parseInt(document.getElementById("timer-min").value, 10) || 0;
       var s = parseInt(document.getElementById("timer-sec").value, 10) || 0;
-      tools.startTimer(m * 60 + s);
+      if (m * 60 + s <= 0) { toast("Set some minutes or seconds first."); return; }
+      var nm = document.getElementById("timer-name").value.trim();
+      life.startTimer(m * 60 + s, nm);
+      document.getElementById("timer-name").value = "";
+      var tb = document.getElementById("timers-box"); tb._key = null; life.renderTimers(tb);
     };
-    document.getElementById("timer-cancel").onclick = function () { tools.cancelTimer(); };
+    document.getElementById("timer-cancel").onclick = function () {
+      FridayStorage.set("timers", []);
+      var tb = document.getElementById("timers-box"); tb._key = null; life.renderTimers(tb);
+      toast("All timers cancelled.");
+    };
+    var tq = document.getElementById("timer-quick");
+    if (tq) [1, 3, 5, 10, 15, 30, 60].forEach(function (min) {
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "life-tab"; b.textContent = min < 60 ? min + " min" : "1 hr";
+      b.onclick = function () { life.startTimer(min * 60, ""); var tb = document.getElementById("timers-box"); tb._key = null; life.renderTimers(tb); };
+      tq.appendChild(b);
+    });
+    var oc = document.getElementById("btn-open-countdowns");
+    if (oc) oc.onclick = function () { openPanel("countdowns"); };
+    window.addEventListener("friday:tick", function () {
+      var p = document.getElementById("panel-timer");
+      if (p && p.classList.contains("open")) life.renderTimers(document.getElementById("timers-box"));
+    });
+    ["friday:lists", "friday:bills", "friday:countdowns", "friday:notes", "friday:timers"].forEach(function (ev) {
+      window.addEventListener(ev, function () { if (ev === "friday:timers") { var tb = document.getElementById("timers-box"); if (tb) tb._key = null; } });
+    });
+    var ms = document.getElementById("memory-search");
+    if (ms) ms.addEventListener("input", renderMemory);
+    var mf = document.getElementById("memory-filter");
+    if (mf) mf.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-f]");
+      if (!b) return;
+      memFilter = b.getAttribute("data-f");
+      mf.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+      renderMemory();
+    });
+    document.getElementById("btn-eyes").onclick = function () { eyes.open(""); };
+    document.getElementById("btn-photo-again").onclick = function () { eyes.open(""); };
+    document.getElementById("photo-form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var q = document.getElementById("photo-q").value.trim();
+      if (!q || !lastPhoto) return;
+      document.getElementById("photo-q").value = "";
+      var ans = document.getElementById("photo-answer");
+      if (ans) ans.textContent = "Looking…";
+      window.FridayBrain.ask([
+        { role: "system", content: "You are " + (profile.assistantName || "Friday") + ". Answer about the photo in two to four short spoken sentences, no lists or markdown." },
+        { role: "user", content: [{ type: "text", text: q }, { type: "image_url", image_url: { url: lastPhoto } }] }
+      ], { purpose: "vision", temperature: 0.4, max_tokens: 400 }).then(function (t) {
+        t = window.FridayGroq.cleanSpoken(t);
+        if (ans) ans.textContent = t;
+        speakLine(t);
+      }, function () { if (ans) ans.textContent = "My vision is busy right now. Try again in a minute."; });
+    });
     document.getElementById("money-form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       var text = document.getElementById("money-text").value.trim();
@@ -814,6 +1191,24 @@
 
     if (!FridayStorage.hasApiKey()) showSetup(true);
 
+    life.restore();
+    setTimeout(warmUp, 1200);
+    maybeBackupReminder();
+    window.addEventListener("online", function () { toast("Back online."); });
+    window.addEventListener("offline", function () { toast("Offline. Lists, timers and notes still work."); });
+    var diagBtn = document.getElementById("btn-diag");
+    if (diagBtn) diagBtn.onclick = function () { runDiagnostics(false); };
+    var diagAgain = document.getElementById("btn-diag-again");
+    if (diagAgain) diagAgain.onclick = function () { runDiagnostics(false); };
+    applyNight();
+    setInterval(applyNight, 60000);
+    maybeWhatsNew();
+
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "hidden") { if (orb) orb.stop(); }
+      else if (orb && !document.querySelector(".panel.open")) orb.start();
+    });
+
     if (IS_NATIVE) {
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState !== "visible") {
@@ -845,4 +1240,4 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
-// build 2
+// build 3 (v2.0)

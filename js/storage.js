@@ -60,7 +60,7 @@
 
   function exportBackup(includeKey) {
     var data = {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
       profile: get("profile", "sky"),
       settings: get("settings", {}),
@@ -70,6 +70,10 @@
       history: get("history", []),
       timers: get("timers", []),
       connections: get("connections", []),
+      lists: get("lists", null),
+      bills: get("bills", []),
+      countdowns: get("countdowns", []),
+      summary: get("summary", null),
       usage: get("usage", {}),
       dismissedSuggestions: get("dismissedSuggestions", [])
     };
@@ -78,6 +82,7 @@
   }
 
   function downloadBackup(includeKey) {
+    set("lastBackupAt", Date.now());
     var data = exportBackup(includeKey);
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     var a = document.createElement("a");
@@ -101,6 +106,10 @@
     if (data.history) set("history", data.history);
     if (data.timers) set("timers", data.timers);
     if (data.connections) set("connections", data.connections);
+    if (data.lists) set("lists", data.lists);
+    if (data.bills) set("bills", data.bills);
+    if (data.countdowns) set("countdowns", data.countdowns);
+    if (data.summary) set("summary", data.summary);
     if (data.usage) set("usage", data.usage);
     if (data.dismissedSuggestions) set("dismissedSuggestions", data.dismissedSuggestions);
     if (data.profile) rawSet(PREFIX + "profile", data.profile);

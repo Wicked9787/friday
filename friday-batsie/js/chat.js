@@ -1,27 +1,25 @@
-/* Groq chat, persona, rolling memory, and multi-agent helpers. */
+/* Chat: persona, moods, rolling memory, long-chat summary, helpers, agents, streaming. */
 (function (root) {
   "use strict";
 
   var HISTORY_LIMIT = 12;
-  var WEB_RE = /\b(news|headlines?|score|scores|who won|won the|game tonight|stock|stocks|price of|prices?|how much (is|does|are)|bitcoin|today|tonight|tomorrow|this week|latest|current|currently|right now|recent|who is|who's|what is|what's|when is|when does|where is|how old|population|election|forecast|open now|hours)\b/i;
+  var WEB_RE = /\b(news|headlines?|score|scores|who won|won the|game tonight|playing tonight|schedule for|standings|stock|stocks|price of|prices?|how much (is|does|are|do)|cost|bitcoin|crypto|today|tonight|tomorrow|yesterday|this week|this weekend|last night|latest|current|currently|right now|recent|recently|update on|what happened|who is|who's|who was|what is|what's|what are|when is|when does|when did|when was|when were|where is|how old|how tall|net worth|population|election|forecast|open now|hours|release date|come out|coming out|trailer|lyrics|recipe|review|reviews|versus|compare|is it true|fact check|look ?up|search|google|find out|wikipedia|website|link)\b/i;
+  var FORCE_WEB_RE = /^(?:please )?(?:search(?: the web| online| the internet)?(?: for)?|look up|google|find out|check online(?: for)?|browse(?: for)?)\s+(.+)$/i;
+  var URL_RE = /\b((?:https?:\/\/|www\.)[^\s]+|[a-z0-9-]+\.(?:com|org|net|io|co|gov|edu|us|tv|app|dev|ai|news)(?:\/[^\s]*)?)/i;
 
   var HELPERS = {
-    research: {
-      name: "research",
-      system: "You are Friday's research helper. Gather clear, useful facts. Prefer concise, well-structured answers with any uncertainty flagged. Do not speak as Friday; write a brief research brief she can voice."
-    },
-    coding: {
-      name: "coding",
-      system: "You are Friday's coding helper. Give working, practical code and short explanations. Do not speak as Friday; write a brief technical brief she can voice."
-    },
-    money: {
-      name: "money",
-      system: "You are Friday's money and bills helper. Be careful, plain, and practical. This is not formal financial advice. Do not speak as Friday; write a brief brief she can voice."
-    },
-    messages: {
-      name: "messages",
-      system: "You are Friday's messaging helper. Draft short, natural texts or emails the user can send. Do not speak as Friday; write the draft and a one-line note she can voice."
-    }
+    research: { system: "You are Friday's research helper. Gather clear, useful facts. Prefer concise, well-structured answers with any uncertainty flagged. Do not speak as Friday; write a brief research brief she can voice." },
+    coding: { system: "You are Friday's coding helper. Give working, practical code and short explanations. Do not speak as Friday; write a brief technical brief she can voice." },
+    money: { system: "You are Friday's money and bills helper. Be careful, plain, and practical. This is not formal financial advice. Do not speak as Friday; write a brief brief she can voice." },
+    messages: { system: "You are Friday's messaging helper. Draft short, natural texts or emails the user can send. Do not speak as Friday; write the draft and a one-line note she can voice." }
+  };
+
+  var MOODS = {
+    normal: { name: "Normal", line: "" },
+    focus: { name: "Focus", line: "Mood: focus mode. Be brief and efficient. No small talk, no follow-up questions unless needed. One or two sentences." },
+    hype: { name: "Hype", line: "Mood: hype mode. Be upbeat, energetic, encouraging, and playful. Celebrate wins." },
+    calm: { name: "Calm", line: "Mood: calm mode. Be gentle, slow, reassuring, and soft-spoken. Short sentences." },
+    bedtime: { name: "Bedtime", line: "Mood: bedtime mode. Speak softly and briefly like it's late at night. Wind things down, no excitement." }
   };
 
   var PHONE_PATTERNS = [
@@ -31,23 +29,21 @@
     { re: /\blights?\b/i, name: "lights" },
     { re: /\b(brightness|dim|brighten)\b/i, name: "lights" },
     { re: /\b(apple tv|tv|television)\b/i, name: "tv" },
-    { re: /\b(un)?lock\b.*\b(door|doors|house)\b|\b(door|doors)\b.*\b(un)?lock|\block (it|up)\b/i, name: "lock" },
     { re: /\bscenes?\b/i, name: "scene" },
     { re: /\b(do not disturb|don't disturb|dnd)\b/i, name: "dnd" },
     { re: /\b(text|sms|message|iMessage)\b/i, name: "messages" },
     { re: /\bcameras?\b/i, name: "cameras" },
-    { re: /\b(play|pause|skip|music|spotify|apple music)\b/i, name: "music" },
-    { re: /\bweather\b/i, name: "weather" },
+    { re: /\bhome ?pod\b/i, name: "music" },
+    { re: /\b(pause|resume|skip|next song|previous song|turn (it |the music )?(up|down)|volume)\b/i, name: "music" },
+    { re: /\b(play|put on|shuffle)\b.*\b(music|song|songs|playlist|album|radio|station|by|some)\b|\b(music|spotify|apple music)\b/i, name: "music" },
     { re: /\bgood ?night\b/i, name: "good night" },
-    { re: /\bfind my (iphone|phone)\b/i, name: "find my phone" },
     { re: /\bbattery\b/i, name: "battery" },
-    { re: /\bremind me\b/i, name: "remind" },
-    { re: /\bmorning briefing\b/i, name: "morning briefing" }
+    { re: /\bremind me\b|\bset (a |an )?reminder\b/i, name: "remind" },
+    { re: /\b(my calendar|on my calendar|calendar today|my schedule|what'?s on (today|tomorrow|my schedule)|appointments?|add (an |a )?(event|appointment)|schedule (a|an) )\b/i, name: "calendar" }
   ];
 
   function detectPhoneIntent(text) {
     var t = String(text || "");
-    // In-app timer is handled before this in app.js, but keep the rest.
     for (var i = 0; i < PHONE_PATTERNS.length; i++) {
       if (PHONE_PATTERNS[i].re.test(t)) return PHONE_PATTERNS[i].name;
     }
@@ -66,71 +62,65 @@
     return sec;
   }
 
-  function personaPrompt(profile, memory) {
+  function settings() { return root.FridayStorage.get("settings", {}) || {}; }
+
+  function currentMood() {
+    var s = settings();
+    var m = s.mood || "normal";
+    if (m === "normal" && root.FridayNight && root.FridayNight.isNight()) m = "calm";
+    return MOODS[m] ? m : "normal";
+  }
+
+  function memoryLines(memory) {
+    var list = (memory || []).slice();
+    list.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
+    return list.slice(0, 60).map(function (m) { return "- " + m.text; }).join("\n");
+  }
+
+  function personaPrompt(profile, memory, summary) {
     var terms = (profile.terms || []).join(" or ");
     var perTen = profile.addressPerTen || 4;
-    var mem = (memory || []).map(function (m, i) { return "- " + m.text; }).join("\n");
+    var mem = memoryLines(memory);
+    var mood = MOODS[currentMood()];
+    var d = new Date();
     return [
       "You are " + profile.assistantName + ", a personal AI assistant for " + profile.ownerName + ".",
-      "Style: warm, casual, dry wit, loyal, light teasing, never rude. Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier in this chat, and sometimes ask a short follow-up question.",
+      "Style: warm, casual, dry wit, loyal, light teasing, never rude. Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
       "Everything you say is spoken aloud, so keep replies short (one to three sentences), no lists, no markdown, no links, no emojis.",
       "Address " + profile.ownerName + " as " + (terms || "nothing special") + " about " + perTen + " times in every 10 lines of dialogue. The rest of the time, use no honorific at all — just talk plainly.",
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
-      "Keep answers concise unless you are asked for more. Today is " + new Date().toDateString() + ".",
-      "If you need the phone to do something you cannot do yourself (alarms, lights, the Apple TV, locks, scenes, Do Not Disturb, sending a real text, cameras), say clearly that you will hand it to the " + (profile.shortcutName || "Friday") + " shortcut.",
+      "Keep answers concise unless you are asked for more. Today is " + d.toDateString() + ", and it is " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".",
+      mood.line,
+      "If you need the phone to do something you cannot do yourself (alarms, lights, the Apple TV, scenes, Do Not Disturb, sending a real text, cameras, the calendar), say clearly that you will hand it to the " + (profile.shortcutName || "Friday") + " shortcut.",
+      "You also have your own lists, bills, countdowns, timers, and notes in the app; if asked about them and you don't see them here, suggest the exact words to say, like 'add milk to my grocery list'.",
+      summary ? ("Summary of your earlier conversations with " + profile.ownerName + " (use it to stay consistent; don't recite it):\n" + summary) : "",
       mem ? ("Things you know about " + profile.ownerName + " (use them naturally, don't recite them):\n" + mem) : "You have no long-term memory notes yet.",
       "Your name is " + profile.assistantName + ". The person you help is " + profile.ownerName + "."
-    ].join("\n");
+    ].filter(Boolean).join("\n");
   }
 
-  function helperPrompt(kind, profile) {
-    return (HELPERS[kind] && HELPERS[kind].system) || HELPERS.research.system;
-  }
-
-  async function groqChat(messages, opts) {
+  // Back-compat wrapper: everything goes through the brain (Groq + backups).
+  function groqChat(messages, opts) {
     opts = opts || {};
-    var key = root.FridayStorage.getApiKey();
-    if (!key) throw new Error("Add a Groq API key in Settings first.");
-    var body = {
-      model: opts.model || root.FRIDAY_CONFIG.MODEL,
-      messages: messages,
-      temperature: opts.temperature == null ? 0.7 : opts.temperature,
-      include_reasoning: false
-    };
-    if (opts.max_tokens) body.max_tokens = opts.max_tokens;
-    if (opts.tools) body.tools = opts.tools;
-    if (opts.reasoning_effort) body.reasoning_effort = opts.reasoning_effort;
-    var res = await fetch(root.FRIDAY_CONFIG.CHAT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + key
-      },
-      body: JSON.stringify(body)
-    });
-    if (!res.ok) {
-      var errText = "";
-      try { errText = await res.text(); } catch (e) {}
-      if (res.status === 401) throw new Error("That Groq key was rejected. Check it in Settings.");
-      if (res.status === 429) throw new Error("Groq is rate-limiting us. Wait a moment and try again.");
-      throw new Error("Groq request failed (" + res.status + ").");
-    }
-    var data = await res.json();
-    var choice = (data.choices && (data.choices[0] || data.choices[1])) || {};
-    var msg = choice.message || {};
-    var text = msg.content || msg.reasoning || "";
-    if (Array.isArray(text)) {
-      text = text.map(function (p) { return p.text || p.content || ""; }).join("\n");
-    }
-    return String(text || "").trim();
+    return root.FridayBrain.ask(messages, Object.assign({ purpose: "chat", temperature: 0.7 }, opts));
   }
 
-  // Web answers come back with citation marks like 【2†L6-L10】; strip them so they read well aloud.
   function cleanSpoken(t) {
-    return String(t || "").replace(/【[^】]*】/g, "").replace(/\[\d+\]/g, "").replace(/\*\*/g, "").replace(/\s{2,}/g, " ").trim();
+    return String(t || "").replace(/【[^】]*】/g, "").replace(/\[\d+\]/g, "").replace(/\*\*|__|`/g, "").replace(/^#+\s*/gm, "").replace(/\s{2,}/g, " ").trim();
   }
 
-  // ---- Added agents (ChatGPT, Groq, any OpenAI-compatible endpoint) ----
+  // ---- Added agents ----
+  var AGENT_ALIASES = {
+    openai: ["chat gpt", "chatgpt", "gpt", "open ai", "openai"],
+    anthropic: ["claude"],
+    gemini: ["gemini", "google"],
+    xai: ["grok"],
+    deepseek: ["deepseek", "deep seek"],
+    mistral: ["mistral"],
+    openrouter: ["openrouter", "open router"],
+    cerebras: ["cerebras"]
+  };
+
   function listAgents() {
     var list = root.FridayStorage.get("connections", []) || [];
     return Array.isArray(list) ? list.filter(function (c) { return c && c.type === "agent"; }) : [];
@@ -143,8 +133,7 @@
     var agents = listAgents();
     for (var i = 0; i < agents.length; i++) {
       var a = agents[i];
-      var names = [a.name];
-      if (a.provider === "openai") names.push("chat gpt", "chatgpt", "gpt", "open ai", "openai");
+      var names = [a.name].concat(AGENT_ALIASES[a.provider] || []);
       for (var j = 0; j < names.length; j++) {
         if (!names[j]) continue;
         var n = escRe(String(names[j]).trim()).replace(/\s+/g, "\\s*");
@@ -157,47 +146,60 @@
   }
 
   async function agentChat(agent, prompt, profile) {
-    var key = root.FridayStorage.getAgentKey(agent.id);
-    if (!key && agent.provider === "groq") key = root.FridayStorage.getApiKey();
-    if (!key) throw new Error("I don't have a key for " + agent.name + ". Add one in Settings, Connections.");
-    var base = String(agent.baseUrl || "").trim().replace(/\/+$/, "");
-    if (!base) throw new Error(agent.name + " is missing its web address. Check it in Settings, Connections.");
-    var url = /\/chat\/completions$/.test(base) ? base : base + "/chat/completions";
-    var res;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + key },
-        body: JSON.stringify({
-          model: agent.model || "gpt-5-mini",
-          messages: [
-            { role: "system", content: "You are " + agent.name + ". " + (profile.assistantName || "Friday") + " is relaying a question from " + (profile.ownerName || "the user") + " and will read your answer aloud. Answer in two to four plain sentences, no markdown or lists." },
-            { role: "user", content: prompt }
-          ]
-        })
-      });
-    } catch (e) {
-      throw new Error("I couldn't reach " + agent.name + ". Check the internet or its web address.");
-    }
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) throw new Error(agent.name + " rejected the key. Check it in Settings, Connections.");
-      if (res.status === 404) throw new Error(agent.name + " didn't recognize that model or address. Check it in Settings, Connections.");
-      if (res.status === 429) throw new Error(agent.name + " is busy or out of credit right now. Try again in a bit.");
-      throw new Error(agent.name + " had a problem (" + res.status + "). Try again in a bit.");
-    }
-    var data = await res.json();
-    var msg = ((data.choices && data.choices[0]) || {}).message || {};
-    var out = msg.content || "";
-    if (Array.isArray(out)) out = out.map(function (p) { return p.text || ""; }).join(" ");
+    var out = await root.FridayBrain.askAgent(agent, [
+      { role: "system", content: "You are " + agent.name + ". " + (profile.assistantName || "Friday") + " is relaying a question from " + (profile.ownerName || "the user") + " and will read your answer aloud. Answer in two to four plain sentences, no markdown or lists." },
+      { role: "user", content: prompt }
+    ], { max_tokens: 500 });
     out = cleanSpoken(out);
     if (!out) throw new Error(agent.name + " sent back an empty answer.");
     return out;
   }
 
+  // Free facts from Wikipedia (works from the phone, no key).
+  async function wikiFacts(q) {
+    q = String(q || "").replace(/^(hey |ok )?(friday|jarvis)[, ]+/i, "").replace(/^(who|what|when|where|why|how)( is| are| was| were| did| does| do)?\s+/i, "").replace(/[?.!]+$/, "").trim();
+    if (q.length < 3) return "";
+    try {
+      var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var tm = setTimeout(function () { if (ctl) ctl.abort(); }, 5000);
+      var r = await fetch("https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0&format=json&origin=*&search=" + encodeURIComponent(q), ctl ? { signal: ctl.signal } : {});
+      var j = await r.json();
+      var title = j && j[1] && j[1][0];
+      if (!title) { clearTimeout(tm); return ""; }
+      var r2 = await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title.replace(/ /g, "_")), ctl ? { signal: ctl.signal } : {});
+      clearTimeout(tm);
+      var j2 = await r2.json();
+      return j2 && j2.extract ? (title + ": " + j2.extract).slice(0, 1200) : "";
+    } catch (e) { return ""; }
+  }
+
+  // Splits streamed text into speakable sentences.
+  function SentenceSplitter(onSentence) {
+    this.buf = "";
+    this.onSentence = onSentence;
+  }
+  SentenceSplitter.prototype.push = function (piece) {
+    this.buf += piece;
+    var re = /^([\s\S]*?[.!?…](?:["')\]]*)?)(\s+)(?=\S)/;
+    var m;
+    while ((m = this.buf.match(re))) {
+      var s = cleanSpoken(m[1]);
+      this.buf = this.buf.slice(m[0].length);
+      if (s.length < 4 && this.buf.length < 200) { this.buf = s + " " + this.buf; break; }
+      if (s) this.onSentence(s);
+    }
+  };
+  SentenceSplitter.prototype.flush = function () {
+    var s = cleanSpoken(this.buf);
+    this.buf = "";
+    if (s) this.onSentence(s);
+  };
+
   function FridayChat(opts) {
     this.profile = opts.profile;
     this.history = root.FridayStorage.get("history", []);
     this.memory = root.FridayStorage.get("memory", []);
+    this.summary = root.FridayStorage.get("summary", { text: "", upTo: 0 });
     this.onHelper = opts.onHelper || function () {};
   }
 
@@ -206,18 +208,39 @@
     root.FridayStorage.set("memory", this.memory);
   };
 
+  FridayChat.prototype._memEvent = function () {
+    try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
+  };
+
   FridayChat.prototype.addMemory = function (text) {
     text = String(text || "").trim();
     if (!text) return;
     this.memory.push({ text: text, at: new Date().toISOString() });
     this.save();
-    try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
+    this._memEvent();
   };
 
   FridayChat.prototype.removeMemory = function (i) {
     this.memory.splice(i, 1);
     this.save();
-    try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
+    this._memEvent();
+  };
+
+  FridayChat.prototype.editMemory = function (i, text) {
+    text = String(text || "").trim();
+    if (!this.memory[i]) return;
+    if (!text) return this.removeMemory(i);
+    this.memory[i].text = text;
+    this.memory[i].edited = new Date().toISOString();
+    this.save();
+    this._memEvent();
+  };
+
+  FridayChat.prototype.togglePin = function (i) {
+    if (!this.memory[i]) return;
+    this.memory[i].pinned = !this.memory[i].pinned;
+    this.save();
+    this._memEvent();
   };
 
   FridayChat.prototype.rememberFromSpeech = function (text) {
@@ -225,13 +248,24 @@
     return m ? m[1].trim() : null;
   };
 
+  // Sort the request locally (free and instant). Only truly unclear long requests use the AI.
+  FridayChat.prototype.classifyLocal = function (text) {
+    var t = String(text || "").toLowerCase();
+    if (/\b(code|coding|javascript|python|html|css|swift|function|script|regex|bug|stack trace|compile|programming|sql|api)\b/.test(t)) return "coding";
+    if (/\b(budget|bills?|loan|debt|credit card|interest rate|save money|saving|invest|pay off|paycheck|mortgage|rent money|afford)\b/.test(t)) return "money";
+    if (/\b(write|draft|compose|reword|rewrite)\b.*\b(text|message|email|reply|note to|card)\b|\breply to\b/.test(t)) return "messages";
+    if (/\b(explain|research|in detail|deep dive|pros and cons|history of|how does .* work|step by step|teach me)\b/.test(t)) return "research";
+    return t.split(/\s+/).length > 28 ? null : "chat";
+  };
+
   FridayChat.prototype.classify = async function (text) {
-    var prompt = [
-      { role: "system", content: "Classify the user request as one of: chat, research, coding, money, messages, phone. Reply with only the one word." },
-      { role: "user", content: text }
-    ];
+    var local = this.classifyLocal(text);
+    if (local) return local;
     try {
-      var out = (await groqChat(prompt, { temperature: 0, max_tokens: 16 })).toLowerCase();
+      var out = (await root.FridayBrain.ask([
+        { role: "system", content: "Classify the user request as one of: chat, research, coding, money, messages, phone. Reply with only the one word." },
+        { role: "user", content: text }
+      ], { purpose: "small", temperature: 0, max_tokens: 16, noBackup: true })).toLowerCase();
       if (/research/.test(out)) return "research";
       if (/cod/.test(out)) return "coding";
       if (/money|bill|budget/.test(out)) return "money";
@@ -243,19 +277,25 @@
     }
   };
 
-  FridayChat.prototype.ask = async function (userText) {
+  FridayChat.prototype._push = function (role, content) {
+    this.history.push({ role: role, content: content, at: new Date().toISOString() });
+    this.save();
+  };
+
+  /* opts.onSentence(sentence) is called as each sentence of the reply arrives,
+     so the app can start speaking before the whole answer is ready. */
+  FridayChat.prototype.ask = async function (userText, opts) {
+    opts = opts || {};
     var text = String(userText || "").trim();
     if (!text) return { text: "", kind: "chat" };
-    this.history.push({ role: "user", content: text, at: new Date().toISOString() });
-    this.save();
+    this._push("user", text);
     this.onHelper("thinking");
 
     var mem = this.rememberFromSpeech(text);
     if (mem) {
       this.addMemory(mem);
       var ack = this._ackMemory();
-      this.history.push({ role: "assistant", content: ack, at: new Date().toISOString() });
-      this.save();
+      this._push("assistant", ack);
       this.onHelper(null);
       return { text: ack, kind: "memory" };
     }
@@ -268,14 +308,11 @@
       }
       this.onHelper("research");
       var said;
-      try {
-        said = await agentChat(ag.agent, ag.prompt, this.profile);
-      } finally {
-        this.onHelper(null);
-      }
+      try { said = await agentChat(ag.agent, ag.prompt, this.profile); }
+      finally { this.onHelper(null); }
       var line = ag.agent.name + " says: " + said;
-      this.history.push({ role: "assistant", content: line, at: new Date().toISOString() });
-      this.save();
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("agents", "Asked " + ag.agent.name);
+      this._push("assistant", line);
       return { text: line, kind: "agent" };
     }
 
@@ -287,62 +324,101 @@
     }
     if (phone && phone !== "messages") {
       var handoff = this._handoffLine(text);
-      this.history.push({ role: "assistant", content: handoff, at: new Date().toISOString() });
-      this.save();
+      this._push("assistant", handoff);
       this.onHelper(null);
       return { text: handoff, kind: "phone", command: text };
     }
 
-    var web = WEB_RE.test(text) && phone !== "messages";
+    var st0 = settings();
+    var forced = text.match(FORCE_WEB_RE);
+    var link = text.match(URL_RE);
+    var web = (st0.webMode === "always" || forced || link || WEB_RE.test(text)) && phone !== "messages" && st0.webMode !== "off";
     var kind = web ? "chat" : await this.classify(text);
     this.onHelper(web ? "research" : (kind === "chat" ? "thinking" : kind));
 
     var helperText = "";
     if (HELPERS[kind] && !web) {
-      helperText = await groqChat([
-        { role: "system", content: helperPrompt(kind, this.profile) },
-        { role: "user", content: text }
-      ], { temperature: 0.4 });
+      try {
+        helperText = await groqChat([
+          { role: "system", content: HELPERS[kind].system },
+          { role: "user", content: text }
+        ], { temperature: 0.4 });
+      } catch (e) { helperText = ""; }
     }
 
-    var messages = [{ role: "system", content: personaPrompt(this.profile, this.memory) }];
+    var messages = [{ role: "system", content: personaPrompt(this.profile, this.memory, this.summary && this.summary.text) }];
     this.history.slice(-HISTORY_LIMIT).forEach(function (h) {
-      if (h.role === "user" || h.role === "assistant") {
-        messages.push({ role: h.role, content: h.content });
-      }
+      if (h.role === "user" || h.role === "assistant") messages.push({ role: h.role, content: h.content });
     });
     if (helperText) {
-      messages.push({
-        role: "system",
-        content: "Your " + kind + " helper produced this brief. Answer the user in your own voice, using it. Do not mention the helper by name unless asked.\n\n" + helperText
-      });
+      messages.push({ role: "system", content: "Your " + kind + " helper produced this brief. Answer the user in your own voice, using it. Do not mention the helper by name unless asked.\n\n" + helperText });
     }
     if (kind === "messages" || phone === "messages") {
-      messages.push({
-        role: "system",
-        content: "If they want a real text sent from the phone, include a short confirmation and know the app may open Messages or the shortcut."
-      });
+      messages.push({ role: "system", content: "If they want a real text sent from the phone, include a short confirmation and know the app may open Messages or the shortcut." });
     }
 
     var reply = "";
+    var streamed = false;
     if (web) {
-      // Groq's built-in browser search (groq/compound was retired in Sept 2026).
+      var webNote = link
+        ? "The user shared a link: " + link[1] + ". Open that page with your browser tool, read it, and answer what they asked about it (or summarize it) in two to four short spoken sentences. No links or citations."
+        : "Search the web for current, accurate information, then answer in one to three short spoken sentences. Mention the date if it matters. No links or citations.";
       try {
-        messages.push({ role: "system", content: "Search the web if it helps, then answer in one to three short spoken sentences. No links or citations." });
-        reply = cleanSpoken(await groqChat(messages, { tools: [{ type: "browser_search" }], reasoning_effort: "low", temperature: 0.6 }));
+        if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("research", link ? "Reading a link" : (forced ? "Searching the web for " + forced[1].slice(0, 50) : "Searching the web"));
+        messages.push({ role: "system", content: webNote });
+        reply = cleanSpoken(await groqChat(messages, { tools: [{ type: "browser_search" }], reasoning_effort: "low", temperature: 0.5, noBackup: true }));
       } catch (e) { reply = ""; }
       if (!reply) {
         messages.pop();
+        // Free fallback: Wikipedia, so she still has facts when web search is busy.
+        var wiki = link ? "" : await wikiFacts(forced ? forced[1] : text);
+        if (wiki) messages.push({ role: "system", content: "Web search was busy. Here is a Wikipedia summary that may help (say it's from Wikipedia if you use it):\n" + wiki });
+      }
+    }
+    if (!reply) {
+      var useStream = !!opts.onSentence && settings().fastReplies !== false;
+      if (useStream) {
+        var splitter = new SentenceSplitter(function (s) { streamed = true; opts.onSentence(s); });
+        reply = await groqChat(messages, { stream: true, onDelta: function (p) { splitter.push(p); } });
+        splitter.flush();
+      } else {
         reply = await groqChat(messages);
       }
-    } else {
-      reply = await groqChat(messages);
     }
+    reply = cleanSpoken(reply);
     this.learn(text).catch(function () {});
-    this.history.push({ role: "assistant", content: reply, at: new Date().toISOString() });
-    this.save();
+    this._push("assistant", reply);
+    this.maybeSummarize().catch(function () {});
     this.onHelper(null);
-    return { text: reply, kind: kind, command: (kind === "messages" || phone === "messages") ? text : null };
+    return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null };
+  };
+
+  // Long-chat memory: fold older conversation into a short running summary.
+  FridayChat.prototype.maybeSummarize = async function () {
+    var h = this.history;
+    var keep = HISTORY_LIMIT;
+    if (h.length <= keep + 8) return;
+    var cutoff = h.length - keep;
+    var lastAt = this.summary.lastAt || "";
+    var older = h.slice(0, cutoff).filter(function (m) { return !lastAt || (m.at || "") > lastAt; });
+    if (older.length < 8) return;
+    if (this._summarizing) return;
+    this._summarizing = true;
+    try {
+      var owner = this.profile.ownerName || "the user";
+      var transcript = older.map(function (m) { return (m.role === "user" ? owner : "Assistant") + ": " + m.content; }).join("\n").slice(-6000);
+      var out = await root.FridayBrain.ask([
+        { role: "system", content: "You keep a running summary of conversations between " + owner + " and their assistant. Merge the old summary with the new conversation. Keep what matters later: topics, plans, decisions, promises, open questions, how " + owner + " was feeling. Drop small talk. Third person, plain sentences, under 140 words." },
+        { role: "user", content: "Old summary:\n" + (this.summary.text || "(none)") + "\n\nNew conversation:\n" + transcript }
+      ], { purpose: "small", temperature: 0.2, max_tokens: 320 });
+      out = String(out || "").trim();
+      if (out) {
+        this.summary = { text: out, lastAt: older[older.length - 1].at || new Date().toISOString() };
+        root.FridayStorage.set("summary", this.summary);
+      }
+    } finally {
+      this._summarizing = false;
+    }
   };
 
   // Quietly pick up lasting personal facts from what the user says.
@@ -350,10 +426,10 @@
     var t = String(userText || "");
     if (t.length < 12 || !/\b(i|i'm|im|i've|my|me|mine|we|our|us)\b/i.test(t)) return;
     var owner = this.profile.ownerName || "the user";
-    var out = await groqChat([
-      { role: "system", content: "Extract lasting personal facts about " + owner + " from their message: preferences, likes and dislikes, names of family, friends or pets, routines, important dates, where things are. Ignore one-off requests, questions, and anything temporary. Write each fact as a short third-person sentence starting with " + owner + " (for example: " + owner + " likes black coffee.). Reply with only a JSON array of strings, or [] if there is nothing lasting." },
+    var out = await root.FridayBrain.ask([
+      { role: "system", content: "Extract lasting personal facts about " + owner + " from their message: preferences, likes and dislikes, names of family, friends or pets, routines, important dates like birthdays, where things are. Ignore one-off requests, questions, and anything temporary. Write each fact as a short third-person sentence starting with " + owner + " (for example: " + owner + " likes black coffee.). Reply with only a JSON array of strings, or [] if there is nothing lasting." },
       { role: "user", content: t }
-    ], { temperature: 0, max_tokens: 400, reasoning_effort: "low" });
+    ], { purpose: "small", temperature: 0, max_tokens: 400, reasoning_effort: "low", noBackup: true });
     var m = String(out || "").match(/\[[\s\S]*\]/);
     if (!m) return;
     var facts;
@@ -372,25 +448,19 @@
       if (dup) return;
       self.memory.push({ text: f, at: new Date().toISOString(), auto: true });
       added++;
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "Learned: " + f);
     });
-    if (added) {
-      this.save();
-      try { root.dispatchEvent(new CustomEvent("friday:memory")); } catch (e) {}
-    }
+    if (added) { this.save(); this._memEvent(); }
   };
 
   FridayChat.prototype._ackMemory = function () {
     var terms = this.profile.terms || [];
     var t = terms[Math.floor(Math.random() * terms.length)] || "";
-    var lines = t ? [
-      "I will remember that, " + t + ".",
-      "Saved to memory, " + t + ".",
-      "Locked in."
-    ] : ["I will remember that.", "Saved to memory.", "Locked in."];
+    var lines = t ? ["I will remember that, " + t + ".", "Saved to memory, " + t + ".", "Locked in."] : ["I will remember that.", "Saved to memory.", "Locked in."];
     return lines[Math.floor(Math.random() * lines.length)];
   };
 
-  FridayChat.prototype._handoffLine = function (cmd) {
+  FridayChat.prototype._handoffLine = function () {
     var terms = this.profile.terms || [];
     var t = terms[0] ? ", " + terms[0] : "";
     return "On it" + t + ". I'll hand that to your shortcut.";
@@ -398,9 +468,12 @@
 
   FridayChat.prototype.resetHistory = function () {
     this.history = [];
+    this.summary = { text: "", upTo: 0 };
+    root.FridayStorage.set("summary", this.summary);
     this.save();
   };
 
   root.FridayChat = FridayChat;
-  root.FridayGroq = { chat: groqChat, detectAgent: detectAgent, detectPhoneIntent: detectPhoneIntent, detectInAppTimer: detectInAppTimer };
+  root.FridayMoods = MOODS;
+  root.FridayGroq = { chat: groqChat, detectAgent: detectAgent, detectPhoneIntent: detectPhoneIntent, detectInAppTimer: detectInAppTimer, cleanSpoken: cleanSpoken, personaPrompt: personaPrompt };
 })(window);
