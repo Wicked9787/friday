@@ -100,6 +100,13 @@
       self.volume += (level - self.volume) * 0.35;
       self._onVolume(self.volume, "user");
       var now = performance.now();
+      if (self.listening && self.opts.onSilence && !self._silenceFired) {
+        if (self.volume > 0.12) { self._heard = true; self._lastLoud = now; }
+        if ((self._heard && now - self._lastLoud > 1300) || (!self._heard && now - self._listenStart > 8000)) {
+          self._silenceFired = true;
+          setTimeout(function () { self.opts.onSilence(); }, 0);
+        }
+      }
       if (self.volume > 0.22 && self.volume > self._peakHold * 1.12 && now - self._lastPeak > 120) {
         self._lastPeak = now;
         self._onSyllable();
@@ -114,6 +121,10 @@
     if (this.listening) return;
     this.stopSpeak();
     this.listening = true;
+    this._heard = false;
+    this._listenStart = performance.now();
+    this._lastLoud = this._listenStart;
+    this._silenceFired = false;
     this._chunks = [];
     this._onState("listen-start");
     try {

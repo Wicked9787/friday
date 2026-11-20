@@ -511,9 +511,21 @@
   }
 
   function toggleListen() {
-    if (voice.speaking) voice.stopSpeak();
-    if (voice.listening) endListen();
-    else beginListen();
+    // One tap starts a hands-free conversation; she stops listening on her own
+    // when you pause. Tapping again ends the conversation.
+    if (handsFree || voice.listening || voice.speaking || busy) {
+      handsFree = false;
+      if (voice.speaking) voice.stopSpeak();
+      if (voice.listening) {
+        document.getElementById("listen-dot").classList.remove("on");
+        voice.stopListen().catch(function () {});
+      }
+      orb.setTalking("idle", 0);
+      setCaption("Tap to talk");
+      return;
+    }
+    handsFree = true;
+    beginListen();
   }
 
   function showSetup(on) {
@@ -535,7 +547,8 @@
         else orb.setTalking(who || (voice.speaking ? "friday" : "user"), v);
       },
       onSyllable: function () { orb.notifySyllable(); },
-      onState: function () {}
+      onState: function () {},
+      onSilence: function () { if (voice.listening) endListen(); }
     });
     voice.setVoiceURI(settingsData.voiceURI || "");
 
