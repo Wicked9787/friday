@@ -137,10 +137,23 @@
     document.getElementById("caption-line").textContent = line || "Tap to talk";
   }
 
+  /* The orb and bubbles only animate while Friday's main screen is showing.
+     A panel (Settings, Memory, Chat…) covers the whole screen, and when the
+     app is in the background nothing is visible, so both are paused. */
+  function syncAnimation() {
+    var setup = document.getElementById("setup");
+    var onScreen = document.visibilityState !== "hidden" &&
+      !document.querySelector(".panel.open") &&
+      !(setup && setup.classList.contains("open"));
+    if (orb) { if (onScreen) orb.start(); else orb.stop(); }
+    if (bubbles && bubbles.pause) { if (onScreen) bubbles.resume(); else bubbles.pause(); }
+  }
+
   function openPanel(id) {
     closePanels();
     var el = document.getElementById("panel-" + id);
     if (el) el.classList.add("open");
+    syncAnimation();
     if (id === "neural") {
       if (neural) neural.start();
     } else if (neural) neural.stop();
@@ -152,6 +165,7 @@
   function closePanels() {
     document.querySelectorAll(".panel.open").forEach(function (p) { p.classList.remove("open"); });
     if (neural) neural.stop();
+    syncAnimation();
   }
 
   function shortcutUrl(command) {
@@ -526,6 +540,7 @@
 
   function showSetup(on) {
     document.getElementById("setup").classList.toggle("open", !!on);
+    syncAnimation();
   }
 
   function init() {
@@ -729,6 +744,11 @@
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(function () {});
     }
+
+    document.addEventListener("visibilitychange", syncAnimation);
+    window.addEventListener("pagehide", syncAnimation);
+    window.addEventListener("pageshow", syncAnimation);
+    syncAnimation();
 
     setTimeout(maybeGreet, 700);
   }

@@ -528,6 +528,20 @@
     return best;
   };
 
+  /* Stop/restart the floating animation (used when Friday isn't on screen). */
+  FridayBubbles.prototype.pause = function () {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = 0;
+  };
+  FridayBubbles.prototype.resume = function () {
+    if (this._raf) return;
+    var self = this;
+    this._raf = requestAnimationFrame(function tick(ts) {
+      self._tick(ts);
+      self._raf = requestAnimationFrame(tick);
+    });
+  };
+
   FridayBubbles.prototype._tick = function (ts) {
     if (this.edit || this._flow) return;
     var mode = this._effectiveMode();
