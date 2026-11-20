@@ -46,7 +46,7 @@
     { kind: "tv", label: "TV", gold: false, size: "lg", action: "shortcut", command: "tv on" },
     { kind: "alarm", label: "Alarm", gold: true, size: "sm", action: "shortcut", command: "set an alarm" },
     { kind: "cameras", label: "Cameras", gold: true, size: "lg", action: "shortcut", command: "cameras" },
-    { kind: "camera", label: "Camera", gold: false, size: "sm", action: "url", url: "camera://" },
+    { kind: "camera", label: "Camera", gold: false, size: "sm", action: "shortcut", command: "open camera" },
     { kind: "phone", label: "Phone", gold: true, size: "sm", action: "url", url: "tel:" },
     { kind: "chat", label: "Chat", gold: false, size: "sm", action: "panel", panel: "chat" },
     { kind: "music", label: "Music", gold: false, size: "lg", action: "url", url: "music://" },
@@ -59,7 +59,6 @@
   ];
 
   var APP_SCHEMES = [
-    { name: "Camera", url: "camera://", kind: "camera" },
     { name: "Phone", url: "tel:", kind: "phone" },
     { name: "Messages", url: "sms:", kind: "messages" },
     { name: "FaceTime", url: "facetime://", kind: "video" },
@@ -189,9 +188,18 @@
       migrated = true;
     }
     if (!this.list.some(function (b) { return b.kind === "camera"; })) {
-      this.list.push({ id: "camera", kind: "camera", label: "Camera", gold: false, size: "sm", action: "url", url: "camera://", slot: this.list.length });
+      this.list.push({ id: "camera", kind: "camera", label: "Camera", gold: false, size: "sm", action: "shortcut", command: "open camera", slot: this.list.length });
       migrated = true;
     }
+    // camera:// is not a real iOS link; older saved bubbles get switched to the shortcut.
+    this.list.forEach(function (b) {
+      if (b.action === "url" && /^camera:/i.test(String(b.url || ""))) {
+        b.action = "shortcut";
+        b.command = "open camera";
+        delete b.url;
+        migrated = true;
+      }
+    });
     if (!this.list.some(function (b) { return b.kind === "phone"; })) {
       this.list.push({ id: "phone", kind: "phone", label: "Phone", gold: true, size: "sm", action: "url", url: "tel:", slot: this.list.length });
       migrated = true;

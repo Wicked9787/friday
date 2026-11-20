@@ -22,3 +22,22 @@ if (!xml.includes("<key>CFBundleURLTypes</key>")) {
 }
 fs.writeFileSync(plist, xml);
 console.log("Added mic permission to Info.plist");
+
+// App icon: copy the Friday/Jarvis art into the Xcode asset catalog
+// (single 1024x1024 universal icon, opaque, which Xcode 16+ accepts).
+const iconSrc = path.join(__dirname, "..", "icons", "appicon-1024.png");
+const iconDir = path.join(__dirname, "..", "ios", "App", "App", "Assets.xcassets", "AppIcon.appiconset");
+if (fs.existsSync(iconSrc)) {
+  fs.mkdirSync(iconDir, { recursive: true });
+  for (const f of fs.readdirSync(iconDir)) {
+    if (/\.png$/i.test(f)) fs.rmSync(path.join(iconDir, f));
+  }
+  fs.copyFileSync(iconSrc, path.join(iconDir, "AppIcon-1024.png"));
+  fs.writeFileSync(path.join(iconDir, "Contents.json"), JSON.stringify({
+    images: [{ filename: "AppIcon-1024.png", idiom: "universal", platform: "ios", size: "1024x1024" }],
+    info: { author: "xcode", version: 1 }
+  }, null, 2));
+  console.log("Installed " + name + " app icon");
+} else {
+  console.log("No icons/appicon-1024.png, keeping the default icon");
+}

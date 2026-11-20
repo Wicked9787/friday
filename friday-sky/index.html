@@ -104,16 +104,43 @@
       <details class="accord" id="accord-connections">
         <summary>Connections <span class="accord-current" id="connections-current">None</span></summary>
         <div class="accord-body">
-          <p class="hint">Add other agents or services by name and a link or app scheme. Open one with a tap, or pin it as a bubble.</p>
+          <p class="hint">Add a link or app, or an AI agent like ChatGPT. For an agent, say “ask ChatGPT …” or “have &lt;name&gt; …” and she reads you its answer. Keys stay on this phone.</p>
           <div id="connections-list"></div>
           <div class="row row-col" style="margin-top:12px">
             <label for="conn-name">New connection</label>
             <input type="text" id="conn-name" placeholder="Name">
+            <select id="conn-type" style="margin-top:8px">
+              <option value="link">Link or app</option>
+              <option value="openai">AI agent: ChatGPT (OpenAI)</option>
+              <option value="groq">AI agent: Groq</option>
+              <option value="custom">AI agent: other (OpenAI-compatible)</option>
+            </select>
             <input type="text" id="conn-url" placeholder="https://… or an app scheme" style="margin-top:8px">
+            <div id="conn-agent-fields" class="hidden">
+              <input type="text" id="conn-base" placeholder="Base URL, like https://api.openai.com/v1" autocapitalize="off" autocorrect="off" style="margin-top:8px">
+              <input type="text" id="conn-model" placeholder="Model, like gpt-5-mini" autocapitalize="off" autocorrect="off" style="margin-top:8px">
+              <input type="password" id="conn-key" placeholder="API key (saved only on this phone)" autocomplete="off" style="margin-top:8px">
+              <div class="sub">For Groq you can leave the key blank to use your main Groq key.</div>
+            </div>
             <div class="sub">Optional icon</div>
             <div id="conn-icons" class="icon-pick"></div>
             <button class="btn gold" type="button" id="btn-conn-add">Save connection</button>
           </div>
+        </div>
+      </details>
+
+      <details class="accord" id="accord-shortcut">
+        <summary>Shortcut setup</summary>
+        <div class="accord-body">
+          <ol class="hint" style="padding-left:18px;margin:0 0 10px">
+            <li>Tap <b>Copy prompt</b>.</li>
+            <li>Open the Shortcuts app. Delete your old shortcut named <b class="sc-setup-name">Friday</b> (press and hold it, then Delete).</li>
+            <li>Tap <b>+</b> to make a new shortcut, and paste the prompt into the box that asks what the shortcut should do.</li>
+            <li>Name the new shortcut exactly <b class="sc-setup-name">Friday</b>.</li>
+            <li>Check there is no Speak Text step. Run it once from Shortcuts and allow Home, Messages, and Contacts when it asks.</li>
+          </ol>
+          <textarea id="shortcut-prompt" readonly style="min-height:160px;font-size:12px"></textarea>
+          <button class="btn gold" type="button" id="btn-shortcut-copy" style="margin-top:8px">Copy prompt</button>
         </div>
       </details>
 

@@ -81,6 +81,14 @@
     return location.protocol === "capacitor:";
   }
 
+  var SHORTCUT_PROMPT = "Get the Shortcut Input as text. If Shortcut Input has any value, use it as the request. Otherwise, Dictate Text and use that as the request. Change the request to lowercase, then check it in this order and only do the first one that matches:\n1. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n2. If it contains \"lock\" and (\"door\" or \"house\" or \"it\"): if it contains \"unlock\", unlock the front door lock in the Home app; otherwise lock it.\n3. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n4. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. If it says \"off\", turn those lights off. If it says a percent or number, turn them on and set their brightness to that number. If it says a color (like red, blue, warm white), turn them on and set that color. Otherwise, if it says \"on\", turn them on.\n6. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n7. If it contains \"weather\", get the current weather for my current location and show it as a notification.\n8. If it contains \"cameras\", open the app Roku Smart Home.\n9. If it contains \"camera\", open the app Camera.\n10. If it starts with \"text\" or \"message\" (or \"send a text to\"), the next word is the contact name and the rest is the message body; send that body to that contact with Send Message, without showing the compose sheet if possible.\n11. If it starts with \"call\", the rest is a contact name; call that contact.\n12. Otherwise, do nothing.\nDo not add any Speak Text step anywhere; the app does all the talking. Do not show alerts or ask questions except Dictate Text when there is no input.";
+
+  var AGENT_PRESETS = {
+    openai: { name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini" },
+    groq: { name: "Groq", base: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
+    custom: { name: "", base: "", model: "" }
+  };
+
   function loadConnections() {
     var list = root.FridayStorage.get("connections", []);
     return Array.isArray(list) ? list : [];
@@ -314,6 +322,7 @@
     this._bindLayouts();
     this._bindChips();
     this._bindConnections();
+    this._bindShortcutSetup();
     this._syncHeaders();
 
     var briefing = document.getElementById("set-briefing");
@@ -526,8 +535,13 @@
         var open = document.createElement("button");
         open.type = "button";
         open.className = "btn";
-        open.textContent = "Open";
+        open.textContent = c.type === "agent" ? "New key" : "Open";
         open.addEventListener("click", function () {
+          if (c.type === "agent") {
+            var k = prompt("Paste a new API key for " + (c.name || "this agent") + ". It stays on this phone.");
+            if (k && k.trim()) { root.FridayStorage.setAgentKey(c.id, k); self.onToast("Key saved on this phone."); }
+            return;
+          }
           if (!c.url) return;
           try { location.href = c.url; } catch (e) {}
         });
@@ -535,6 +549,7 @@
         add.type = "button";
         add.className = "btn gold";
         add.textContent = "Add bubble";
+        if (c.type === "agent") add.style.display = "none";
         add.addEventListener("click", function () {
           self.onAddBubble({
             kind: c.kind || "link",
@@ -551,13 +566,16 @@
         del.className = "btn danger";
         del.textContent = "Remove";
         del.addEventListener("click", function () {
+          if (c.type === "agent") root.FridayStorage.setAgentKey(c.id, "");
           var next = current().filter(function (x, idx) { return idx !== i; });
           saveConnections(next);
           renderList();
         });
         var url = document.createElement("div");
         url.className = "conn-url";
-        url.textContent = c.url || "";
+        url.textContent = c.type === "agent"
+          ? "AI agent · " + (c.model || "") + " · say “ask " + (c.name || "") + " …”"
+          : (c.url || "");
         row.appendChild(name);
         row.appendChild(open);
         row.appendChild(add);
@@ -576,6 +594,25 @@
         name = String(name || "").trim();
         url = String(url || "").trim();
         if (!name) { self.onToast("Give the connection a name."); return; }
+        var type = typeEl ? typeEl.value : "link";
+        if (type !== "link") {
+          var base = String(document.getElementById("conn-base").value || "").trim();
+          var model = String(document.getElementById("conn-model").value || "").trim();
+          var akey = String(document.getElementById("conn-key").value || "").trim();
+          if (!base) { self.onToast("Add the agent's base URL."); return; }
+          if (!/^https?:\/\//i.test(base)) base = "https://" + base;
+          if (!model) { self.onToast("Add a model name."); return; }
+          if (!akey && type !== "groq") { self.onToast("Paste the agent's API key."); return; }
+          var agentId = "a" + Math.random().toString(36).slice(2, 9);
+          var alist = current();
+          alist.push({ id: agentId, name: name, type: "agent", provider: type, baseUrl: base, model: model, kind: selectedKind || "chat" });
+          saveConnections(alist);
+          if (akey) root.FridayStorage.setAgentKey(agentId, akey);
+          ["conn-name", "conn-key"].forEach(function (id) { document.getElementById(id).value = ""; });
+          renderList();
+          self.onToast(name + " added. Say “ask " + name + " …”.");
+          return;
+        }
         if (!url) { self.onToast("Add a link or app scheme."); return; }
         if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && /^[\w.-]+\.[a-z]{2,}([\/:?#]|$)/i.test(url)) url = "https://" + url;
         var list = current();
@@ -592,8 +629,51 @@
         self.onToast("Connection saved on this phone.");
       };
     }
+    var typeEl = document.getElementById("conn-type");
+    if (typeEl) {
+      typeEl.onchange = function () {
+        var t = typeEl.value;
+        var isAgent = t !== "link";
+        document.getElementById("conn-agent-fields").classList.toggle("hidden", !isAgent);
+        document.getElementById("conn-url").classList.toggle("hidden", isAgent);
+        if (isAgent) {
+          var pr = AGENT_PRESETS[t] || AGENT_PRESETS.custom;
+          document.getElementById("conn-base").value = pr.base;
+          document.getElementById("conn-model").value = pr.model;
+          var nm = document.getElementById("conn-name");
+          if (!nm.value.trim()) nm.value = pr.name;
+        }
+      };
+    }
     renderIcons();
     renderList();
+  };
+
+  FridaySettings.prototype._bindShortcutSetup = function () {
+    var self = this;
+    var ta = document.getElementById("shortcut-prompt");
+    if (!ta) return;
+    ta.value = SHORTCUT_PROMPT;
+    var nm = this.shortcutName();
+    document.querySelectorAll(".sc-setup-name").forEach(function (el) { el.textContent = nm; });
+    var btn = document.getElementById("btn-shortcut-copy");
+    if (btn) btn.onclick = function () {
+      function fallback() {
+        ta.removeAttribute("readonly");
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        var ok = false;
+        try { ok = document.execCommand("copy"); } catch (e) {}
+        ta.setAttribute("readonly", "");
+        self.onToast(ok ? "Copied. Paste it in the Shortcuts app." : "Press and hold the text to copy it.");
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(SHORTCUT_PROMPT).then(function () {
+          self.onToast("Copied. Paste it in the Shortcuts app.");
+        }, fallback);
+      } else fallback();
+    };
   };
 
   FridaySettings.prototype.shortcutName = function () {

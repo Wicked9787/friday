@@ -200,7 +200,7 @@
   }
 
   var DIRECT_APPS = [
-    ["apple music", "music://"], ["music", "music://"], ["spotify", "spotify://"], ["camera", "camera://"],
+    ["apple music", "music://"], ["music", "music://"], ["spotify", "spotify://"],
     ["phone", "tel:"], ["messages", "sms:"], ["facetime", "facetime://"], ["mail", "mailto:"],
     ["maps", "maps://"], ["photos", "photos-redirect://"], ["settings", "app-settings:"],
     ["youtube", "youtube://"], ["netflix", "nflx://"], ["instagram", "instagram://"],
@@ -212,6 +212,14 @@
     if (!m) return null;
     for (var i = 0; i < DIRECT_APPS.length; i++) if (m[1] === DIRECT_APPS[i][0]) return { name: m[1], url: DIRECT_APPS[i][1] };
     return null;
+  }
+
+  // The Camera app has no URL scheme, so camera requests go through the shortcut.
+  function cameraCommand(text) {
+    var t = String(text || "").toLowerCase().replace(/[.!?,]/g, "").trim();
+    var m = t.match(/^(?:hey \w+ )?(?:please )?(?:open|launch|pull up|show|start|bring up|check)(?: up)?(?: me)? (?:the |my )?(cameras|camera)(?: app)?(?: please)?$/);
+    if (!m) return null;
+    return m[1] === "cameras" ? "cameras" : "open camera";
   }
 
   function openUrl(url) {
@@ -441,6 +449,13 @@
     if (neural) neural.setActive("thinking");
     document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
     try {
+      var camCmd = cameraCommand(text);
+      if (camCmd) {
+        leftForApp = true;
+        setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
+        runShortcut(camCmd);
+        return;
+      }
       var direct = directAppUrl(text);
       if (direct) {
         leftForApp = true;
@@ -479,6 +494,7 @@
       var msg = (err && err.message) || "Something went wrong.";
       setCaption(msg);
       toast(msg);
+      try { await voice.speak(msg, profile); } catch (e) {}
     } finally {
       busy = false;
       if (neural) neural.setActive(null);

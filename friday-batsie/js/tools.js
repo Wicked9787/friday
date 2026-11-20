@@ -103,7 +103,7 @@
       p.textContent = item.text;
       var meta = document.createElement("div");
       meta.className = "meta";
-      meta.textContent = fmt(item.at);
+      meta.textContent = fmt(item.at) + (item.auto ? " · learned on her own" : "");
       card.appendChild(x);
       card.appendChild(p);
       card.appendChild(meta);

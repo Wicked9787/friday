@@ -42,6 +42,16 @@
     return getApiKey().length > 0;
   }
 
+  // Keys for added agents (ChatGPT etc.) live only on this phone, never in backups.
+  function getAgentKey(id) {
+    return rawGet(PREFIX + "agentKey." + id) || "";
+  }
+  function setAgentKey(id, key) {
+    key = String(key || "").trim();
+    if (!key) { rawDel(PREFIX + "agentKey." + id); return; }
+    rawSet(PREFIX + "agentKey." + id, key);
+  }
+
   function maskKey(key) {
     key = String(key || "");
     if (key.length < 8) return key ? "••••" : "";
@@ -118,6 +128,8 @@
     getApiKey: getApiKey,
     setApiKey: setApiKey,
     hasApiKey: hasApiKey,
+    getAgentKey: getAgentKey,
+    setAgentKey: setAgentKey,
     maskKey: maskKey,
     exportBackup: exportBackup,
     downloadBackup: downloadBackup,
