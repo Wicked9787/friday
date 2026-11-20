@@ -708,7 +708,16 @@
       X1: { nested: { silver: 0.10 }, core: 0, dust: 1, tint: [0.09, 0.055, 0.015] },
       X2: { nested: { silver: 0.18, radii: [0.52, 0.72, 0.92, 1.1], spokes: 6 }, core: 1, dust: 1, tint: [0.07, 0.05, 0.02] },
       X3: { nested: { silver: 0.55, seed: 77, chords: 22 }, core: 0, dust: 1, tint: [0.05, 0.055, 0.065] },
-      X4: { nested: { silver: 0.12, radii: [0.30, 0.46, 0.62, 0.78, 0.94, 1.1], seed: 9, chords: 10, spokes: 14 }, core: 0, dust: 1, follow: 1, tint: [0.09, 0.055, 0.015] }
+      X4: { nested: { silver: 0.12, radii: [0.30, 0.46, 0.62, 0.78, 0.94, 1.1], seed: 9, chords: 10, spokes: 14 }, core: 0, dust: 1, follow: 1, tint: [0.09, 0.055, 0.015] },
+      // 3.1: more nested fracture looks, all in the HD style
+      X5: { nested: { silver: 0.08, radii: [0.34, 0.56, 0.78, 1.0], seed: 21, spokes: 10, chords: 12 }, core: 1, dust: 1, tint: [0.08, 0.05, 0.015] },
+      X6: { nested: { silver: 0.85, seed: 133, chords: 18, spokes: 8 }, core: 0, dust: 1, tint: [0.035, 0.06, 0.085] },
+      X7: { nested: { silver: 0.16, radii: [0.24, 0.38, 0.52, 0.66, 0.8, 0.96, 1.12], seed: 57, chords: 16, spokes: 18 }, core: 0, dust: 1, follow: 1, tint: [0.085, 0.055, 0.02] },
+      X8: { nested: { silver: 0.14, radii: [0.5, 0.7, 0.9, 1.08], seed: 240, spokes: 6, chords: 9 }, ring: 0.8, core: 1, dust: 1, tint: [0.09, 0.06, 0.02] },
+      X9: { nested: { silver: 0.2, radii: [0.46, 0.7, 0.94], seed: 612, chords: 8 }, streams: 1, core: 0, dust: 1, tint: [0.08, 0.055, 0.02] },
+      X10: { nested: { silver: 0.3, radii: [0.6, 0.66, 0.96, 1.03], seed: 314, chords: 14, spokes: 4 }, core: 0, dust: 1, follow: 1, tint: [0.07, 0.055, 0.035] },
+      X11: { nested: { silver: 0.22, radii: [0.36, 0.6, 0.84], seed: 98, chords: 10, spokes: 8 }, hshell: 0.6, core: 0, dust: 1, tint: [0.08, 0.055, 0.025] },
+      X12: { nested: { silver: 0.05, seed: 808, chords: 26, spokes: 12 }, core: 0, dust: 1, follow: 1, tint: [0.115, 0.045, 0.01] }
     };
     var s = S[look];
     if (!s) s = conceptSpec(look);

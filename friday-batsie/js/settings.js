@@ -44,7 +44,10 @@
       nightOrb: true,
       partnerMessages: true,
       partnerNames: "",
-      partnerContact: ""
+      partnerContact: "",
+      talkTime: "normal",
+      billAlerts: true,
+      countdownAlerts: true
     };
     var s = Object.assign(defaults, root.FridayStorage.get("settings", {}));
     if (!Array.isArray(s.chips)) {
@@ -101,7 +104,7 @@
     return location.protocol === "capacitor:";
   }
 
-  var SHORTCUT_PROMPT = "Get the Shortcut Input as text. If Shortcut Input has any value, use it as the request. Otherwise, Dictate Text and use that as the request. Change the request to lowercase, then check it in this order and only do the first one that matches:\n1. If it contains \"remind me\" or \"reminder\": take what to be reminded about and the date and time from the request, and add it to the Reminders app with an alert at that time (if no time is said, alert in one hour).\n2. If it starts with \"text\" or \"message\" (or \"send a text to\"), the next word is the contact name and the rest is the message body; send that body to that contact with Send Message, without showing the compose sheet if possible.\n3. If it starts with \"call\", the rest is a contact name; call that contact.\n4. If it contains \"calendar\", \"schedule\", \"appointment\" or \"what's on\": if it says \"add\" or \"schedule a\" or \"schedule an\", take the event name and the date and time from the request and add a calendar event with them (if no time is said, use tomorrow at 9 AM), then show a quiet notification that it was added. Otherwise find calendar events for today (or tomorrow if the request says tomorrow) and show their titles and times as a quiet notification.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\", \"brighten\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. Then: if it has a number with a percent sign or the word percent, or says \"to\" followed by a number (like \"50%\", \"50 percent\", \"set the lights to 50\"), turn those lights on and set their brightness to exactly that number. Otherwise if it says \"dim\", set their brightness to 30. Otherwise if it says \"brighten\", \"full\" or \"all the way up\", set their brightness to 100. Otherwise if it says \"off\", turn them off. Otherwise if it says a color (like red, blue, warm white), turn them on and set that color. Otherwise if it says \"on\", turn them on.\n6. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n7. If it contains \"homepod\", \"music\", \"song\", \"playlist\", \"album\", \"pause\", \"resume\", \"skip\", \"next song\", \"previous song\" or \"volume\": if it says \"homepod\", set the playback destination to the HomePod first. Then if it says \"pause\", pause; if it says \"resume\", play; if it says \"skip\" or \"next\", skip forward; if it says \"previous\" or \"back\", skip back; if it says \"volume\" or \"turn it up\" or \"turn it down\" with a number, set the volume to that percent (up means 80, down means 30 if no number is said). Otherwise if it says \"play\" followed by words, search Apple Music for those words and play the first result; otherwise shuffle and play my music library.\n8. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n9. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n10. If it contains \"timer\", find the number of minutes in the request and start a timer in the Clock app for that many minutes.\n11. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n12. If it contains \"do not disturb\", \"don't disturb\" or \"dnd\": if it says \"off\", turn the Do Not Disturb focus off; otherwise turn it on.\n13. If it contains \"battery\", get the battery level and show it as a quiet notification.\n14. If it contains \"cameras\", open the app Roku Smart Home.\n15. If it contains \"camera\", open the app Camera.\n16. Otherwise, do nothing.\nDo not add any Speak Text step anywhere; the app does all the talking. Do not show alerts or ask questions except Dictate Text when there is no input. Make every notification silent.";
+  var SHORTCUT_PROMPT = "Get the Shortcut Input as text and use it as the request. If it is empty, stop this shortcut. Make a lowercase copy of the request to check against, but when sending a message use the request's original words and capitalization. Check it in this order and only do the first one that matches:\n1. If it contains \"remind me\" or \"reminder\": take what to be reminded about and the date and time from the request, and add it to the Reminders app with an alert at that time (if no time is said, alert in one hour).\n2. If it starts with \"text\" or \"message\" (or \"send a text to\"): the contact name is the words after that up to the word \"saying\" (if there is no \"saying\", it is the next word), and the message body is everything after \"saying\". Send that body, with its original capitalization, to that contact with Send Message, without showing the compose sheet.\n3. If it starts with \"call\", the rest is a contact name; call that contact.\n4. If it contains \"calendar\", \"schedule\", \"appointment\" or \"what's on\": if it says \"add\" or \"schedule a\" or \"schedule an\", take the event name and the date and time from the request and add a calendar event with them (if no time is said, use tomorrow at 9 AM), then show a quiet notification that it was added. Otherwise find calendar events for today (or tomorrow if the request says tomorrow) and show their titles and times as a quiet notification.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\", \"brighten\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. Then: if it has a number with a percent sign or the word percent, or says \"to\" followed by a number (like \"50%\", \"50 percent\", \"set the lights to 50\"), turn those lights on and set their brightness to exactly that number. Otherwise if it says \"dim\", set their brightness to 30. Otherwise if it says \"brighten\", \"full\" or \"all the way up\", set their brightness to 100. Otherwise if it says \"off\", turn them off. Otherwise if it says a color (like red, blue, warm white), turn them on and set that color. Otherwise if it says \"on\", turn them on.\n6. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n7. If it contains \"homepod\", \"music\", \"song\", \"playlist\", \"album\", \"pause\", \"resume\", \"skip\", \"next song\", \"previous song\" or \"volume\": if it says \"homepod\", set the playback destination to the HomePod first. Then if it says \"pause\", pause; if it says \"resume\", play; if it says \"skip\" or \"next\", skip forward; if it says \"previous\" or \"back\", skip back; if it says \"volume\" or \"turn it up\" or \"turn it down\" with a number, set the volume to that percent (up means 80, down means 30 if no number is said). Otherwise if it says \"play\" followed by words, search Apple Music for those words and play the first result; otherwise shuffle and play my music library.\n8. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n9. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n10. If it contains \"timer\", find the number of minutes in the request and start a timer in the Clock app for that many minutes.\n11. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n12. If it contains \"do not disturb\", \"don't disturb\" or \"dnd\": if it says \"off\", turn the Do Not Disturb focus off; otherwise turn it on.\n13. If it contains \"battery\", get the battery level and show it as a quiet notification.\n14. If it contains \"cameras\", open the app Roku Smart Home.\n15. If it contains \"camera\", open the app Camera.\n16. Otherwise, do nothing.\nDo not add any Speak Text or Dictate Text step anywhere; the app does all the talking and listening. Do not show alerts or ask questions. Make every notification silent.";
 
   var AGENT_PRESETS = (root.FridayBrain && root.FridayBrain.PRESETS) || {
     openai: { label: "ChatGPT / OpenAI", name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini" },
@@ -168,6 +171,7 @@
     this.onRender = opts.onRender || function () {};
     this.onNight = opts.onNight || function () {};
     this.onChange30 = opts.onChange30 || function () {};
+    this.onLearnBubbles = opts.onLearnBubbles || function () {};
     this.values = loadSettings();
     if (!this.values.look) this.values.look = this.profile.defaultLook || "N";
     if (!this.values.shortcutName) this.values.shortcutName = this.profile.shortcutName || "Friday";
@@ -269,11 +273,33 @@
       btn.type = "button";
       btn.className = "layout-choice" + (self.values.layout === item.id ? " on" : "");
       btn.setAttribute("data-layout", item.id);
-      btn.innerHTML = "<b>" + item.name + "</b><span>" + item.blurb + "</span>";
+      btn.innerHTML = layoutPreview(item.id) + "<b>" + item.name + "</b><span>" + item.blurb + "</span>";
       btn.addEventListener("click", function () { self.setLayout(item.id); });
       grid.appendChild(btn);
     });
   };
+
+  // A small picture of each layout: where the orb sits and where the bubbles go.
+  var LP_FRAMES = { orbit: [0.46, 0.28], ring: [0.46, 0.26], dock: [0.42, 0.32], grid: [0.24, 0.2], arc: [0.34, 0.26], orbonly: [0.5, 0.34], immersive: [0.5, 0.47], orbtop: [0.27, 0.27], orbdock: [0.8, 0.15], orbclock: [0.58, 0.3], double: [0.44, 0.24], spiral: [0.3, 0.24], home: [0.22, 0.18], list: [0.28, 0.22], sheet: [0.25, 0.2] };
+  function layoutPreview(id) {
+    var W = 64, H = 112, f = LP_FRAMES[id] || LP_FRAMES.orbit, cx = W / 2, cy = f[0] * H, r = f[1] * W * 0.9;
+    var g = "lpg" + id, dots = [], i, a;
+    function dot(x, y, rr, gold) { dots.push('<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="' + (rr || 3.2) + '" fill="' + (gold ? "#e8c872" : "#3a3a3e") + '" stroke="rgba(232,200,114,.5)" stroke-width=".6"/>'); }
+    if (id === "orbit") { [[-1.5, -1.2], [1.4, -1.0], [-1.7, 0.4], [1.6, 0.6], [-0.7, 1.6], [0.9, 1.7], [0, -1.8]].forEach(function (p, k) { dot(cx + p[0] * r * 0.9, cy + p[1] * r * 0.85, 3.4, k % 2); }); }
+    else if (id === "ring" || id === "double") { for (i = 0; i < 8; i++) { a = i / 8 * Math.PI * 2; dot(cx + Math.cos(a) * r * 1.55, cy + Math.sin(a) * r * 1.55, 3, i % 2); } if (id === "double") for (i = 0; i < 10; i++) { a = i / 10 * Math.PI * 2 + 0.3; dot(cx + Math.cos(a) * r * 2.15, cy + Math.sin(a) * r * 2.15, 2.4, (i + 1) % 2); } }
+    else if (id === "dock" || id === "sheet") { if (id === "sheet") dots.push('<rect x="3" y="70" width="58" height="40" rx="7" fill="rgba(255,255,255,.06)"/>'); for (i = 0; i < 5; i++) dot(10 + i * 11, id === "sheet" ? 84 : 100, 3.4, i % 2); if (id === "sheet") for (i = 0; i < 5; i++) dot(10 + i * 11, 98, 3.4, (i + 1) % 2); }
+    else if (id === "grid" || id === "home") { for (i = 0; i < 12; i++) dot(12 + (i % 4) * 13.3, 50 + Math.floor(i / 4) * 14, 3.6, i % 3 === 0); if (id === "home") { dots.push('<rect x="5" y="94" width="54" height="14" rx="6" fill="rgba(255,255,255,.06)"/>'); for (i = 0; i < 4; i++) dot(13 + i * 12.7, 101, 3.2, i % 2); } }
+    else if (id === "arc") { for (i = 0; i < 7; i++) { a = Math.PI * (0.1 + 0.8 * i / 6); dot(cx - Math.cos(a) * 24, cy + 18 + Math.sin(a) * 22, 3.2, i % 2); } }
+    else if (id === "spiral") { for (i = 0; i < 9; i++) { a = i * 0.9; var rr = 10 + i * 2.6; dot(cx + Math.cos(a) * rr, cy + 26 + Math.sin(a) * rr * 0.7, 2.8, i % 2); } }
+    else if (id === "list") { for (i = 0; i < 5; i++) { dots.push('<rect x="8" y="' + (52 + i * 11) + '" width="48" height="7" rx="3.5" fill="' + (i % 2 ? "#3a3a3e" : "rgba(232,200,114,.55)") + '"/>'); } }
+    else { dots.push('<rect x="24" y="104" width="16" height="2.4" rx="1.2" fill="rgba(255,255,255,.35)"/>'); }
+    if (id === "orbclock") dots.push('<text x="32" y="22" fill="#efece8" font-size="13" font-weight="300" text-anchor="middle" font-family="-apple-system,sans-serif">9:41</text><rect x="20" y="27" width="24" height="2" rx="1" fill="rgba(255,255,255,.3)"/>');
+    if (id === "orbtop") dots.push('<rect x="12" y="60" width="40" height="3" rx="1.5" fill="rgba(255,255,255,.45)"/><rect x="18" y="66" width="28" height="3" rx="1.5" fill="rgba(255,255,255,.3)"/>');
+    if (id === "orbdock") dots.push('<rect x="12" y="62" width="40" height="3" rx="1.5" fill="rgba(255,255,255,.45)"/>');
+    var top = id === "immersive" ? "" : '<circle cx="44" cy="8" r="2" fill="rgba(255,255,255,.35)"/><circle cx="50" cy="8" r="2" fill="rgba(255,255,255,.35)"/><circle cx="56" cy="8" r="2" fill="rgba(255,255,255,.35)"/>';
+    return '<svg class="lp" viewBox="0 0 ' + W + ' ' + H + '" aria-hidden="true"><defs><radialGradient id="' + g + '"><stop offset="0" stop-color="#fff3cf"/><stop offset=".35" stop-color="#e8c872"/><stop offset=".7" stop-color="rgba(196,132,42,.45)"/><stop offset="1" stop-color="rgba(196,132,42,0)"/></radialGradient></defs>' +
+      top + '<circle cx="' + cx + '" cy="' + cy.toFixed(1) + '" r="' + (r * 1.35).toFixed(1) + '" fill="url(#' + g + ')"/><circle cx="' + cx + '" cy="' + cy.toFixed(1) + '" r="' + (r * 0.42).toFixed(1) + '" fill="#0b0b0c" stroke="rgba(255,255,255,.5)" stroke-width=".6"/>' + dots.join("") + '</svg>';
+  }
 
   FridaySettings.prototype._bindChips = function () {
     var self = this;
@@ -347,6 +373,8 @@
     this._bindConnections();
     this._bindShortcutSetup();
     this._bind30();
+    this._bind31();
+    this._bindNav();
     this._syncHeaders();
 
     var briefing = document.getElementById("set-briefing");
@@ -634,6 +662,180 @@
     if (acc) acc.addEventListener("toggle", function () { if (!acc.open) stopPreview(); });
     var hint = document.getElementById("voice-hint");
     if (hint) hint.textContent = "Tap a voice to choose it, or ▶ to hear it first. AI voices sound the most natural; Premium iPhone voices come next.";
+  };
+
+  // ---------- 3.1: Settings in pages ----------
+  FridaySettings.prototype._bindNav = function () {
+    var self = this;
+    var menu = document.getElementById("settings-menu"), back = document.getElementById("settings-back"), title = document.getElementById("settings-title");
+    function show(pid) {
+      document.querySelectorAll("#panel-settings .spage").forEach(function (p) { p.hidden = p.id !== "sp-" + pid; });
+      if (menu) menu.hidden = !!pid;
+      if (back) back.hidden = !pid;
+      var pg = pid ? document.getElementById("sp-" + pid) : null;
+      if (title) title.textContent = pg ? pg.getAttribute("data-title") : "Settings";
+      var body = document.querySelector("#panel-settings .body");
+      if (body) body.scrollTop = 0;
+      self.page = pid || "";
+      if (pid === "phone" && self._refreshPhone) self._refreshPhone();
+    }
+    this.showPage = show;
+    if (menu) menu.addEventListener("click", function (e) { var b = e.target.closest(".smenu-item"); if (b) show(b.getAttribute("data-page")); });
+    if (back) back.onclick = function () { show(""); };
+    root.__fridaySettingsShow = function (id) {
+      var el = document.getElementById(id);
+      var pg = el && el.closest ? el.closest(".spage") : null;
+      if (pg) show(pg.id.replace("sp-", ""));
+      if (el && el.tagName === "DETAILS") el.open = true;
+      return el;
+    };
+    show("");
+  };
+
+  // ---------- 3.1: talk time, phone jobs, Back Tap, contacts, widget styles ----------
+  FridaySettings.prototype._bind31 = function () {
+    var self = this, v = this.values, prof = this.profile || {};
+    var name = prof.assistantName || "Friday", scheme = name.toLowerCase();
+    function setText(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+    function copyText(text, msg) {
+      function fallback() {
+        var ta = document.createElement("textarea");
+        ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+        try { document.execCommand("copy"); } catch (e) {}
+        ta.remove();
+        self.onToast(msg);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(function () { self.onToast(msg); }, fallback);
+      else fallback();
+    }
+    document.querySelectorAll(".sc-assistant").forEach(function (e) { e.textContent = name; });
+    setText("bt-url", scheme + "://listen");
+    setText("rt-url", scheme + "://msg?kind=text&from=");
+    var cw = document.getElementById("btn-copy-wake");
+    if (cw) cw.onclick = function () { copyText(scheme + "://listen", "Copied. Paste it into Open URLs."); };
+
+    // bubbles that learn
+    var lb = document.getElementById("set-learn-bubbles");
+    if (lb) {
+      lb.checked = root.FridayStorage.get("bubblesLearn", false) === true;
+      lb.onchange = function () { self.onLearnBubbles(lb.checked); };
+    }
+
+    // talk time
+    var tt = document.getElementById("talk-time");
+    function syncTalk() { if (tt) tt.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-talk") === (v.talkTime || "normal")); }); }
+    if (tt) tt.addEventListener("click", function (e) { var b = e.target.closest("button[data-talk]"); if (!b) return; v.talkTime = b.getAttribute("data-talk"); saveSettings(v); syncTalk(); });
+    syncTalk();
+
+    // phone jobs: what's done in the app vs the Shortcut
+    var N = root.FridayNative;
+    function refreshPhone() {
+      var list = document.getElementById("phone-list");
+      if (!list) return;
+      var app = !!(N && N.isApp());
+      var hi = root.FridayStorage.get("homeInfo", null);
+      var homeOk = !!(app && N.home.available() && N.home._status && N.home._status.ok);
+      var rows = [
+        ["Timers ring when closed", app && N.notify.available() ? (N.notify.allowed() ? "In the app" : "Turn on notifications") : "Shortcut", app && N.notify.allowed()],
+        ["Reminders", app && N.calendar.available() ? "In the app" : "Shortcut", app && N.calendar.available()],
+        ["Calendar", app && N.calendar.available() ? "In the app" : "Shortcut", app && N.calendar.available()],
+        ["Battery", app ? "In the app" : "Shortcut", app],
+        ["Contacts", app && N.contacts.names().length ? N.contacts.names().length + " synced" : "Not synced", app && N.contacts.names().length],
+        ["Lights and scenes", homeOk ? "In the app" + (hi ? " (" + hi.lights + " lights)" : "") : "Shortcut", homeOk],
+        ["Apple TV, HomePod, music", "Shortcut", false],
+        ["Sending texts, calls", "Shortcut", false],
+        ["Alarms, Do Not Disturb, Camera", "Shortcut", false]
+      ];
+      list.innerHTML = "";
+      rows.forEach(function (r) {
+        var li = document.createElement("li");
+        if (r[2]) li.className = "inapp";
+        var a = document.createElement("span"); a.textContent = r[0];
+        var b = document.createElement("span"); b.textContent = r[1];
+        li.appendChild(a); li.appendChild(b); list.appendChild(li);
+      });
+    }
+    this._refreshPhone = refreshPhone;
+    refreshPhone();
+    var nb = document.getElementById("btn-notify-on");
+    if (nb) nb.onclick = function () { if (root.__fridayTurnOnNotifications) root.__fridayTurnOnNotifications().then(refreshPhone); };
+    var hc = document.getElementById("btn-home-check");
+    if (hc) hc.onclick = function () {
+      if (!N || !N.isApp() || !N.home.available()) { setText("home-status", "Lights go through your Shortcut in this version."); return; }
+      setText("home-status", "Checking…");
+      N.home._status = null;
+      N.home.ready().then(function (ok) {
+        var hi = root.FridayStorage.get("homeInfo", null);
+        setText("home-status", ok ? "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".") : "The app can't reach your Home in this install, so lights keep going through your Shortcut. (If you installed the Lights-test version and allowed Home access, try again.)");
+        refreshPhone();
+      });
+    };
+
+    // contacts
+    function syncContactsUi() {
+      var names = N ? N.contacts.names() : [];
+      var dl = document.getElementById("contact-names");
+      if (dl) { dl.innerHTML = ""; names.slice(0, 600).forEach(function (n) { var o = document.createElement("option"); o.value = n; dl.appendChild(o); }); }
+      var pc = document.getElementById("set-partner-contact");
+      if (pc && names.length) pc.setAttribute("list", "contact-names");
+      if (names.length) setText("contacts-status", names.length + " contacts synced. “Text Mom” or “call Daddy” now goes to the exact contact. Names only, kept on this phone.");
+    }
+    var cs = document.getElementById("btn-contacts-sync");
+    if (cs) cs.onclick = function () {
+      if (!N) { self.onToast("Contacts sync works in the installed app."); return; }
+      setText("contacts-status", "Syncing…");
+      N.contacts.sync().then(function (r) { if (r.ok) syncContactsUi(); else setText("contacts-status", r.reason); refreshPhone(); });
+    };
+    syncContactsUi();
+    root.addEventListener("friday:contacts", syncContactsUi);
+
+    // widget styles
+    var box = document.getElementById("widget-styles");
+    var dir = root.FRIDAY_BAKED_PROFILE === "batsie" ? "friday-batsie/scriptable/" : "scriptable/";
+    var src = null;
+    function load() {
+      if (src !== null) return Promise.resolve(src);
+      return fetch(dir + "Friday-Widget.js").then(function (r) { return r.ok ? r.text() : ""; }).then(function (t) { src = t || ""; return src; }, function () { return ""; });
+    }
+    var STYLES = [
+      ["obsidian", "Obsidian", "HD orb, greeting, weather and Talk."],
+      ["clock", "Clock", "Big live time, date and weather."],
+      ["upnext", "Up next", "Your next events and reminders."],
+      ["minimal", "Minimal", "Greeting and weather. No orb."],
+      ["classic", "Classic", "The original drawn orb."]
+    ];
+    function preview(id) {
+      var orb = '<radialGradient id="wo' + id + '"><stop offset="0" stop-color="#fff3cf"/><stop offset=".35" stop-color="#e8c872"/><stop offset=".7" stop-color="rgba(196,132,42,.4)"/><stop offset="1" stop-color="rgba(196,132,42,0)"/></radialGradient>';
+      var bg = '<rect width="160" height="76" rx="14" fill="#0b0a08"/><rect width="160" height="76" rx="14" fill="url(#wb' + id + ')"/>';
+      var defs = '<defs>' + orb + '<linearGradient id="wb' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c1810"/><stop offset="1" stop-color="#050505"/></linearGradient></defs>';
+      var t = function (x, y, w, h, a) { return '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="' + h / 2 + '" fill="rgba(239,236,232,' + a + ')"/>'; };
+      var body = "";
+      if (id === "obsidian" || id === "classic") body = t(12, 12, 38, 4, .5) + t(12, 24, 70, 8, .9) + t(12, 38, 56, 4, .5) + '<rect x="12" y="52" width="40" height="13" rx="6.5" fill="none" stroke="#e8c872"/>' + '<circle cx="122" cy="38" r="' + (id === "classic" ? 24 : 30) + '" fill="url(#wo' + id + ')"/><circle cx="122" cy="38" r="9" fill="#0b0b0c" stroke="rgba(255,255,255,.55)" stroke-width=".8"/>';
+      else if (id === "clock") body = '<text x="12" y="42" fill="#efece8" font-size="30" font-weight="200" font-family="-apple-system,sans-serif">9:41</text>' + t(12, 50, 60, 4, .55) + t(12, 60, 46, 4, .4) + '<circle cx="124" cy="38" r="26" fill="url(#wo' + id + ')"/><circle cx="124" cy="38" r="8" fill="#0b0b0c" stroke="rgba(255,255,255,.55)" stroke-width=".8"/>';
+      else if (id === "upnext") body = '<text x="12" y="18" fill="#f3dc9a" font-size="8" font-weight="600" font-family="-apple-system,sans-serif">UP NEXT</text>' + '<text x="12" y="31" fill="#d9b468" font-size="7" font-family="-apple-system,sans-serif">3:00 PM</text>' + t(12, 35, 76, 6, .9) + '<text x="12" y="53" fill="#d9b468" font-size="7" font-family="-apple-system,sans-serif">Tomorrow 9:00 AM</text>' + t(12, 57, 60, 6, .9) + '<circle cx="136" cy="20" r="14" fill="url(#wo' + id + ')"/><circle cx="136" cy="20" r="4.5" fill="#0b0b0c" stroke="rgba(255,255,255,.5)" stroke-width=".6"/>';
+      else body = t(12, 12, 38, 4, .5) + t(12, 30, 96, 9, .9) + t(12, 46, 70, 4, .5) + '<rect x="12" y="56" width="40" height="12" rx="6" fill="none" stroke="#e8c872"/>';
+      return '<svg viewBox="0 0 160 76" aria-hidden="true">' + defs + bg + body + '</svg>';
+    }
+    if (box) {
+      box.innerHTML = "";
+      STYLES.forEach(function (st) {
+        var c = document.createElement("div");
+        c.className = "wstyle";
+        c.innerHTML = preview(st[0]) + "<b>" + st[1] + "</b><small>" + st[2] + "</small>";
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "btn gold"; b.textContent = "Copy script";
+        b.onclick = function () {
+          load().then(function (t) {
+            if (!t) { self.onToast("Still loading. Tap again in a second."); return; }
+            copyText(t.replace(/const PRESET = "[a-z]+"/, 'const PRESET = "' + st[0] + '"'), st[1] + " widget copied. Paste it into a new Scriptable script.");
+          });
+        };
+        c.appendChild(b);
+        box.appendChild(c);
+      });
+      load();
+    }
   };
 
   // ---------- 3.0: recap, hands-free, routines, messages, charging display, battery ----------

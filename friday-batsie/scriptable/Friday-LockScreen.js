@@ -133,7 +133,7 @@ function sym(stack, name, size) {
 function centered(stack, fn) { const r = stack.addStack(); r.addSpacer(); fn(r); r.addSpacer(); return r }
 
 const widget = new ListWidget()
-widget.url = TAP_APP ? APP_URL : talkUrl()
+widget.url = TAP_APP ? APP_URL : APP_URL + "listen"
 widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000)
 
 if (FAMILY === "accessoryInline") {
@@ -164,7 +164,7 @@ if (FAMILY === "accessoryInline") {
     centered(widget, r => { const t = r.addText(wx ? wx.temp + "°" : "--"); t.font = Font.semiboldSystemFont(15) })
     widget.addSpacer()
   } else if (MODE === "timer") {
-    widget.url = TAP_APP ? APP_URL : talkUrl("10 minute timer")
+    widget.url = APP_URL + "do?text=" + encodeURIComponent("10 minute timer")
     widget.addSpacer()
     centered(widget, r => sym(r, "timer", 26))
     widget.addSpacer()

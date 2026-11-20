@@ -10,7 +10,9 @@ void (async function () {
 //   app                         make taps open the app instead of Talk
 //   orb n | orb x1 | orb x2 | orb h2   which HD orb to show (default n)
 //   classic                     use the original drawn orb instead of the HD one
+//   obsidian | clock | upnext | minimal   which design (or set PRESET below)
 // Example: clear medium-top orb x2
+// Tapping opens the app already listening (3.1).
 // No API keys in this script.
 
 // ---- Profile ----
@@ -20,6 +22,7 @@ const TERM = "ma'am"
 const APP_URL = "jarvis://"
 const SITE_URL = "https://wicked9787.github.io/friday/?u=batsie"
 // -----------------
+const PRESET = "obsidian" // obsidian | clock | upnext | minimal | classic
 
 const GOLD = "#d9b468", GOLD_HI = "#f3dc9a", SILVER = "#e4e7ec", INK = "#f2efe9"
 const FALLBACK = { lat: 36.6, lon: -83.66 }
@@ -30,7 +33,8 @@ const STYLE = words.find(w => w === "clear" || w === "tinted" || w === "solid") 
 const TINT = Math.min(90, Math.max(0, parseInt(words.find(w => /^\d+$/.test(w)) || "25", 10))) / 100
 const SLOT = words.find(w => /^(small|medium|large)-[a-z]+$/.test(w))
 const TAP_APP = words.includes("app")
-const CLASSIC = words.includes("classic")
+const DESIGN = words.find(w => ["obsidian", "clock", "upnext", "minimal", "classic"].includes(w)) || PRESET
+const CLASSIC = words.includes("classic") || DESIGN === "classic"
 const ORB_LOOK = (words[words.indexOf("orb") + 1] && words.includes("orb")) ? words[words.indexOf("orb") + 1] : "n"
 const FAMILY = config.widgetFamily || "large"
 
@@ -39,7 +43,10 @@ function talkUrl(text) {
   if (text) u += "&input=text&text=" + encodeURIComponent(text)
   return u
 }
-const TAP = TAP_APP ? APP_URL : talkUrl()
+// Since 3.1 the app takes the tap and starts listening (the Shortcut no longer listens).
+const LISTEN_URL = APP_URL + "listen"
+function doUrl(text) { return APP_URL + "do?text=" + encodeURIComponent(text) }
+const TAP = TAP_APP ? APP_URL : LISTEN_URL
 
 // ---------- helpers ----------
 function seeded(seed) {
@@ -348,7 +355,7 @@ function talkPill(parent, w, h) {
   p.borderColor = col(GOLD, 0.7)
   p.borderWidth = 1
   p.cornerRadius = h / 2
-  p.url = TAP_APP ? APP_URL : talkUrl()
+  p.url = TAP
   p.addSpacer()
   symbol(p, "mic.fill", h * 0.36, INK)
   p.addSpacer(6)
@@ -366,7 +373,7 @@ function wxLine(stack, wx, size) {
 const BUBBLES = [
   { k: "Lights", sym: "lightbulb", gold: true, url: talkUrl("lights on") },
   { k: "TV", sym: "tv", gold: false, url: talkUrl("tv on") },
-  { k: "Timer", sym: "timer", gold: true, url: talkUrl("10 minute timer") },
+  { k: "Timer", sym: "timer", gold: true, url: doUrl("10 minute timer") },
   { k: "Alarm", sym: "alarm", gold: false, url: talkUrl("set an alarm") },
   { k: "Music", sym: "music.note", gold: true, url: talkUrl("music") },
   { k: "Notes", sym: "note.text", gold: false, url: "mobilenotes://" }
@@ -387,13 +394,115 @@ function bubble(parent, b, d) {
 }
 
 // ---------- layouts ----------
+// ---------- 3.1 designs: clock, up next, minimal ----------
+function liveTime(stack, size, hex) {
+  const t = stack.addDate(new Date())
+  t.applyTimeStyle()
+  t.font = Font.lightSystemFont(size)
+  t.textColor = col(hex, 1)
+  t.minimumScaleFactor = 0.6
+  t.lineLimit = 1
+  return t
+}
+async function upNext(max) {
+  const out = []
+  const now = new Date(), end = new Date(now.getTime() + 36 * 3600 * 1000)
+  try {
+    const evs = await CalendarEvent.between(now, end, [])
+    evs.filter(e => !e.isAllDay && e.endDate > now).forEach(e => out.push({ t: e.startDate, title: e.title }))
+  } catch (e) {}
+  try {
+    const rs = await Reminder.allIncomplete()
+    rs.filter(r => r.dueDate && r.dueDate < end).forEach(r => out.push({ t: r.dueDate, title: r.title, rem: true }))
+  } catch (e) {}
+  out.sort((a, b) => a.t - b.t)
+  return out.slice(0, max)
+}
+function whenText(d) {
+  const now = new Date(), tom = new Date(now)
+  tom.setDate(now.getDate() + 1)
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  if (d < now) return "Now"
+  if (d.toDateString() === now.toDateString()) return time
+  if (d.toDateString() === tom.toDateString()) return "Tomorrow " + time
+  return d.toLocaleDateString("en-US", { weekday: "short" }) + " " + time
+}
+async function buildClock(w, size) {
+  const W = size.width, H = size.height
+  const dateText = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+  if (FAMILY === "small") {
+    w.backgroundImage = await background("small", size, { x: W / 2, y: H * 0.7, r: H * 0.18, reach: 1.0 })
+    w.setPadding(12, 12, 12, 12)
+    const top = w.addStack(); top.addSpacer(); liveTime(top, 36, INK); top.addSpacer()
+    const dd = w.addStack(); dd.addSpacer(); label(dd, dateText, 10, INK, 0.7, "med"); dd.addSpacer()
+    w.addSpacer()
+    return w
+  }
+  const wx = await weather()
+  const big = FAMILY === "large"
+  w.backgroundImage = await background(FAMILY, size, { x: W - H * (big ? 0.24 : 0.46), y: H * (big ? 0.2 : 0.5), r: H * (big ? 0.15 : 0.3), reach: 1.1 })
+  w.setPadding(14, 16, 14, 16)
+  const c = w.addStack(); c.layoutVertically(); c.size = new Size(W * 0.6, 0)
+  label(c, ASSISTANT.toUpperCase(), 9, INK, 0.6, "bold")
+  liveTime(c, big ? 58 : 44, INK)
+  label(c, dateText, 12, INK, 0.75, "med")
+  c.addSpacer(4)
+  const wr = c.addStack(); wr.centerAlignContent(); wxLine(wr, wx, 11)
+  if (big) {
+    w.addSpacer()
+    const items = await upNext(3)
+    items.forEach(n => {
+      const r = w.addStack(); r.centerAlignContent()
+      label(r, whenText(n.t), 11, GOLD_HI, 0.95, "bold"); r.addSpacer(8)
+      const tt = label(r, n.title, 12, INK, 0.9, "med"); tt.lineLimit = 1
+      w.addSpacer(4)
+    })
+  }
+  w.addSpacer()
+  return w
+}
+async function buildUpNext(w, size) {
+  const W = size.width, H = size.height
+  const max = FAMILY === "small" ? 1 : FAMILY === "medium" ? 2 : 5
+  const items = await upNext(max)
+  w.backgroundImage = await background(FAMILY, size, FAMILY === "small" ? { x: W * 0.8, y: H * 0.2, r: H * 0.15, reach: 0.9 } : { x: W - H * 0.3, y: H * 0.26, r: H * (FAMILY === "large" ? 0.12 : 0.22), reach: 0.9 })
+  w.setPadding(14, 16, 14, 16)
+  label(w, "UP NEXT", 9, GOLD_HI, 0.9, "bold")
+  w.addSpacer(6)
+  if (!items.length) { const n = label(w, "Nothing coming up. Enjoy it.", FAMILY === "small" ? 13 : 15, INK, 0.9, "med"); n.lineLimit = 3 }
+  items.forEach(it => {
+    label(w, whenText(it.t), 10, GOLD, 0.95, "bold")
+    const t = label(w, (it.rem ? "\u25E6 " : "") + it.title, FAMILY === "small" ? 14 : 13, INK, 1, "med")
+    t.lineLimit = FAMILY === "small" ? 3 : 1
+    w.addSpacer(5)
+  })
+  w.addSpacer()
+  return w
+}
+async function buildMinimal(w, size) {
+  const wx = await weather()
+  w.backgroundImage = await background(FAMILY, size, null)
+  w.setPadding(14, 16, 14, 16)
+  label(w, ASSISTANT.toUpperCase(), 9, INK, 0.6, "bold")
+  w.addSpacer()
+  const g = label(w, greeting(), FAMILY === "small" ? 16 : 20, INK, 1, "bold"); g.lineLimit = 2; g.minimumScaleFactor = 0.7
+  w.addSpacer(4)
+  const wr = w.addStack(); wr.centerAlignContent(); wxLine(wr, wx, 11)
+  if (FAMILY !== "small") { w.addSpacer(8); talkPill(w, 96, 28) }
+  w.addSpacer()
+  return w
+}
+
 async function build() {
-  if (!CLASSIC) HD_IMG = await hdOrb(ORB_LOOK)
+  if (!CLASSIC && DESIGN !== "minimal") HD_IMG = await hdOrb(ORB_LOOK)
   const w = new ListWidget()
   const size = widgetSize(FAMILY)
   const W = size.width, H = size.height
   w.url = TAP
   w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000)
+  if (DESIGN === "clock") return await buildClock(w, size)
+  if (DESIGN === "upnext") return await buildUpNext(w, size)
+  if (DESIGN === "minimal") return await buildMinimal(w, size)
   const day = new Date().toLocaleDateString("en-US", { weekday: "long" }).toUpperCase()
 
   if (FAMILY === "small") {
@@ -448,7 +557,7 @@ async function build() {
   const side = (c, top, bot) => { c.addSpacer(R - dy); bubble(c, top, d); c.addSpacer(dy * 2 - d); bubble(c, bot, d); c.addSpacer(R - dy) }
   side(colA, BUBBLES[5], BUBBLES[4])          // Notes, Music
   bubble(colB, BUBBLES[0], d)                 // Lights
-  const mid = colB.addStack(); mid.size = new Size(d, R * 2 - d); mid.url = talkUrl()
+  const mid = colB.addStack(); mid.size = new Size(d, R * 2 - d); mid.url = TAP
   bubble(colB, BUBBLES[3], d)                 // Alarm
   side(colC, BUBBLES[1], BUBBLES[2])          // TV, Timer
 

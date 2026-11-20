@@ -8,7 +8,7 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.0";
+  var APP_VERSION = "3.1";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -62,6 +62,10 @@
     grid: { cyN: 0.24, radiusK: 0.20 },
     arc: { cyN: 0.34, radiusK: 0.26 },
     orbonly: { cyN: 0.50, radiusK: 0.34 },
+    immersive: { cyN: 0.50, radiusK: 0.47 },
+    orbtop: { cyN: 0.27, radiusK: 0.27 },
+    orbdock: { cyN: 0.80, radiusK: 0.15 },
+    orbclock: { cyN: 0.58, radiusK: 0.30 },
     double: { cyN: 0.44, radiusK: 0.24 },
     spiral: { cyN: 0.30, radiusK: 0.24 },
     home: { cyN: 0.22, radiusK: 0.18 },
@@ -70,7 +74,8 @@
   };
 
   function applyOrbFrame(mode, revealed) {
-    var m = (mode === "orbonly" && revealed) ? "dock" : (mode || "orbit");
+    var oo = window.FridayBubbles && window.FridayBubbles.ORB_ONLY ? window.FridayBubbles.ORB_ONLY : { orbonly: 1 };
+    var m = (oo[mode] && revealed) ? "dock" : (mode || "orbit");
     var f = LAYOUT_FRAMES[m] || LAYOUT_FRAMES.orbit;
     if (orb) orb.setFrame(f);
     var stage = document.getElementById("stage");
@@ -85,7 +90,19 @@
       if (settings._syncHeaders) settings._syncHeaders();
     }
     if (bubbles) bubbles.setLayout(id);
-    else applyOrbFrame(id, id !== "orbonly");
+    else applyOrbFrame(id, !(window.FridayBubbles && window.FridayBubbles.ORB_ONLY && window.FridayBubbles.ORB_ONLY[id]));
+    var sc = document.getElementById("stage-clock");
+    if (sc) { sc.hidden = id !== "orbclock"; tickStageClock(); }
+  }
+
+  function tickStageClock() {
+    var el = document.getElementById("stage-clock");
+    if (!el || el.hidden) return;
+    var d = new Date(), h = d.getHours() % 12 || 12, m = String(d.getMinutes()).padStart(2, "0");
+    var days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    el.querySelector(".sc-time").textContent = h + ":" + m;
+    el.querySelector(".sc-date").textContent = days[d.getDay()] + ", " + months[d.getMonth()] + " " + d.getDate();
   }
 
   function applyAppIcon(id) {
@@ -148,6 +165,7 @@
     closePanels();
     var el = document.getElementById("panel-" + id);
     if (el) { el.classList.add("open"); if (orb) orb.stop(); }
+    if (id === "settings" && settings && settings.showPage) settings.showPage("");
     if (id === "neural") {
       if (neural) neural.start();
     } else if (neural) neural.stop();
@@ -240,7 +258,32 @@
     return true;
   }
 
+  // "text daddy hi" -> "text DADDY!! saying hi" (names from Contacts, if synced)
+  function fixContacts(cmd) {
+    var N = window.FridayNative;
+    if (!N || !N.contacts.names().length) return cmd;
+    var m = String(cmd || "").match(/^(text|message|send a text to|send a message to|call|facetime)\s+(.+)$/i);
+    if (!m) return cmd;
+    var verb = m[1].toLowerCase(), rest = m[2], who = null, body = null;
+    var isCall = verb === "call" || verb === "facetime";
+    var sm = rest.match(/^(.+?)\s+(?:saying|that says|and say|to say)\s+([\s\S]*)$/i);
+    if (sm) { who = sm[1]; body = sm[2]; }
+    else if (isCall) who = rest;
+    else {
+      var words = rest.split(/\s+/);
+      for (var n = Math.min(3, words.length - 1); n >= 1; n--) {
+        var cand = words.slice(0, n).join(" ");
+        if (N.contacts.resolve(cand.replace(/^(my|the)\s+/i, ""))) { who = cand; body = words.slice(n).join(" "); break; }
+      }
+    }
+    if (!who) return cmd;
+    var exact = N.contacts.resolve(who.replace(/^(my|the)\s+/i, ""));
+    if (!exact) return cmd;
+    return isCall ? verb + " " + exact : "text " + exact + " saying " + (body || "");
+  }
+
   function runShortcut(command) {
+    command = fixContacts(command);
     var url = shortcutUrl(command);
     FridayStorage.set("lastShortcut", String(command).slice(0, 60));
     emitActivity("shortcut", "Sent to Shortcut: " + String(command).slice(0, 60));
@@ -625,6 +668,7 @@
       }
       var direct = directAppUrl(text);
       if (direct) {
+        if (bubbles) { if (!bubbles.noteAppMentions("open " + direct.name)) bubbles.noteUsage("url:" + direct.url); bubbles.refreshSuggestions(); }
         setCaption("Opening " + direct.name + ".");
         goUrl(direct.url, opts);
         return;
@@ -647,6 +691,17 @@
       }
       var ex = extras ? extras.handle(text, profile) : null;
       if (ex) { await runExtra(ex, text, opts); return; }
+      if (window.FridayPhone) {
+        var ph = await window.FridayPhone.handle(text, profile);
+        if (ph) {
+          chat._push("user", text);
+          chat._push("assistant", ph.say);
+          setCaption(ph.say);
+          emitActivity(ph.tool === "home" ? "home" : ph.tool === "battery" ? "core" : "calendar", ph.say.slice(0, 70));
+          await voice.speak(ph.say, profile);
+          return;
+        }
+      }
       var act = life ? life.handle(text) : null;
       if (!act && /^(run |start )?(a )?(diagnostics?|system check|self[- ]?check|health check)$|^check (yourself|your systems)$/.test(low)) {
         chat._push("user", text);
@@ -668,7 +723,7 @@
           await voice.speak(act.say, profile);
           return;
         }
-        if (act.panel) openPanel(act.panel);
+        if (act.panel) { openPanel(act.panel); if (bubbles) { bubbles.noteUsage("panel:" + act.panel); bubbles.refreshSuggestions(); } }
         else refreshOpen();
         setCaption(act.say || "");
         if (act.url) { await voice.speak(act.say, profile); goUrl(act.url, opts); return; }
@@ -841,6 +896,15 @@
       return;
     }
     if (ex.recap) { chat._push("user", text); await runRecap(); return; }
+    if (ex.contacts) {
+      chat._push("user", text);
+      var N0 = window.FridayNative;
+      var cr = N0 ? await N0.contacts.sync() : { ok: false, reason: "Contacts sync works in the installed app." };
+      var cl = cr.ok ? "Synced " + cr.count + " contacts. Texts and calls will go to the right person now." : cr.reason;
+      chat._push("assistant", cl); setCaption(cl); emitActivity("contacts", cl);
+      await voice.speak(cl, profile);
+      return;
+    }
     if (ex.partner) {
       chat._push("user", text);
       var line = "Sending that to " + ex.partner.to + ".";
@@ -849,6 +913,16 @@
       emitActivity("shortcut", "Message for " + ex.partner.to);
       await voice.speak(line, profile);
       goShortcut(ex.partner.command, opts);
+      return;
+    }
+    if (ex.textSend) {
+      chat._push("user", text);
+      var tl = "Texting " + ex.textSend.to.replace(/[^\w' -]+/g, "").trim() + ".";
+      chat._push("assistant", tl);
+      setCaption(tl);
+      emitActivity("shortcut", "Text to " + ex.textSend.to);
+      await voice.speak(tl, profile);
+      goShortcut(ex.textSend.command, opts);
       return;
     }
     if (ex.translate) { chat._push("user", text); await runTranslate(ex.translate); return; }
@@ -865,8 +939,14 @@
   var pendingMessage = false;
   function onIncomingMessage(L) {
     var pc = extras ? extras.partnerCfg(profile) : { display: "" };
-    var who = pc.display || L.app || "your partner";
-    var line = "Message from " + who + ": " + L.text;
+    var who, line;
+    if (L.kind === "text" || L.kind === "email") {
+      who = L.from || "someone";
+      line = (L.kind === "email" ? "Email from " : "Text from ") + who + ": " + L.text;
+    } else {
+      who = pc.display || L.app || "your partner";
+      line = "Message from " + who + ": " + L.text;
+    }
     chat._push("assistant", line);
     toast(line);
     emitActivity("speaking", "Message from " + who);
@@ -892,6 +972,14 @@
     if (L.action === "msg") { onIncomingMessage(L); return; }
     if (L.action === "charging" || L.action === "bedside") { openBedside(); return; }
     if (L.action === "unplugged") { closeBedside(); return; }
+    if (L.action === "listen" || L.action === "wake") {
+      closePanels();
+      setTimeout(function () {
+        if (voice.speaking) voice.stopSpeak();
+        if (!voice.listening && !busy) { handsFree = handsFreeOn(); beginListen(); }
+      }, 350);
+      return;
+    }
     if ((L.action === "say" || L.action === "do") && (L.query.text || L.query.q)) { handleUtterance(L.query.text || L.query.q); return; }
     if (!L.action) continueLeaveQueue();
   }
@@ -918,6 +1006,46 @@
     clearInterval(openBedside._wx);
     bedside.close();
   }
+
+  // ---------- 3.1: bills and countdowns ring through iPhone notifications ----------
+  var _alertsT = 0;
+  function scheduleLifeAlerts() {
+    clearTimeout(_alertsT);
+    _alertsT = setTimeout(async function () {
+      var N = window.FridayNative, D = window.FridayLifeData;
+      if (!N || !N.notify.allowed() || !D) return;
+      var s = (settings && settings.values) || settingsData || {};
+      var old = FridayStorage.get("alertKeys", []) || [];
+      for (var i = 0; i < old.length; i++) await N.notify.cancel(old[i]);
+      var keys = [];
+      function nine(daysAhead) { var at = new Date(); at.setHours(9, 0, 0, 0); at.setDate(at.getDate() + daysAhead); return at; }
+      if (s.billAlerts !== false) D.bills().forEach(function (b) {
+        var st = D.billStatus(b);
+        if (!st || st.paid || st.days < 0 || st.days > 40) return;
+        var at = nine(st.days), key = "bill:" + (b.id || b.name) + ":" + at.toDateString();
+        keys.push(key);
+        N.notify.at(key, b.name + " bill is due today", (b.amount ? D.money(b.amount) + ". " : "") + "Tell " + (profile.assistantName || "Friday") + " when it's paid.", at);
+      });
+      if (s.countdownAlerts !== false) D.countdowns().forEach(function (c) {
+        var n = D.countdownDays(c);
+        if (n == null || n < 0 || n > 60) return;
+        var at = nine(n), key = "cd:" + (c.id || c.name) + ":" + at.toDateString();
+        keys.push(key);
+        N.notify.at(key, c.name + " is today!", "Counting down with " + (profile.assistantName || "Friday") + ".", at);
+      });
+      FridayStorage.set("alertKeys", keys);
+    }, 800);
+  }
+  async function turnOnNotifications() {
+    var N = window.FridayNative;
+    if (!N || !N.notify.available()) { toast("Notifications work in the installed app."); return false; }
+    var ok = await N.notify.ask();
+    FridayStorage.set("notifyAsked", true);
+    toast(ok ? "Notifications are on." : "Notifications are off. Turn them on in iPhone Settings, " + (profile.assistantName || "Friday") + ", Notifications.");
+    if (ok) scheduleLifeAlerts();
+    return ok;
+  }
+  window.__fridayTurnOnNotifications = turnOnNotifications;
 
   // ---------- 3.0: battery savers for the orb ----------
   var lastActivity = Date.now();
@@ -1095,8 +1223,7 @@
     document.getElementById("btn-wn-shortcut").onclick = function () {
       done();
       openPanel("settings");
-      var acc = document.getElementById("accord-partner");
-      if (acc) { acc.open = true; setTimeout(function () { acc.scrollIntoView({ block: "start", behavior: "smooth" }); }, 120); }
+      if (window.__fridaySettingsShow) window.__fridaySettingsShow("phone-status");
     };
   }
 
@@ -1221,6 +1348,10 @@
         if (settings && settings._bindLooks) settings._bindLooks();
       },
       onNight: function () { applyNight(); },
+      onLearnBubbles: function (on) {
+        bubbles.setLearning(on);
+        toast(on ? "Starting small. The bubbles you use will show up over time." : "Your full layout is back.");
+      },
       onAddBubble: function (spec) {
         bubbles.add(spec);
         closePanels();
@@ -1229,7 +1360,13 @@
       }
     });
 
+    bubbles.onLearned = function (added) {
+      var names = added.map(function (b) { return b.label || "a bubble"; });
+      toast("Added " + names.slice(0, 2).join(" and ") + " to your map. You use " + (names.length > 1 ? "them" : "it") + " a lot.");
+    };
     applyLayout(settings.values.layout || "orbit", true);
+    tickStageClock();
+    setInterval(tickStageClock, 15000);
     window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
@@ -1525,6 +1662,13 @@
     });
     setInterval(applyPower, 5000);
     applyPower();
+    window.addEventListener("friday:bills", scheduleLifeAlerts);
+    window.addEventListener("friday:countdowns", scheduleLifeAlerts);
+    scheduleLifeAlerts();
+    // keep contact names fresh (no prompt if already allowed)
+    if (window.FridayNative && window.FridayNative.contacts.available() && window.FridayNative.contacts.syncedAt() && Date.now() - window.FridayNative.contacts.syncedAt() > 3 * 864e5) {
+      setTimeout(function () { window.FridayNative.contacts.sync(); }, 5000);
+    }
     var CapApp = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
     if (CapApp) {
       try { CapApp.addListener("appUrlOpen", function (e) { handleLink(e && e.url); }); } catch (e) {}
@@ -1539,4 +1683,4 @@
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 })();
-// build 4 (v3.0)
+// build 5 (v3.1)

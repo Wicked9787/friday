@@ -165,8 +165,19 @@
       self._onVolume(self.volume, "user");
       var now = performance.now();
       if (self.listening && self.opts.onSilence && !self._silenceFired) {
-        if (self.volume > 0.12) { self._heard = true; self._lastLoud = now; }
-        if ((self._heard && now - self._lastLoud > 1300) || (!self._heard && now - self._listenStart > 8000)) {
+        // learn the room's background noise in the first half second
+        if (now - self._listenStart < 450) self._floor = Math.max(self._floor || 0, self.volume);
+        var loud = Math.max(0.1, Math.min(0.3, (self._floor || 0) * 1.8 + 0.06));
+        if (self.volume > loud) {
+          if (!self._heard) self._speechStart = now;
+          self._heard = true; self._lastLoud = now;
+        }
+        var st = root.FridayStorage.get("settings", {}) || {};
+        var pause = st.talkTime === "short" ? 1100 : st.talkTime === "long" ? 2900 : 1900;
+        // a short burst ("um", "so") gets extra time to keep going
+        if (self._heard && now - (self._speechStart || now) < 900) pause += 600;
+        var maxLen = st.talkTime === "long" ? 45000 : 30000;
+        if ((self._heard && now - self._lastLoud > pause) || (!self._heard && now - self._listenStart > 8000) || (now - self._listenStart > maxLen)) {
           self._silenceFired = true;
           setTimeout(function () { self.opts.onSilence(); }, 0);
         }
@@ -189,6 +200,8 @@
     this._listenStart = performance.now();
     this._lastLoud = this._listenStart;
     this._silenceFired = false;
+    this._floor = 0;
+    this._speechStart = 0;
     this._chunks = [];
     this._onState("listen-start");
     try {
@@ -305,11 +318,11 @@
   var TTS_URL = "https://api.groq.com/openai/v1/audio/speech";
   var TTS_MODEL = "canopylabs/orpheus-v1-english";
   var MOOD_VOICE = {
-    normal: { rate: 1.02, pitch: 1.0, tag: "" },
-    focus: { rate: 1.08, pitch: 1.0, tag: "" },
-    hype: { rate: 1.1, pitch: 1.08, tag: "[cheerful]" },
-    calm: { rate: 0.94, pitch: 0.98, tag: "[calm]" },
-    bedtime: { rate: 0.9, pitch: 0.96, tag: "[whisper]" }
+    normal: { rate: 1.0, pitch: 1.0, tag: "" },
+    focus: { rate: 1.04, pitch: 1.0, tag: "" },
+    hype: { rate: 1.06, pitch: 1.05, tag: "[cheerful]" },
+    calm: { rate: 0.97, pitch: 0.99, tag: "[calm]" },
+    bedtime: { rate: 0.94, pitch: 0.97, tag: "[whisper]" }
   };
 
   FridayVoice.AI_VOICES = AI_VOICES;
@@ -436,6 +449,8 @@
         if (ctx.state !== "running") return fail(new Error("audio-suspended"));
         var src = ctx.createBufferSource();
         src.buffer = buffer;
+        var sp = parseFloat((root.FridayStorage.get("settings", {}) || {}).voiceSpeed);
+        if (sp > 0.79 && sp < 1.26 && Math.abs(sp - 1) > 0.01 && src.playbackRate) src.playbackRate.value = sp;
         self._outGain.gain.value = volume;
         src.connect(self._outGain);
         self._src = src;
@@ -443,7 +458,7 @@
         src.start();
         self._realEnvelope();
         // Safety net: never wait longer than the clip plus a little.
-        guard = setTimeout(finish, (buffer.duration || 5) * 1000 + 1500);
+        guard = setTimeout(finish, (buffer.duration || 5) * 1000 / ((src.playbackRate && src.playbackRate.value) || 1) + 1500);
       };
       var resume = ctx.state === "running" ? Promise.resolve() : (ctx.resume ? ctx.resume() : Promise.resolve());
       Promise.resolve(resume).catch(function () {}).then(function () {
@@ -517,14 +532,14 @@
     });
   };
 
-  FridayVoice.prototype._speakOne = async function (text, profile, gen, lang) {
+  FridayVoice.prototype._speakOne = async function (text, profile, gen, lang, pre) {
     var mv = this._moodVoice();
     if (lang) { await this._speakSystem(text, profile, mv, lang); return; }
     if (this._aiAllowed()) {
       try {
         var parts = splitForTTS(text, 190);
         var voiceId = this._aiVoiceId();
-        var next = this._fetchClip(parts[0], voiceId, mv.tag);
+        var next = pre || this._fetchClip(parts[0], voiceId, mv.tag);
         for (var i = 0; i < parts.length; i++) {
           if (!this.speaking || gen !== this._gen) return;
           var buf = await next;
@@ -560,7 +575,12 @@
     try {
       while (this._queue && this._queue.length && gen === this._gen) {
         var item = this._queue.shift();
-        await this._speakOne(item.text, item.profile, gen, item.lang);
+        var nx = this._queue[0];
+        if (nx && !nx.lang && !nx._pre && this._aiAllowed()) {
+          nx._pre = this._fetchClip(splitForTTS(nx.text, 190)[0], this._aiVoiceId(), this._moodVoice().tag);
+          nx._pre.catch(function () {});
+        }
+        await this._speakOne(item.text, item.profile, gen, item.lang, item._pre);
       }
     } finally {
       if (gen === this._gen) {

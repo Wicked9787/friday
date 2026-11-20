@@ -242,9 +242,12 @@
   };
 
   var FLOW = { dock: 1, grid: 1, home: 1, list: 1, sheet: 1 };
+  // Orb-only layouts: just the orb; swipe up from the bottom to reveal the bubbles.
+  var ORB_ONLY = { orbonly: 1, immersive: 1, orbtop: 1, orbdock: 1, orbclock: 1 };
+  FridayBubbles.ORB_ONLY = ORB_ONLY;
 
   FridayBubbles.prototype._effectiveMode = function () {
-    if (this.mode === "orbonly") return (this.revealed || this.edit) ? "dock" : "orbonly";
+    if (ORB_ONLY[this.mode]) return (this.revealed || this.edit) ? "dock" : "orbonly";
     return this.mode || "orbit";
   };
 
@@ -255,9 +258,10 @@
       if (c.indexOf("layout-") === 0 || c === "bubbles-revealed" || c === "flow-tray") stage.classList.remove(c);
     });
     stage.classList.add("layout-" + (this.mode || "orbit"));
+    if (ORB_ONLY[this.mode] && this.mode !== "orbonly") stage.classList.add("layout-orbonly");
     var eff = this._effectiveMode();
     if (FLOW[eff]) stage.classList.add("flow-tray");
-    if (this.mode === "orbonly" && (this.revealed || this.edit)) stage.classList.add("bubbles-revealed");
+    if (ORB_ONLY[this.mode] && (this.revealed || this.edit)) stage.classList.add("bubbles-revealed");
   };
 
   FridayBubbles.prototype._bindReveal = function () {
@@ -266,7 +270,7 @@
     if (!zone) return;
     var y0 = 0, x0 = 0, tracking = false;
     zone.addEventListener("touchstart", function (e) {
-      if (self.mode !== "orbonly" || !e.touches[0]) return;
+      if (!ORB_ONLY[self.mode] || !e.touches[0]) return;
       x0 = e.touches[0].clientX;
       y0 = e.touches[0].clientY;
       tracking = true;
@@ -285,7 +289,7 @@
 
   FridayBubbles.prototype.setLayout = function (mode) {
     this.mode = mode || "orbit";
-    this.revealed = this.mode !== "orbonly";
+    this.revealed = !ORB_ONLY[this.mode];
     this._stageClass();
     this.onLayout(this.mode, this.revealed);
     this.render();
@@ -680,7 +684,7 @@
 
   FridayBubbles.prototype.setEdit = function (on) {
     this.edit = !!on;
-    if (this.edit && this.mode === "orbonly") this.revealed = true;
+    if (this.edit && ORB_ONLY[this.mode]) this.revealed = true;
     this._stageClass();
     this.onLayout(this.mode, this.revealed);
     this.render();
@@ -688,6 +692,10 @@
 
   FridayBubbles.prototype.remove = function (id) {
     var b = this.byId(id);
+    if (b && (b.learned || (this.learning && this.learning())) && !b.suggest) {
+      var dk = this.usageKey(b), dl = root.FridayStorage.get("dismissedSuggestions", []) || [];
+      if (dk && dl.indexOf(dk) < 0) { dl.push(dk); root.FridayStorage.set("dismissedSuggestions", dl); }
+    }
     if (b && b.suggest && b.suggestKey) {
       var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
       if (dismissed.indexOf(b.suggestKey) < 0) {
@@ -770,6 +778,7 @@
   // Returns true if it already re-rendered.
   FridayBubbles.prototype.refreshSuggestions = function () {
     var self = this;
+    var learnedNow = this._learnStep();
     var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
     var usage = root.FridayStorage.get("usage", {}) || {};
     var memory = root.FridayStorage.get("memory", []) || [];
@@ -825,11 +834,71 @@
       self.list.push(c);
       changed = true;
     });
-    if (changed) {
+    if (changed || learnedNow) {
       this.save();
       this.render();
     }
-    return changed;
+    return changed || learnedNow;
+  };
+
+  // ---------- 3.1: bubbles that learn ----------
+  // Start with a few bubbles; the ones you actually use come back (or get added) over time.
+  // Removing one keeps it removed. Turning learning off brings your full layout back.
+  FridayBubbles.prototype.learning = function () { return root.FridayStorage.get("bubblesLearn", false) === true; };
+  FridayBubbles.prototype.setLearning = function (on) {
+    var self = this;
+    on = !!on;
+    if (on === this.learning()) return;
+    var usage = root.FridayStorage.get("usage", {}) || {};
+    if (on) {
+      var full = this.list.filter(function (b) { return !b.suggest; });
+      root.FridayStorage.set("bubblesFull", full);
+      var core = { memory: 1, lists: 1, timer: 1, chat: 1 };
+      var start = full.filter(function (b) { return b.action === "panel" && core[b.panel]; });
+      var used = full.filter(function (b) { return start.indexOf(b) < 0 && (usage[self.usageKey(b)] || 0) >= 3; })
+        .sort(function (a, b) { return (usage[self.usageKey(b)] || 0) - (usage[self.usageKey(a)] || 0); }).slice(0, 2);
+      this.list = start.concat(used);
+      if (!this.list.length) this.list = full.slice(0, 4);
+      root.FridayStorage.set("bubblesLearn", true);
+    } else {
+      var saved = root.FridayStorage.get("bubblesFull", null);
+      if (Array.isArray(saved) && saved.length) {
+        var extra = this.list.filter(function (b) { return b.learned && !saved.some(function (f) { return self.usageKey(f) === self.usageKey(b); }); });
+        this.list = saved.concat(extra);
+      }
+      root.FridayStorage.set("bubblesLearn", false);
+    }
+    this.list.forEach(function (b, i) { b.slot = i; });
+    this.save();
+    if (!this.refreshSuggestions()) this.render();
+  };
+  FridayBubbles.prototype._learnStep = function () {
+    if (!this.learning()) return false;
+    var self = this;
+    var usage = root.FridayStorage.get("usage", {}) || {};
+    var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
+    var full = root.FridayStorage.get("bubblesFull", []) || [];
+    var have = {};
+    this.list.forEach(function (b) { have[self.usageKey(b)] = 1; });
+    var added = [];
+    // 1) your own bubbles come back once you've used them a few times
+    full.forEach(function (b) {
+      var k = self.usageKey(b);
+      if (have[k] || dismissed.indexOf(k) >= 0 || (usage[k] || 0) < 3) return;
+      var c = Object.assign({}, b, { learned: true, slot: self.list.length });
+      self.list.push(c); have[k] = 1; added.push(c);
+    });
+    // 2) suggestions you keep using become regular bubbles
+    this.list.forEach(function (b) {
+      if (b.suggest && (usage[b.suggestKey] || 0) >= 3 && dismissed.indexOf(b.suggestKey) < 0) {
+        b.suggest = false; b.learned = true; added.push(b);
+      }
+    });
+    if (added.length) {
+      this.save();
+      if (this.onLearned) this.onLearned(added);
+    }
+    return added.length > 0;
   };
 
   FridayBubbles.prototype.activate = function (b) {

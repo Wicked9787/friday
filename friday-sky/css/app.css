@@ -1101,3 +1101,54 @@ body.bedside-on #caption, body.bedside-on #edit-bar { visibility: hidden; }
 .voice-status.good { color: #8fd18f; }
 .voice-status.bad { color: #f0a868; }
 #btn-test-ai-voice { margin: 0 0 10px; }
+
+/* ---------- 3.1: orb-only layouts ---------- */
+#stage-clock { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 74px); text-align: center; pointer-events: none; z-index: 2; }
+#stage-clock .sc-time { font-size: 88px; font-weight: 200; letter-spacing: -2px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+#stage-clock .sc-date { margin-top: 8px; font-size: 17px; color: var(--muted); }
+.layout-orbclock:not(.bubbles-revealed) #caption { bottom: calc(40px + var(--safe-bottom)); }
+/* immersive: the orb takes the screen, controls fade back until touched */
+.layout-immersive:not(.bubbles-revealed) #chrome { opacity: 0.22; transition: opacity .6s ease; }
+.layout-immersive:not(.bubbles-revealed) #chrome:hover, .layout-immersive:not(.bubbles-revealed) #chrome:focus-within, .layout-immersive:not(.bubbles-revealed) #chrome:active { opacity: 1; }
+.layout-immersive:not(.bubbles-revealed) #chips { display: none; }
+.layout-immersive:not(.bubbles-revealed) #caption .name { opacity: 0; }
+.layout-immersive:not(.bubbles-revealed) #caption { bottom: calc(18px + var(--safe-bottom)); }
+/* orb up top: her words big in the middle */
+.layout-orbtop:not(.bubbles-revealed) #caption { bottom: auto; top: 54%; }
+.layout-orbtop:not(.bubbles-revealed) #caption .line { font-size: 22px; line-height: 1.35; }
+/* orb dock: small orb low, words above it */
+.layout-orbdock:not(.bubbles-revealed) #caption { bottom: calc(24% + var(--safe-bottom)); }
+.layout-orbdock:not(.bubbles-revealed) #caption .line { font-size: 20px; }
+.layout-orbdock:not(.bubbles-revealed) #chips { top: calc(var(--safe-top) + 70px); bottom: auto; margin-top: 0; }
+
+/* ---------- 3.1: settings pages ---------- */
+#panel-settings header { gap: 6px; }
+#settings-back { font-size: 26px; line-height: 1; padding-bottom: 3px; }
+#settings-back[hidden] { display: none; }
+.smenu { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 16px; }
+.smenu[hidden], .spage[hidden] { display: none; }
+.smenu-item { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; text-align: left; gap: 2px 10px; width: 100%;
+  border: 1px solid var(--line); background: rgba(255,255,255,0.03); color: var(--ink); border-radius: 16px; padding: 14px 16px; font: inherit; }
+.smenu-item:active { background: rgba(232,200,114,0.08); }
+.smenu-t { font-size: 17px; font-weight: 600; grid-column: 1; }
+.smenu-s { font-size: 13px; color: var(--muted); grid-column: 1; }
+.smenu-chev { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--gold); font-size: 24px; }
+.spage { animation: spage-in .22s ease; }
+@keyframes spage-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.phone-list { list-style: none; margin: 8px 0 10px; padding: 0; font-size: 14px; }
+.phone-list li { display: flex; justify-content: space-between; padding: 7px 2px; border-bottom: 1px solid var(--line); }
+.phone-list li span:last-child { color: var(--muted); }
+.phone-list li.inapp span:last-child { color: #8fd18f; }
+
+/* ---------- 3.1: layout previews and widget styles ---------- */
+.layout-choice { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.layout-choice .lp { width: 72px; height: 126px; border-radius: 13px; background: #050505; border: 1px solid var(--line); margin-bottom: 6px; flex: none; }
+.layout-choice span { font-size: 12px; line-height: 1.35; }
+.widget-styles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.wstyle { border: 1px solid var(--line); border-radius: 16px; padding: 10px; background: rgba(255,255,255,0.03); text-align: center; }
+.wstyle svg { width: 100%; height: auto; border-radius: 14px; display: block; }
+.wstyle b { display: block; margin: 8px 0 2px; font-size: 14px; }
+.wstyle small { display: block; color: var(--muted); font-size: 12px; min-height: 30px; }
+.wstyle .btn { margin-top: 8px; font-size: 13px; padding: 8px 10px; }
+.neural-stats { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.neural-stats b { font-size: 14px; }

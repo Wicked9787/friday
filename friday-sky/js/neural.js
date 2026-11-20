@@ -23,13 +23,21 @@
     { id: "money", label: "Money", ring: 2, kind: "helper", tip: "Money helper and your bills.", panel: "money" },
     { id: "messages", label: "Messages", ring: 2, kind: "helper", tip: "Drafting texts and emails." },
     { id: "agents", label: "Connections", ring: 2, kind: "helper", tip: "Other AIs you added (backup brains and “ask …”)." },
+    { id: "translate", label: "Translator", ring: 2, kind: "helper", tip: "Says things in other languages with a matching iPhone voice." },
     { id: "lists", label: "Lists", ring: 3, kind: "life", tip: "Grocery, to-do and your own lists.", panel: "lists" },
     { id: "bills", label: "Bills", ring: 3, kind: "life", tip: "Bills and due dates.", panel: "money" },
     { id: "timers", label: "Timers", ring: 3, kind: "life", tip: "Running timers.", panel: "timer" },
     { id: "countdowns", label: "Countdowns", ring: 3, kind: "life", tip: "Days until the things you're waiting for.", panel: "countdowns" },
     { id: "notes", label: "Notes", ring: 3, kind: "life", tip: "Quick notes.", panel: "notes" },
-    { id: "weather", label: "Weather", ring: 3, kind: "life", tip: "Weather and the morning briefing." },
-    { id: "shortcut", label: "Shortcut", ring: 3, kind: "phone", tip: "Phone-only jobs: lights, TV, HomePod, alarms, reminders, calendar, texts, calls." }
+    { id: "weather", label: "Weather", ring: 3, kind: "life", tip: "Weather, the morning briefing and the nightly recap." },
+    { id: "routines", label: "Routines", ring: 3, kind: "life", tip: "Phrases that do several things, like “movie time” or “I'm home”." },
+    { id: "habits", label: "Habits", ring: 3, kind: "life", tip: "Water and the habits you track, with streaks.", panel: "habits" },
+    { id: "spending", label: "Spending", ring: 3, kind: "life", tip: "Your spending log.", panel: "money" },
+    { id: "calendar", label: "Calendar", ring: 3, kind: "life", tip: "Reminders and calendar events, added right in the app when the iPhone allows it." },
+    { id: "shortcut", label: "Shortcut", ring: 4, kind: "phone", tip: "Jobs only your Shortcut can do: Apple TV, HomePod, texts, calls, alarms, Do Not Disturb." },
+    { id: "home", label: "Home", ring: 4, kind: "phone", tip: "Lights and scenes. Right in the app if iOS allows it, otherwise through your Shortcut." },
+    { id: "partner", label: "Partner", ring: 4, kind: "phone", tip: "Messages between Friday and Jarvis, read out loud." },
+    { id: "contacts", label: "Contacts", ring: 4, kind: "phone", tip: "Contact names synced on this phone, so texts and calls find the right person." }
   ];
   var LINKS = [
     ["core", "thinking"], ["core", "memory"], ["core", "voice"], ["core", "vision"],
@@ -37,7 +45,9 @@
     ["memory", "thinking"], ["vision", "thinking"],
     ["voice", "shortcut"], ["memory", "lists"], ["memory", "notes"], ["vision", "timers"],
     ["money", "bills"], ["memory", "countdowns"], ["research", "weather"], ["core", "shortcut"],
-    ["lists", "notes"], ["timers", "countdowns"], ["bills", "countdowns"], ["weather", "shortcut"], ["lists", "timers"]
+    ["lists", "notes"], ["timers", "countdowns"], ["bills", "countdowns"], ["weather", "shortcut"], ["lists", "timers"],
+    ["thinking", "translate"], ["core", "routines"], ["routines", "shortcut"], ["memory", "habits"], ["money", "spending"],
+    ["core", "calendar"], ["calendar", "countdowns"], ["voice", "partner"], ["partner", "contacts"], ["shortcut", "home"], ["core", "home"], ["shortcut", "contacts"]
   ];
   // What lights up for each kind of activity: a path of nodes the pulses travel along.
   var PATHS = {
@@ -57,7 +67,15 @@
     timers: ["core", "vision", "timers"],
     countdowns: ["core", "memory", "countdowns"],
     notes: ["core", "memory", "notes"],
-    weather: ["core", "thinking", "research", "weather"]
+    weather: ["core", "thinking", "research", "weather"],
+    translate: ["core", "thinking", "translate"],
+    routines: ["core", "routines"],
+    habits: ["core", "memory", "habits"],
+    spending: ["core", "thinking", "money", "spending"],
+    calendar: ["core", "calendar"],
+    home: ["core", "home"],
+    partner: ["core", "voice", "partner"],
+    contacts: ["core", "shortcut", "contacts"]
   };
 
   function fib(n, i, offset) {
@@ -82,9 +100,9 @@
     this.log = (store() && store().get("neuralLog", [])) || [];
     this.selected = null;
     this.lastBrain = "";
-    var rings = { 1: [], 2: [], 3: [] };
+    var rings = { 1: [], 2: [], 3: [], 4: [] };
     DEFS.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
-    var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.56, off: 0.0 }, 3: { r: 0.90, y: 0.52, off: 0.25 } };
+    var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.52, off: 0.0 }, 3: { r: 0.92, y: 0.5, off: 0.25 }, 4: { r: 0.5, y: -0.98, off: 0.6 } };
     var self = this;
     this.nodes = {};
     DEFS.forEach(function (d) {
@@ -98,6 +116,14 @@
       self.nodes[d.id] = { def: d, p: p, sx: 0, sy: 0, sz: 0, scale: 1, glow: 0, seed: Math.random() * 100 };
     });
     var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile && root.FRIDAY_CONFIG.getProfile().assistantName) || "Friday";
+    try {
+      var pcfg = root.FridayExtras && root.FridayExtras.partnerCfg ? root.FridayExtras.partnerCfg(root.FRIDAY_CONFIG.getProfile()) : null;
+      if (pcfg && pcfg.display) this.nodes.partner.def = Object.assign({}, this.nodes.partner.def, { label: pcfg.display });
+    } catch (e) {}
+    // 3.1: the map grows. Every memory, routine, habit, list, countdown and connection
+    // becomes a small bubble around the part of her it belongs to.
+    this.leaves = {};
+    this._seen = null;
     this.nodes.core.def = Object.assign({}, this.nodes.core.def, { label: name, tip: "This is " + name + ". Everything she does flows through here." });
     // background synapse dust
     this.dust = [];
@@ -144,10 +170,12 @@
     var map = {
       "friday:lists": ["lists", "List updated"], "friday:bills": ["bills", "Bills updated"],
       "friday:countdowns": ["countdowns", "Countdown updated"], "friday:notes": ["notes", "Note saved"],
-      "friday:timers": ["timers", "Timers changed"], "friday:memory": ["memory", "Memory updated"]
+      "friday:timers": ["timers", "Timers changed"], "friday:memory": ["memory", "Memory updated"],
+      "friday:habits": ["habits", "Habits updated"], "friday:spending": ["spending", "Spending logged"],
+      "friday:routines": ["routines", "Routines changed"], "friday:contacts": ["contacts", "Contacts synced"]
     };
     Object.keys(map).forEach(function (ev) {
-      root.addEventListener(ev, function () { self.pulse(map[ev][0], map[ev][1]); });
+      root.addEventListener(ev, function () { self.pulse(map[ev][0], map[ev][1]); if (self.running) self._syncLeaves(); });
     });
     root.addEventListener("friday:activity", function (e) {
       var d = e.detail || {};
@@ -198,7 +226,9 @@
     this._renderLog();
     this._renderStats();
     var self = this;
-    this._statsTimer = setInterval(function () { self._renderStats(); if (self.selected) self._renderCard(); }, 1000);
+    this._syncLeaves();
+    this._statsTimer = setInterval(function () { self._renderStats(); if (self.selected) self._renderCard(); if (++self._lt % 3 === 0) self._syncLeaves(); }, 1000);
+    this._lt = 0;
     var loop = function (ts) {
       if (!self.running) return;
       self._raf = requestAnimationFrame(loop);
@@ -211,6 +241,58 @@
     this.running = false;
     if (this._raf) cancelAnimationFrame(this._raf);
     clearInterval(this._statsTimer);
+  };
+
+  // ---------- growth: one small bubble per thing she knows ----------
+  function hashStr(t) { var h = 2166136261; t = String(t || ""); for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+  function shortLabel(t) { t = String(t || "").replace(/\s+/g, " ").trim(); return t.length > 26 ? t.slice(0, 24) + "…" : t; }
+  FridayNeural.prototype._wantLeaves = function () {
+    var S = store(), out = [];
+    if (!S) return out;
+    function add(parent, key, label, tip) { out.push({ id: parent + ":" + hashStr(key), parent: parent, label: shortLabel(label), tip: tip || label }); }
+    try {
+      (S.get("memory", []) || []).slice(-60).forEach(function (m) { var t = (m && m.text) || m; if (t) add("memory", t, t, (m.auto ? "She learned this on her own: " : "You told her: ") + t); });
+      (S.get("connections", []) || []).filter(function (x) { return x.type === "agent"; }).forEach(function (a) { add("agents", a.id || a.name, a.name, a.name + (a.backup ? " · backup brain" : " · say “ask " + a.name + " …”")); });
+      var X = root.FridayExtras;
+      if (X) {
+        X.routines().forEach(function (r) { add("routines", r.id || r.phrase, r.phrase, "“" + r.phrase + "” · " + ((r.steps || []).length ? (r.steps || []).join(", ") : "greeting only")); });
+        X.habits().list.forEach(function (h) { add("habits", h.id, h.name, h.name + (h.goal > 1 ? " · goal " + h.goal + " a day" : " · once a day")); });
+      }
+      var l = S.get("lists", null);
+      if (l && l.items) Object.keys(l.items).forEach(function (k) { var n = l.items[k].filter(function (x) { return !x.done; }).length; add("lists", "list:" + k, k.charAt(0).toUpperCase() + k.slice(1), (k === "to-do" ? "To-do" : k) + " list · " + n + " open"); });
+      (S.get("countdowns", []) || []).forEach(function (c) { add("countdowns", c.id || c.name, c.name, c.name); });
+      (S.get("bills", []) || []).forEach(function (b) { add("bills", b.id || b.name, b.name, b.name + (b.amount ? " · $" + b.amount : "")); });
+    } catch (e) {}
+    return out;
+  };
+  FridayNeural.prototype._syncLeaves = function () {
+    var S = store(), self = this, want = this._wantLeaves(), keep = {};
+    if (!this._seen) this._seen = {};
+    var seenList = (S && S.get("neuralSeen", null)) || null;
+    var firstTime = !seenList;
+    if (seenList && !this._seenLoaded) { seenList.forEach(function (k) { self._seen[k] = 1; }); this._seenLoaded = true; }
+    var byParent = {};
+    want.forEach(function (w) { (byParent[w.parent] = byParent[w.parent] || []).push(w); });
+    Object.keys(byParent).forEach(function (pid) {
+      var arr = byParent[pid], parent = self.nodes[pid];
+      if (!parent) return;
+      var n = arr.length, rad = Math.min(0.22, 0.09 + 0.014 * Math.sqrt(n));
+      arr.forEach(function (w, k) {
+        keep[w.id] = 1;
+        var d = fib(Math.max(n, 6), k, parent.seed);
+        var pos = [parent.p[0] + d[0] * rad, parent.p[1] + d[1] * rad * 1.1, parent.p[2] + d[2] * rad];
+        var lf = self.leaves[w.id];
+        if (!lf) {
+          var isNew = !firstTime && !self._seen[w.id];
+          lf = self.leaves[w.id] = { id: w.id, parent: pid, p: pos, born: isNew ? performance.now() : -1, seed: Math.random() * 100 };
+          if (isNew) { self.pulse(pid, "New: " + w.label, false); }
+        }
+        lf.p = pos; lf.label = w.label; lf.tip = w.tip;
+      });
+    });
+    Object.keys(this.leaves).forEach(function (id) { if (!keep[id]) delete self.leaves[id]; });
+    Object.keys(keep).forEach(function (k) { self._seen[k] = 1; });
+    try { if (S) S.set("neuralSeen", Object.keys(keep)); } catch (e) {}
   };
 
   // ---------- live numbers ----------
@@ -234,6 +316,14 @@
         return line;
       }
       if (id === "voice") { var sv = S.get("settings", {}) || {}; var uv = S.get("usage.brain", null); var tts = uv && uv.date === new Date().toDateString() ? (uv.tts || 0) : 0; return (sv.voiceURI && sv.voiceURI.indexOf("ai:") === 0 ? "AI voice " + sv.voiceURI.slice(3) + " · about " + Math.max(0, 100 - tts) + " left today" : "iPhone voice"); }
+      if (id === "routines" && root.FridayExtras) { var rr = root.FridayExtras.routines(); return rr.length + " routine" + (rr.length === 1 ? "" : "s") + ": " + rr.map(function (x) { return x.phrase; }).join(", "); }
+      if (id === "habits" && root.FridayExtras) { var hh = root.FridayExtras.habits(); return hh.list.length ? hh.list.map(function (x) { return x.name; }).join(", ") : "None yet"; }
+      if (id === "spending" && root.FridayExtras) { var tt = root.FridayExtras.spendTotals(); return "This month $" + Math.round(tt.month) + " · this week $" + Math.round(tt.week); }
+      if (id === "contacts") { var cn = (S.get("contacts", null) || {}).names; return cn && cn.length ? cn.length + " contact names synced" : "Not synced yet (Settings → Messages & Contacts)"; }
+      if (id === "home") { var hi = S.get("homeInfo", null); return hi && hi.lights ? hi.lights + " lights in the app" : "Through your Shortcut"; }
+      if (id === "calendar") return root.FridayNative && root.FridayNative.isApp() && root.FridayNative.calendar.available() ? "Right in the app" : "Through your Shortcut";
+      if (id === "partner" && root.FridayExtras) { var pc = root.FridayExtras.partnerCfg(root.FRIDAY_CONFIG.getProfile()); return "Say “tell " + pc.display + " …” · texts " + pc.contact; }
+      if (id === "translate") return "Say “how do you say … in Spanish”";
       if (id === "weather") return "Open-Meteo · morning briefing " + ((S.get("settings", {}) || {}).morningBriefing === false ? "off" : "on");
       if (id === "shortcut") { var last = S.get("lastShortcut", ""); return last ? "Last job: “" + last + "”" : "Ready for phone-only jobs"; }
       if (id === "core") { var s2 = S.get("settings", {}) || {}; var moods = { normal: "Normal", focus: "Focus", hype: "Hype", calm: "Calm", bedtime: "Bedtime" }; return "Mood: " + (moods[s2.mood || "normal"] || "Normal") + (root.FridayNight && root.FridayNight.isNight() ? " · night mode" : ""); }
@@ -251,6 +341,10 @@
       if (id === "bills") { var b = S.get("bills", []) || []; return b.length ? String(b.length) : ""; }
       if (id === "notes") { var nn = (S.get("notes", []) || []).length; return nn ? String(nn) : ""; }
       if (id === "countdowns") { var c = (S.get("countdowns", []) || []).length; return c ? String(c) : ""; }
+      if (id === "routines" && root.FridayExtras) return String(root.FridayExtras.routines().length);
+      if (id === "habits" && root.FridayExtras) { var h = root.FridayExtras.habits(); return h.list.length ? String(h.list.length) : ""; }
+      if (id === "spending" && root.FridayExtras) { var m = root.FridayExtras.spendTotals().month; return m ? "$" + Math.round(m) : ""; }
+      if (id === "contacts") { var cn = (S.get("contacts", null) || {}).names; return cn && cn.length ? String(cn.length) : ""; }
     } catch (e) {}
     return "";
   };
@@ -356,6 +450,39 @@
     this.packets = keep.slice(-260);
     if (this.active && Math.random() < 0.06) this.pulse(this.active === "thinking" ? "thinking" : this.active, null, true);
 
+    // learned bubbles around their parent
+    var nowMs = performance.now();
+    Object.keys(this.leaves).forEach(function (id) {
+      var lf = self.leaves[id], par = P[lf.parent];
+      if (!par) return;
+      var wob = [Math.sin(t * 0.5 + lf.seed) * 0.01, Math.cos(t * 0.43 + lf.seed) * 0.01, 0];
+      var q = self._project([lf.p[0] + wob[0], lf.p[1] + wob[1], lf.p[2]], cx, cy, R);
+      lf.sx = q.x; lf.sy = q.y; lf.sz = q.z;
+      var grow = lf.born < 0 ? 1 : Math.min(1, (nowMs - lf.born) / 1200);
+      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 4000);
+      var depth = (q.z + 1) / 2, a = (0.25 + depth * 0.6) * grow;
+      ctx.strokeStyle = rgba(GOLD_SOFT, 0.08 + 0.1 * depth + pop * 0.4);
+      ctx.lineWidth = 0.6 * dpr;
+      ctx.beginPath(); ctx.moveTo(par.x, par.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+      var rr = (1.8 + 1.2 * depth + pop * 3) * dpr * q.s * grow;
+      if (pop > 0 || self.selected === id) {
+        var gg = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rr * 5);
+        gg.addColorStop(0, rgba(GOLD, 0.35 * Math.max(pop, self.selected === id ? 0.7 : 0)));
+        gg.addColorStop(1, rgba(GOLD, 0));
+        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(q.x, q.y, rr * 5, 0, TAU); ctx.fill();
+      }
+      ctx.fillStyle = rgba(lf.parent === "memory" ? SILVER : GOLD_SOFT, a);
+      ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, TAU); ctx.fill();
+      if (self.selected === id || pop > 0.5) {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.font = "500 " + 9.5 * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = rgba([239, 236, 232], 0.9);
+        ctx.fillText(lf.label, q.x, q.y - rr - 6 * dpr);
+        ctx.globalCompositeOperation = "lighter";
+      }
+    });
+
     // nodes, back to front
     var order = Object.keys(this.nodes).sort(function (a, b) { return self.nodes[a].sz - self.nodes[b].sz; });
     order.forEach(function (id) {
@@ -428,6 +555,11 @@
       var lim = (n.def.kind === "core" ? 40 : 30) * self.dpr;
       if (d < lim && d < bd) { bd = d; best = id; }
     });
+    Object.keys(this.leaves || {}).forEach(function (id) {
+      var lf = self.leaves[id];
+      var d = Math.hypot(lf.sx - x, lf.sy - y);
+      if (d < 16 * self.dpr && d < bd * 0.8) { bd = d; best = id; }
+    });
     this.selected = best === this.selected ? null : best;
     if (best) this.flash[best] = 1;
     this._renderCard();
@@ -437,15 +569,22 @@
     var card = document.getElementById("neural-card");
     if (!card) return;
     if (!this.selected) { card.classList.add("hidden"); return; }
-    var n = this.nodes[this.selected], d = n.def, self = this;
+    var lf = this.leaves && this.leaves[this.selected];
+    if (lf) {
+      var pd = this.nodes[lf.parent] ? this.nodes[lf.parent].def : {};
+      lf = { def: { label: lf.label, tip: lf.tip, panel: pd.panel } };
+    }
+    var n = lf || this.nodes[this.selected];
+    if (!n) { card.classList.add("hidden"); return; }
+    var d = n.def, self = this;
     card.classList.remove("hidden");
-    var key = this.selected + "|" + this._info(this.selected);
+    var key = this.selected + "|" + (lf ? d.tip : this._info(this.selected));
     if (card._key === key) return;
     card._key = key;
     card.innerHTML = "";
     var h = document.createElement("b"); h.textContent = d.label || "Core";
     var p = document.createElement("p"); p.textContent = d.tip || "";
-    var live = document.createElement("div"); live.className = "neural-live"; live.textContent = this._info(this.selected);
+    var live = document.createElement("div"); live.className = "neural-live"; live.textContent = lf ? "Learned" : this._info(this.selected);
     card.appendChild(h); card.appendChild(p); card.appendChild(live);
     if (d.panel && this.onOpen) {
       var b = document.createElement("button");
@@ -476,6 +615,7 @@
     var tts = u && u.date === today ? (u.tts || 0) : 0;
     var st = root.FridayBrain && root.FridayBrain.status ? root.FridayBrain.status() : { busy: [], backups: [] };
     var parts = [
+      ["Learned", String(Object.keys(this.leaves || {}).length)],
       ["Replies today", String(replies)],
       ["Brains", st.busy && st.busy.length ? st.busy.length + " resting" : "all ready"],
       ["Backups", String((st.backups || []).length)],

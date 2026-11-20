@@ -284,6 +284,23 @@
     this.onTimerDone = opts.onTimerDone || function () {};
   }
 
+  // 3.1: the iPhone rings the timer even if the app is closed (needs the notifications add-on).
+  function timerTitle(t) { return /^Timer( \d+)?$/.test(t.name) ? "Timer" : t.name + " timer"; }
+  function notifyTimer(t) {
+    var N = root.FridayNative;
+    if (!N || !N.notify.available()) return;
+    var go = function () { N.notify.at("timer:" + t.id, timerTitle(t), "Time's up.", new Date(t.end)); };
+    if (N.notify.allowed()) go();
+    else N.notify.ask().then(function (ok) { S().set("notifyAsked", true); if (ok) go(); });
+  }
+  function unnotifyTimer(id) { var N = root.FridayNative; if (N && N.notify.available()) N.notify.cancel("timer:" + id); }
+  // With notifications on (or not asked yet), timers don't need the Shortcut any more.
+  function phoneRingsTimers() {
+    var N = root.FridayNative;
+    if (!N || !N.notify.available()) return false;
+    return N.notify.allowed() || !S().get("notifyAsked", false);
+  }
+
   FridayLife.prototype.startTimer = function (seconds, name) {
     seconds = Math.max(1, Math.round(seconds));
     var list = timers();
@@ -292,9 +309,11 @@
     list.push(t);
     saveTimers(list);
     this.ensureTick();
+    notifyTimer(t);
     return t;
   };
   FridayLife.prototype.cancelTimer = function (id) {
+    unnotifyTimer(id);
     saveTimers(timers().filter(function (t) { return t.id !== id; }));
   };
   FridayLife.prototype.ensureTick = function () {
@@ -305,7 +324,7 @@
       list.forEach(function (t) { (t.end <= now ? fired : left).push(t); });
       if (fired.length) {
         saveTimers(left);
-        fired.forEach(function (t) { self.onTimerDone(t, now - t.end > 5000); });
+        fired.forEach(function (t) { unnotifyTimer(t.id); self.onTimerDone(t, now - t.end > 5000); });
       }
       fire("friday:tick");
       if (!left.length) { clearInterval(tickHandle); tickHandle = 0; }
@@ -513,7 +532,7 @@
       var tl = timers();
       if (!tl.length) return { say: "No timers are running." };
       if (/\ball\b|\bevery\b|timers$/.test(t) || !m[1]) {
-        if (tl.length > 1 && m[1] && !/\ball\b/.test(t)) { /* named below */ } else { saveTimers([]); return { say: tl.length > 1 ? "Cancelled all your timers." : "Timer cancelled." }; }
+        if (tl.length > 1 && m[1] && !/\ball\b/.test(t)) { /* named below */ } else { tl.forEach(function (x) { unnotifyTimer(x.id); }); saveTimers([]); return { say: tl.length > 1 ? "Cancelled all your timers." : "Timer cancelled." }; }
       }
       name = String(m[1] || "").toLowerCase();
       var hit = tl.filter(function (x) { return x.name.toLowerCase().indexOf(name) >= 0; })[0];
@@ -535,7 +554,7 @@
         else if (nm2 && !/^(\d|a|an|one|two|three|four|five|ten|minute|second|hour|new|quick)/.test(nm2[1]) && !/(minute|second|hour)/.test(nm2[1])) name = nm2[1];
         var timer = this.startTimer(secs, name);
         var s2 = S().get("settings", {}) || {};
-        var hand = s2.iphoneTimers !== false && secs >= (+s2.iphoneTimerMin || 10) * 60;
+        var hand = s2.iphoneTimers !== false && secs >= (+s2.iphoneTimerMin || 10) * 60 && !phoneRingsTimers();
         return {
           say: (timer.name !== "Timer" && !/^Timer \d/.test(timer.name) ? cap(timer.name) + " timer" : "Timer") + " set for " + spokenDuration(secs) + "." + (hand ? " I'm also setting it on your iPhone." : ""),
           panel: "timer",

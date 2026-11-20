@@ -86,7 +86,7 @@
     return {
       names: names,
       display: names[0] || "",
-      contact: String(s.partnerContact || names[0] || "").trim(),
+      contact: String(s.partnerContact || (isB ? "DADDY!!" : names[0]) || "").trim(),
       prefix: "From " + mine + ":",
       on: s.partnerMessages !== false
     };
@@ -129,7 +129,9 @@
       var txt = String(q.text || q.t || "").trim();
       var pm = txt.match(/^(?:💬\s*)?from (friday|jarvis)\s*:\s*/i);
       if (pm) txt = txt.slice(pm[0].length);
-      return txt ? { action: "msg", text: txt.trim(), app: pm ? cap(pm[1].toLowerCase()) : "" } : null;
+      // texts or emails handed over by an automation: friday://msg?kind=text&from=Mom&text=...
+      var kind = String(q.kind || (pm ? "partner" : (q.from ? "text" : "partner"))).toLowerCase();
+      return txt ? { action: "msg", text: txt.trim(), app: pm ? cap(pm[1].toLowerCase()) : "", from: String(q.from || "").trim(), kind: kind } : null;
     }
     return { action: action, query: q };
   }
@@ -336,6 +338,32 @@
     return { today: bits, tomorrow: tom };
   }
 
+  // ---------- 3.1: "text Mom I'm on my way" goes straight to the Shortcut (no AI step) ----------
+  function textSend(text) {
+    var raw = String(text || "").trim().replace(/[\u2019]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/^(please |can you |could you )/i, "").replace(/[.!]+$/, "");
+    if (/\b(draft|write|compose|reword|rewrite|help me)\b/i.test(raw)) return null;
+    var m = raw.match(/^(?:send (?:a )?(?:text|message) to|text|message)\s+(.+)$/i);
+    if (!m) return null;
+    var rest = m[1], who = null, body = null;
+    var sm = rest.match(/^(.+?)\s+(?:saying|that says|and say|to say)\s+(.+)$/i);
+    var N = root.FridayNative, names = N ? N.contacts.names() : [];
+    if (sm) { who = sm[1]; body = sm[2]; }
+    else {
+      var words = rest.split(/\s+/);
+      if (names.length) {
+        for (var k = Math.min(3, words.length - 1); k >= 1; k--) {
+          var cand = words.slice(0, k).join(" ");
+          if (N.contacts.resolve(cand.replace(/^(my|the)\s+/i, ""))) { who = cand; body = words.slice(k).join(" "); break; }
+        }
+      }
+      if (!who && words.length >= 2) { who = words[0]; body = words.slice(1).join(" "); }
+    }
+    if (!who || !body) return null;
+    who = who.replace(/^(my|the)\s+/i, "");
+    var exact = names.length ? (N.contacts.resolve(who) || who) : who;
+    return { to: exact, body: cap(body), command: "text " + exact + " saying " + cap(body) };
+  }
+
   // ---------- one entry point for all of the above ----------
   /* Returns null, or { say, panel, tool, translate, routine, partner, recap, bedside } */
   function handle(text, profile) {
@@ -344,9 +372,12 @@
     var r;
     if (/^(?:start |turn on |open |go to |switch to )?(?:bedside|charging|nightstand|night stand|clock|standby|stand by) (?:mode|display|screen|clock)$/.test(t)) return { bedside: "open" };
     if (/^(?:exit|close|stop|leave|turn off|end) (?:the )?(?:bedside|charging|nightstand|night stand|clock|standby|stand by) (?:mode|display|screen|clock)$/.test(t)) return { bedside: "close" };
+    if (/^(?:sync|update|refresh|load|import) (?:my |the )?contacts$/.test(t)) return { contacts: "sync" };
     if (/^(?:nightly recap|night recap|evening recap|recap(?: my day)?|(?:give me |run )?(?:my )?(?:nightly |daily )?recap|how was my day|wrap up (?:my|the) day|end of day recap)$/.test(t)) return { recap: true };
     var pm = partnerMessage(text, profile);
     if (pm) return { partner: pm };
+    var ts = textSend(text);
+    if (ts) return { textSend: ts };
     var tr = parseTranslate(text);
     if (tr) return { translate: tr };
     if ((r = handleSpending(t))) return r;
