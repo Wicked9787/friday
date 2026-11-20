@@ -68,7 +68,16 @@
   };
 
   FridayVoice.prototype._ensureAudio = async function () {
-    if (this._stream) return;
+    if (this._stream) {
+      var live = this._stream.getAudioTracks().some(function (t) { return t.readyState === "live"; });
+      if (live && this._ctx && this._ctx.state !== "closed") {
+        if (this._ctx.state !== "running") { try { await this._ctx.resume(); } catch (e) {} }
+        if (this._ctx.state === "running") return;
+      }
+      this._stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      this._stream = null;
+      if (this._ctx) { try { this._ctx.close(); } catch (e) {} this._ctx = null; }
+    }
     this._stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });

@@ -800,7 +800,13 @@
 
     if (IS_NATIVE) {
       document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState !== "visible") return;
+        if (document.visibilityState !== "visible") {
+          if (voice.listening || voice.speaking) { try { voice.releaseMic(); } catch (e) {} }
+          else { try { voice.releaseMic(); } catch (e) {} }
+          document.getElementById("listen-dot").classList.remove("on");
+          return;
+        }
+        busy = false;
         if (!FridayStorage.hasApiKey() || document.querySelector(".panel.open")) return;
         setTimeout(function () {
           if (!voice.listening && !voice.speaking && !busy) { handsFree = true; beginListen(); }
