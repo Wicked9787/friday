@@ -124,7 +124,7 @@
         this._rec = mime ? new MediaRecorder(this._stream, { mimeType: mime }) : new MediaRecorder(this._stream);
         var self = this;
         this._rec.ondataavailable = function (e) { if (e.data && e.data.size) self._chunks.push(e.data); };
-        this._rec.start();
+        this._rec.start(250);
         this._mode = "whisper";
       } else if (window.webkitSpeechRecognition) {
         this._mode = "webkit";
@@ -178,10 +178,11 @@
         var type = rec.mimeType || "audio/webm";
         resolve(new Blob(chunks, { type: type }));
       };
+      try { if (rec.state === "recording" && rec.requestData) rec.requestData(); } catch (e) {}
       try { rec.stop(); } catch (e) { resolve(new Blob(chunks)); }
     });
     this._rec = null;
-    if (!blob || blob.size < 200) return "";
+    if (!blob || blob.size < 50) return "";
     return this._transcribe(blob);
   };
 
