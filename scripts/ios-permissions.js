@@ -20,8 +20,13 @@ if (!xml.includes("<key>CFBundleURLTypes</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLName</key>\n\t\t\t<string>${scheme}</string>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array>\n\t\t\t\t<string>${scheme}</string>\n\t\t\t</array>\n\t\t</dict>\n\t</array>\n` + xml.slice(i);
 }
+// App version shown in AltStore and Settings (from package.json "appVersion").
+const pkg = require(path.join(__dirname, "..", "package.json"));
+const ver = String(pkg.appVersion || "1.0");
+xml = xml.replace(/(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]*(<\/string>)/, `$1${ver}$2`);
+xml = xml.replace(/(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/, `$1${ver}$2`);
 fs.writeFileSync(plist, xml);
-console.log("Added mic permission to Info.plist");
+console.log("Added mic permission and version " + ver + " to Info.plist");
 
 // App icon: copy the Friday/Jarvis art into the Xcode asset catalog
 // (single 1024x1024 universal icon, opaque, which Xcode 16+ accepts).
