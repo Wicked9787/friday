@@ -8,7 +8,13 @@ let xml = fs.readFileSync(plist, "utf8");
 const name = process.env.FRIDAY_PROFILE === "batsie" ? "Jarvis" : "Friday";
 const keys = {
   NSMicrophoneUsageDescription: `${name} uses the microphone so you can talk to it.`,
-  NSSpeechRecognitionUsageDescription: `${name} turns your voice into text.`
+  NSSpeechRecognitionUsageDescription: `${name} turns your voice into text.`,
+  NSContactsUsageDescription: `${name} reads contact names so texts and calls go to the right person. They stay on this phone.`,
+  NSCalendarsUsageDescription: `${name} adds events and reads your calendar when you ask.`,
+  NSCalendarsFullAccessUsageDescription: `${name} adds events and reads your calendar when you ask.`,
+  NSRemindersUsageDescription: `${name} adds reminders when you ask.`,
+  NSRemindersFullAccessUsageDescription: `${name} adds reminders when you ask.`,
+  NSHomeKitUsageDescription: `${name} turns your lights on, off and to an exact brightness when you ask.`
 };
 for (const [k, v] of Object.entries(keys)) {
   if (xml.includes(`<key>${k}</key>`)) continue;
