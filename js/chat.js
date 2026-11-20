@@ -149,11 +149,12 @@
 
   FridayChat.prototype.classify = async function (text) {
     var prompt = [
-      { role: "system", content: "Classify the user request as one of: chat, research, coding, money, messages, phone. Reply with only the one word." },
+      { role: "system", content: "Classify the user request as one of: chat, research, coding, money, messages, phone, task. Use task when they want several home or phone things done to reach a goal (for example \"get the house ready for bed\" or \"set things up for movie night\"). Reply with only the one word." },
       { role: "user", content: text }
     ];
     try {
       var out = (await groqChat(prompt, { temperature: 0, max_tokens: 16 })).toLowerCase();
+      if (/task/.test(out)) return "task";
       if (/research/.test(out)) return "research";
       if (/cod/.test(out)) return "coding";
       if (/money|bill|budget/.test(out)) return "money";
@@ -165,11 +166,14 @@
     }
   };
 
-  FridayChat.prototype.ask = async function (userText) {
+  FridayChat.prototype.ask = async function (userText, opts) {
+    opts = opts || {};
     var text = String(userText || "").trim();
     if (!text) return { text: "", kind: "chat" };
-    this.history.push({ role: "user", content: text, at: new Date().toISOString() });
-    this.save();
+    if (!opts.noTask) {
+      this.history.push({ role: "user", content: text, at: new Date().toISOString() });
+      this.save();
+    }
     this.onHelper("thinking");
 
     var mem = this.rememberFromSpeech(text);
@@ -196,7 +200,11 @@
       return { text: handoff, kind: "phone", command: text };
     }
 
-    var kind = await this.classify(text);
+    var kind = opts.noTask ? "chat" : await this.classify(text);
+    if (kind === "task") {
+      // app.js hands this to FridayAgent, which plans the steps.
+      return { text: "", kind: "task", command: text };
+    }
     this.onHelper(kind === "chat" ? "thinking" : kind);
 
     var helperText = "";

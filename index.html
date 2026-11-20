@@ -114,6 +114,13 @@
         <div class="sub">A short line in her voice each time you open the app. The lines live on this phone — she does not call the internet for them.</div>
       </div>
       <div class="row row-col">
+        <label class="toggle-row">Learn my habits
+          <input type="checkbox" id="set-learn">
+        </label>
+        <div class="sub">She notices things you do around the same time (like lights to 30% at night) and asks if you want them. She never does them without asking. Saved only on this phone.</div>
+        <button class="btn" type="button" id="btn-clear-habits" style="margin-top:10px">Clear learned habits</button>
+      </div>
+      <div class="row row-col">
         <label>Quick replies</label>
         <div class="sub">These chips sit under the orb. If a chip runs your shortcut, that tap opens Shortcuts directly.</div>
         <div id="chip-editor"></div>
@@ -233,6 +240,12 @@
         <button class="btn gold" type="submit">Add to memory</button>
       </form>
       <div id="memory-list" style="margin-top:18px"></div>
+      <h2 class="mem-head" style="margin:26px 0 6px;font-size:15px;letter-spacing:.4px;opacity:.85">Routines</h2>
+      <p class="hint">Say “when I say movie night, dim the lights to 20 percent and turn on the TV.” Then just say “movie night.”</p>
+      <div id="routine-list"></div>
+      <h2 class="mem-head" style="margin:26px 0 6px;font-size:15px;letter-spacing:.4px;opacity:.85">Habits I've noticed</h2>
+      <p class="hint">Things you do around the same time on 3 or more days. I only ever ask before doing one. Tap × and I'll stop suggesting it.</p>
+      <div id="habit-list"></div>
     </div>
   </section>
 
@@ -303,6 +316,7 @@
   <script src="js/chat.js"></script>
   <script src="js/neural.js"></script>
   <script src="js/tools.js"></script>
+  <script src="js/agent.js"></script>
   <script src="js/settings.js"></script>
   <script src="js/app.js"></script>
 </body>

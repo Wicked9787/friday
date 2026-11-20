@@ -31,6 +31,7 @@ js/voice.js                tap to talk, Whisper, fallback listener, speaking
 js/chat.js                 Groq chat, persona, helpers, phone intents
 js/neural.js               neural map
 js/tools.js                timer, notes
+js/agent.js                multi-step tasks, routines, habit learning, safety limits
 js/settings.js
 js/storage.js              localStorage, backup, restore
 js/app.js                  puts it all together
@@ -71,6 +72,36 @@ After this subscription ends, you can keep going with any free coding helper.
 4. Upload the changed files to the same GitHub `friday` repo, overwriting the old ones. Pages will update in a minute or two.
 
 You do not need a new host. You do not need to rebuild the profile unless the site address changes.
+
+## Multi-step, routines, and learning
+
+- **Several things at once:** "dim the lights to 30 percent and turn off the TV, then set a 10 minute timer." Friday works out the steps (on the phone when she can, otherwise with Groq), says the plan, runs the in-app steps (timer, note, remember, weather), and sends the home steps to the shortcut in one go, split by `;`. The shortcut needs chunks 29 and 30 for that.
+- **Goals:** "get the house ready for bed" — Groq turns it into steps from the allowed list, using your Memory (for example "I like the lights at 30% at night").
+- **Routines:** "when I say movie night, dim the lights to 20 percent and turn on the TV." After that, just say "movie night." Ask "what routines do I have?" or say "delete the movie night routine." They are listed in the Memory panel.
+- **Habits:** if you do the same thing around the same time on 3 or more days in two weeks, she asks when you open the app ("Want lights to 30% like usual?"). "Yes" runs it, "no" skips it for today, "stop asking" ends that suggestion for good. Settings → Learn my habits turns it off.
+- **What she knows:** "what do you know about me?", "forget my dog's name", "forget everything" (she asks you to confirm).
+- Sky's and Batsie's copies learn separately. Each phone keeps its own.
+
+## Safety
+
+Already in place:
+
+- The Groq key is never in this repo. It is typed on each phone and stays in that phone's storage. Backups leave it out unless you tick the box.
+- Memory, notes, chat history, routines, and habits live only on the phone. You can see and delete them in Memory, or use Settings → Reset.
+- Every phone action goes through your shortcut, and iOS makes you tap "Run in Shortcuts" first, so Friday can't change anything in your home without your tap.
+
+Added with multi-step:
+
+- **Allowed list only.** Friday can only use these steps: lights (on, off, percent), TV on/off, Do Not Disturb, music, cameras, good night, alarm, reminder, timer, note, remember, weather, speak. Texting, money, buying, calling, opening other apps, and deleting are not on the list. If you ask for one inside a multi-step request, she leaves it out and tells you.
+- **Limits.** At most 6 steps per request, lights 0–100%, timers up to 24 hours, at most 20 routines.
+- **Says it first.** She reads the plan out before the home steps run, and you still tap Run.
+- **Asks, never assumes.** A habit is only ever a question. She never does one by herself.
+- **Learning is yours to control.** Turn it off, clear it, or delete single items.
+
+Worth knowing:
+
+- What you say to Friday is sent to Groq to get her answers. Don't tell her passwords, card numbers, or anything you wouldn't want to leave the phone.
+- The shortcut command "text batsie" (chunk 01) sends the text straight away. If you want a check first, turn on "Show When Run" on its Send Message step in Shortcuts.
 
 ## Known limits
 

@@ -46,6 +46,8 @@ Version 2, chunked. Built for the Apple Shortcuts describe box (iOS 27). This fi
 | 26 | Goodbye | goodbye | chunks/26-goodbye.txt | - |
 | 27 | Run diagnostics | run diagnostics | chunks/27-diagnostics.txt | - |
 | 28 | BATSIE MODE (Batsie's phone only) | - | chunks/28-batsie-mode.txt | - |
+| 29 | Use the app's command (start of CORE) | - | chunks/29-use-app-input.txt | Changes the top of CORE, not a command. Do this before 30. Already done if your Friday checks "If Shortcut Input has any value". |
+| 30 | Multi-step | (sent by the app) | chunks/30-multi-step.txt | After it builds, drag its whole If block to the very TOP of the commands, above 01. |
 
 ## Order rules
 
@@ -267,6 +269,22 @@ Under "System checklist": Set Variable failed to Number 0. Set Variable report_l
 
 ```
 Do this on Batsie's phone, not Sky's. Build 00 CORE there, but in the describe text change every "sir" to "ma'am", change "for Sky" to "for Batsie", and change "UK English male voice" to "UK English female voice". Then paste the same chunks in the same order, with the same three changes made in each chunk before pasting. Skip 01 text-batsie on her phone (or make a copy that says "text sky" and sends to the contact Sky).
+```
+
+### 29 · Use the app's command
+
+_Note: The app sends its command as the shortcut's input. With this, Friday only greets and listens when you run the shortcut by itself. On Batsie's phone, make the same "sir" → "ma'am" and voice changes as in 28._
+
+```
+In my Friday shortcut, change only the start, without changing any command steps: replace the first two steps (the greeting list and Dictate Text) with this: If Shortcut Input has any value, Set Variable heard to Shortcut Input. Otherwise, make a List of these phrases ["At your service, sir.", "Good to see you, sir.", "Friday online. What do you need, sir?", "Ready when you are, sir.", "How can I help, sir?", "Listening, sir."], Get Random Item from that list, Speak it with a UK English male voice, then Dictate Text and Set Variable heard to the Dictated Text. End If. Then Change Case of heard to lowercase and Set Variable cmd to the lowercase text.
+```
+
+### 30 · Multi-step
+
+_Note: When you ask the app for several things at once ("lights to 30 percent and TV off") or say one of your routines, the app sends them in one go, split by ";" — for example `lights to 30 percent ; tv off`. This block runs each part through your normal commands, in order. Needs 29. Drag it to the very top of the commands, above 01. On Batsie's phone, say "Run Shortcut Jarvis" (or whatever her shortcut is called) instead of Friday._
+
+```
+In my Friday shortcut, add above the comment COMMANDS GO ABOVE THIS LINE, without changing any other steps: If cmd contains ";": Split Text cmd by the Custom separator ";". Repeat with Each item in the split text: Replace Text matching the regular expression ^\s+|\s+$ with nothing in the Repeat Item, then Run Shortcut Friday with the replaced text as input, with Show While Running turned off. End Repeat. Stop this shortcut. End If.
 ```
 
 ## AUTOMATIONS (set up in Shortcuts > Automation, not the describe box)

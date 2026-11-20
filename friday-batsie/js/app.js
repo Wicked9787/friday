@@ -6,7 +6,7 @@
   var profile = cfg.getProfile();
   var settingsData = window.FridayLoadSettings();
 
-  var orb, voice, chat, bubbles, tools, settings, neural;
+  var orb, voice, chat, bubbles, tools, settings, neural, agent;
   var handsFree = cfg.queryParam("listen") === "1";
   var busy = false;
 
@@ -307,6 +307,11 @@
       });
       return;
     }
+    var offer = agent ? agent.offerSuggestion() : "";
+    if (offer) {
+      speakLine(offer);
+      return;
+    }
     if (s.wakeGreeting !== false) speakLine(wakeLine());
   }
 
@@ -373,6 +378,34 @@
       chat.removeMemory(i);
       renderMemory();
     });
+    var rl = document.getElementById("routine-list");
+    if (rl && agent) {
+      var routines = agent.routines();
+      tools.renderList(rl, agent.routineLines(), function (i) {
+        agent.deleteRoutine(routines[i].name);
+        renderMemory();
+      });
+    }
+    var hl = document.getElementById("habit-list");
+    if (hl && agent) {
+      var pats = agent.learning() ? agent.patternLines() : [];
+      tools.renderList(hl, pats, function (i) {
+        agent.forgetPattern(pats[i].k);
+        renderMemory();
+      });
+      if (!agent.learning()) hl.innerHTML = '<p class="hint">Habit learning is off in Settings.</p>';
+    }
+  }
+
+  async function finishAgent(text, res) {
+    chat.history.push({ role: "user", content: text, at: new Date().toISOString() });
+    chat.history.push({ role: "assistant", content: res.say, at: new Date().toISOString() });
+    chat.save();
+    setCaption(res.say);
+    if (res.panel) openPanel(res.panel);
+    else renderChat();
+    await voice.speak(res.say, profile);
+    if (res.phone) runShortcut(res.phone);
   }
 
   async function handleUtterance(text, opts) {
@@ -394,7 +427,21 @@
     if (neural) neural.setActive("thinking");
     document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
     try {
+      var agentRes = agent ? await agent.handle(text) : null;
+      if (agentRes) {
+        await finishAgent(text, agentRes);
+        return;
+      }
       var result = await chat.ask(text);
+      if (result.kind === "task") {
+        agentRes = await agent.runTask(text);
+        if (agentRes) {
+          chat.history.pop(); // ask() saved the user line; finishAgent saves both
+          await finishAgent(text, agentRes);
+          return;
+        }
+        result = await chat.ask(text, { noTask: true });
+      }
       if (result.kind === "timer") {
         tools.startTimer(result.seconds);
         openPanel("timer");
@@ -406,6 +453,7 @@
         setCaption(result.text);
         await voice.speak(result.text, profile);
         runShortcut(result.command);
+        if (agent) agent.logCommand(result.command);
       } else {
         setCaption(result.text || "");
         renderChat();
@@ -520,6 +568,7 @@
         else if (act.type === "shortcut") {
           setCaption("On it.");
           runShortcut(act.command);
+          if (agent) agent.logCommand(act.command);
         } else if (act.type === "url") openUrl(act.url);
       },
       onAddRequest: function () { openPanel("add-bubble"); },
@@ -537,6 +586,15 @@
       onReset: function () { toast("Reset. Reloading."); setTimeout(function () { location.reload(); }, 400); },
       onToast: toast
     });
+
+    agent = new FridayAgent({
+      profile: profile,
+      chat: chat,
+      tools: tools,
+      weather: weatherSentence,
+      settings: function () { return settings.values; }
+    });
+    window.addEventListener("friday:habits-cleared", function () { renderMemory(); });
 
     applyLayout(settings.values.layout || "orbit", true);
     window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook };
