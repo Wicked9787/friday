@@ -278,6 +278,7 @@
     return { who: who, facetime: /face ?time/.test(m[1]) };
   }
 
+  function appTitle(profile) { return (profile && profile.assistantName) || "Friday"; }
   function inAppTexts() {
     var st = (root.FridayStorage && root.FridayStorage.get("settings", {})) || {};
     return st.textsInApp !== false;
@@ -323,15 +324,25 @@
       return { say: "Added " + ca.title + " to your calendar " + spokenWhen(ca.date) + ".", tool: "calendar" };
     }
 
+    // Music on this iPhone is always done in the app (no Shortcut, no Music app opening).
     var mu = parseMusic(raw);
     if (mu && nat.kit && nat.kit.available()) {
+      var musicNo = function (r) {
+        if (/denied/.test(String(r && r.error || ""))) return { say: "I need Media and Apple Music access. Turn it on in iPhone Settings, " + appTitle(profile) + ", Media and Apple Music.", tool: "music", playing: false };
+        return null;
+      };
       if (mu.action) {
         var mr = await nat.kit.music(mu.action);
-        if (!mr.ok) return null;
+        if (!mr.ok) return musicNo(mr) || { say: "Music isn't responding right now.", tool: "music", playing: false };
         return { say: MUSIC_SAY[mu.action] || "Done.", tool: "music", playing: mu.action !== "pause" };
       }
       var pr = await nat.kit.play(mu.play.query, mu.play.kind, mu.play.shuffle);
-      if (!pr.ok) return null;
+      if (!pr.ok) {
+        var no = musicNo(pr);
+        if (no) return no;
+        var what = mu.play.kind === "playlist" ? "a playlist called " + mu.play.query : mu.play.kind === "album" ? "the album " + mu.play.query : mu.play.query;
+        return { say: mu.play.query ? "I couldn't find " + keepCase(what, raw) + " in your music." : "There's no music in your library to shuffle yet.", tool: "music", playing: false };
+      }
       return { say: mu.play.query ? (mu.play.shuffle ? "Shuffling " : "Playing ") + (pr.title || mu.play.query) + "." : "Shuffling your music.", tool: "music", playing: true };
     }
 
