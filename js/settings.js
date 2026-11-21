@@ -620,7 +620,7 @@
         self.voice.unlockAudio();
         if (!root.FridayStorage.hasApiKey()) { aiStatus("AI voices need your Groq key.", false); return; }
         aiStatus("Testing…", true);
-        var pick = (self.values.voiceURI || "").indexOf("ai:") === 0 ? self.values.voiceURI : "ai:troy";
+        var pick = (self.values.voiceURI || "").indexOf("ai:") === 0 ? self.values.voiceURI : "ai:" + (V.autoAiFor ? V.autoAiFor(self.profile) : "diana");
         self.voice.preview(pick, self.profile).then(function (res) {
           aiStatus(res && res.ok === false ? res.reason : "AI voices are working.", !(res && res.ok === false));
         });

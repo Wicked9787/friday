@@ -1,24 +1,36 @@
-# Friday and Jarvis 3.1.1 · Live Voice
+# Friday and Jarvis 3.1.2 · Live Voice
 
-Coming from 2.0? This one install has everything from 3.0, 3.1 and 3.1.1. Your memory and settings carry over.
+Coming from 2.0? This one install has everything from 3.0, 3.1 and 3.1.2. Your memory and settings carry over.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.1.1-LiveVoice.ipa` | Friday 3.1.1 for Sky. |
-| `Jarvis-v3.1.1-LiveVoice.ipa` | **Install this one.** Jarvis 3.1.1 for Batsie. |
+| `Friday-v3.1.2-LiveVoice.ipa` | **Install this one.** Friday 3.1.2 for Sky. |
+| `Jarvis-v3.1.2-LiveVoice.ipa` | Jarvis 3.1.2 for Batsie. |
 | `…-LightsTest.ipa` | The same app plus Apple Home permission, so lights can run straight from the app. Try it first; if AltStore won't take it, use the regular one. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Backup & About).
 
-## Live voice (new in 3.1.1)
+## Voices
+
+Friday speaks with a woman's voice and Jarvis with a man's. Voice → **Automatic** is the natural AI voice: Diana for Friday, Daniel for Jarvis. If a voice of the other kind was saved from before, it goes back to Automatic once. You can still pick any voice you like afterwards.
+
+## Neural map
+
+- **Everything she learns becomes a bubble.** Each memory, routine, habit, list, countdown, bill and connected AI gets its own glowing bubble around the part of her it belongs to.
+- **Bubbles connect to what they're about.** A memory about Batsie links to Batsie's bubble, one about rent links to Money, a birthday links to Calendar. Memories that share something (the same person, place or thing) are joined to each other too.
+- **New ones arrive with a pulse** traveling from her core out to the new bubble and on to what it connects to. Its name shows for a few seconds.
+- **Tap a part of her** (like Memory) to see the names of all its bubbles. **Tap a bubble** to see what it's connected to.
+- **Turn it any way.** Dragging follows your finger: right turns right, up turns up, and it spins freely in every direction. Flick it and it glides, then settles into a slow turn.
+
+## Live voice
 
 - **She hears you live.** Your words show up on screen as you talk. This uses the iPhone's own speech recognition, so it's free and doesn't wait for a recording to upload. The first time, iOS asks to allow Speech Recognition: tap Allow.
 - **She knows when you're done, like ChatGPT.** She listens to *what* you said, not just for silence. "Set a timer for…" or a trailing "and…" makes her wait; "what's the weather" gets an answer right away. Settings → Voice & Talking → **Talk time** sets how patient she is (Short, Normal, Long).
 - **Smoother, more natural voice.** The AI voice clips now play back to back with even, natural pauses instead of robotic gaps. She starts talking sooner on long answers, joins short sentences into smoother phrases, and no longer reads out symbols, links or emojis.
-- **Natural voice by default.** Voice → Automatic now means the natural AI voice (Daniel for Friday, Diana for Jarvis). When the free AI voice is out for the day she switches to the best iPhone voice. Any voice you picked yourself stays picked.
+- **Natural voice by default.** Voice → Automatic now means the natural AI voice (Diana for Friday, Daniel for Jarvis). When the free AI voice is out for the day she switches to the best iPhone voice. Any voice you picked yourself stays picked.
 - **Talks like a person.** She's told to lead with the answer, use everyday words and contractions, and not open every reply with "Certainly".
 - **Speed:** the AI voice changes pitch when sped up, so the speed slider only nudges it a little now. The iPhone voice still follows the slider fully.
 
@@ -50,7 +62,7 @@ The Shortcut still handles what only it can do: Apple TV, HomePod and music, sen
 
 ### Lights test
 
-`Friday-v3.1.1-LightsTest.ipa` (and `Jarvis-v3.1.1-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
+`Friday-v3.1.2-LightsTest.ipa` (and `Jarvis-v3.1.2-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
 
 - If AltStore installs it and you allow Home access when asked, the lights run straight from the app, to the exact percent.
 - If AltStore refuses it, or Home access doesn't show up, install the regular IPA. Lights keep working through the Shortcut.

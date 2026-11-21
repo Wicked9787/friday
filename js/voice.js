@@ -621,6 +621,21 @@
   FridayVoice.autoAiFor = function (profile) {
     return profile && profile.voiceGender === "female" ? "diana" : "daniel";
   };
+  // Friday speaks with a woman's voice and Jarvis with a man's. A saved voice of the other
+  // kind (from before this was fixed) goes back to Automatic, once.
+  var FEMALE_NAMES = /samantha|karen|moira|serena|fiona|kate|martha|victoria|tessa|ava|zoe|allison|susan|nicky|joelle|stephanie|catherine|kathy|shelley|sandy|flo|grandma|female/i;
+  var MALE_NAMES = /daniel|arthur|aaron|fred|tom|rishi|oliver|alex|evan|nathan|gordon|lee|reed|ralph|rocko|eddy|grandpa|albert|junior|jamie|malcolm|\bmale/i;
+  FridayVoice.voiceFitsGender = function (uri, gender, voices) {
+    if (!uri || !gender) return true;
+    if (uri.indexOf("ai:") === 0) {
+      var a = AI_VOICES.filter(function (x) { return x.id === uri; })[0];
+      return !a || a.gender === gender;
+    }
+    var v = (voices || []).filter(function (x) { return x.voiceURI === uri; })[0];
+    var name = ((v && v.name) || "") + " " + uri;
+    if (gender === "female") return !MALE_NAMES.test(name) || FEMALE_NAMES.test(name);
+    return !FEMALE_NAMES.test(name) || MALE_NAMES.test(name);
+  };
 
   FridayVoice.prototype._aiAllowed = function () {
     if (!this._aiVoiceId()) return false;

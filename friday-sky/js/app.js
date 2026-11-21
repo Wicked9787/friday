@@ -8,7 +8,7 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.1.1";
+  var APP_VERSION = "3.1.2";
   var APP_LABEL = "Live Voice";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
@@ -1271,6 +1271,13 @@
         setTimeout(function () { beginListen(); }, 60);
       }
     });
+    if (!FridayStorage.get("voiceGenderFixed", false)) {
+      var vfix = false;
+      if (!FridayVoice.voiceFitsGender(settingsData.voiceURI || "", profile.voiceGender, voice.listVoices())) { settingsData.voiceURI = ""; vfix = true; }
+      if (!FridayVoice.voiceFitsGender(settingsData.fallbackVoiceURI || "", profile.voiceGender, voice.listVoices())) { settingsData.fallbackVoiceURI = ""; vfix = true; }
+      if (vfix) FridayStorage.set("settings", settingsData);
+      FridayStorage.set("voiceGenderFixed", true);
+    }
     voice.setVoiceURI(settingsData.voiceURI || "");
     voice.autoAi = FridayVoice.autoAiFor(profile);
 
@@ -1382,6 +1389,7 @@
     renderChips();
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
+    if (window.__friday) window.__friday.neural = neural;
     neural.onOpen = function (panel) { openPanel(panel); };
 
     document.getElementById("orb-canvas").addEventListener("click", function () {

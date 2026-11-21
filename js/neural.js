@@ -84,6 +84,24 @@
     var phi = i * 2.399963 + (offset || 0);
     return [Math.cos(phi) * r, y * 0.78, Math.sin(phi) * r];
   }
+  // 3D turning: one rotation matrix, so it turns freely in every direction.
+  function matMul(a, b) {
+    var r = new Array(9);
+    for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) r[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+    return r;
+  }
+  // Turn around the screen's up-down line: the front moves right for a positive angle.
+  function rotYm(a) { var c = Math.cos(a), s = Math.sin(a); return [c, 0, s, 0, 1, 0, -s, 0, c]; }
+  // Turn around the screen's left-right line: the front moves down for a positive angle.
+  function rotXm(b) { var c = Math.cos(b), s = Math.sin(b); return [1, 0, 0, 0, c, s, 0, -s, c]; }
+  function tidy(m) {
+    var a = [m[0], m[1], m[2]], b = [m[3], m[4], m[5]];
+    var na = Math.hypot(a[0], a[1], a[2]) || 1; a = [a[0] / na, a[1] / na, a[2] / na];
+    var d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; b = [b[0] - d * a[0], b[1] - d * a[1], b[2] - d * a[2]];
+    var nb = Math.hypot(b[0], b[1], b[2]) || 1; b = [b[0] / nb, b[1] / nb, b[2] / nb];
+    var c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    return a.concat(b, c);
+  }
   function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + Math.max(0, Math.min(1, a)).toFixed(3) + ")"; }
   function store() { return root.FridayStorage; }
   function nowStr() { return new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
@@ -94,7 +112,8 @@
     this.active = null;
     this.running = false;
     this.dpr = 1;
-    this.rotY = 0.4; this.rotX = -0.22; this.velY = 0.06; this.dragging = false;
+    this.M = matMul(rotXm(0.22), rotYm(0.4));
+    this.spinX = 0; this.spinY = 0.06; this.dragging = false;
     this.packets = [];
     this.flash = {};
     this.log = (store() && store().get("neuralLog", [])) || [];
@@ -116,14 +135,30 @@
       self.nodes[d.id] = { def: d, p: p, sx: 0, sy: 0, sz: 0, scale: 1, glow: 0, seed: Math.random() * 100 };
     });
     var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile && root.FRIDAY_CONFIG.getProfile().assistantName) || "Friday";
+    var pcfg = null;
     try {
-      var pcfg = root.FridayExtras && root.FridayExtras.partnerCfg ? root.FridayExtras.partnerCfg(root.FRIDAY_CONFIG.getProfile()) : null;
+      pcfg = root.FridayExtras && root.FridayExtras.partnerCfg ? root.FridayExtras.partnerCfg(root.FRIDAY_CONFIG.getProfile()) : null;
       if (pcfg && pcfg.display) this.nodes.partner.def = Object.assign({}, this.nodes.partner.def, { label: pcfg.display });
     } catch (e) {}
     // 3.1: the map grows. Every memory, routine, habit, list, countdown and connection
     // becomes a small bubble around the part of her it belongs to.
     this.leaves = {};
+    this.leafLinks = [];
     this._seen = null;
+    try {
+      var pn = [];
+      if (pcfg) pn = (pcfg.names || []).concat(pcfg.contact ? [pcfg.contact] : []);
+      pn = pn.map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9 ]+/g, "").trim(); }).filter(function (x) { return x.length >= 2; });
+      if (pn.length) this._partnerRe = new RegExp("\\b(" + pn.join("|") + ")\\b");
+    } catch (e2) {}
+    // one soft glow, drawn once and reused for every bubble
+    try {
+      var gc = document.createElement("canvas"); gc.width = gc.height = 64;
+      var gx = gc.getContext("2d"), gg0 = gx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gg0.addColorStop(0, "rgba(255,214,130,0.9)"); gg0.addColorStop(0.35, "rgba(255,200,110,0.28)"); gg0.addColorStop(1, "rgba(255,200,110,0)");
+      gx.fillStyle = gg0; gx.fillRect(0, 0, 64, 64);
+      this._glow = gc;
+    } catch (e3) {}
     this.nodes.core.def = Object.assign({}, this.nodes.core.def, { label: name, tip: "This is " + name + ". Everything she does flows through here." });
     // background synapse dust
     this.dust = [];
@@ -139,17 +174,22 @@
     var self = this, c = this.canvas;
     this._onResize = function () { if (self.running) self.resize(); };
     window.addEventListener("resize", this._onResize);
-    var x0 = 0, y0 = 0, lx = 0, moved = false, t0 = 0;
+    var x0 = 0, y0 = 0, lx = 0, ly = 0, lt = 0, moved = false, t0 = 0;
     function pt(e) { var t = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e); return t; }
-    function down(e) { var p = pt(e); x0 = lx = p.clientX; y0 = p.clientY; moved = false; t0 = Date.now(); self.dragging = true; }
+    function down(e) {
+      var p = pt(e); x0 = lx = p.clientX; y0 = ly = p.clientY; moved = false; t0 = lt = Date.now(); self.dragging = true;
+      self.spinX = 0; self.spinY = 0;
+    }
     function move(e) {
       if (!self.dragging) return;
       var p = pt(e);
-      var dx = p.clientX - lx; lx = p.clientX;
+      var dx = p.clientX - lx, dy = p.clientY - ly, now = Date.now(), dtm = Math.max(8, now - lt) / 1000;
+      lx = p.clientX; ly = p.clientY; lt = now;
       if (Math.abs(p.clientX - x0) + Math.abs(p.clientY - y0) > 8) moved = true;
-      self.rotY += dx * 0.008;
-      self.velY = dx * 0.008;
-      self.rotX = Math.max(-0.7, Math.min(0.5, self.rotX + (p.clientY - y0) * 0.00025));
+      self.turn(dx * 0.008, dy * 0.008);
+      // remember how fast the finger moved, for the glide after letting go
+      self.spinY = self.spinY * 0.5 + (dx * 0.008 / dtm) * 0.5;
+      self.spinX = self.spinX * 0.5 + (dy * 0.008 / dtm) * 0.5;
       if (e.cancelable) e.preventDefault();
     }
     function up(e) {
@@ -182,6 +222,14 @@
       if (d.brain) self.lastBrain = d.brain;
       if (d.node) self.pulse(d.node, d.text, d.quiet);
     });
+  };
+
+  // Turn the map: positive ax moves the front to the right, positive ay moves it down (it follows your finger).
+  FridayNeural.prototype.turn = function (ax, ay) {
+    if (ax) this.M = matMul(rotYm(ax), this.M);
+    if (ay) this.M = matMul(rotXm(ay), this.M);
+    this._turns = (this._turns || 0) + 1;
+    if (this._turns % 60 === 0) this.M = tidy(this.M);
   };
 
   FridayNeural.prototype.resize = function () {
@@ -249,13 +297,13 @@
   FridayNeural.prototype._wantLeaves = function () {
     var S = store(), out = [];
     if (!S) return out;
-    function add(parent, key, label, tip) { out.push({ id: parent + ":" + hashStr(key), parent: parent, label: shortLabel(label), tip: tip || label }); }
+    function add(parent, key, label, tip, text) { out.push({ id: parent + ":" + hashStr(key), parent: parent, label: shortLabel(label), tip: tip || label, text: String(text || label || "") }); }
     try {
-      (S.get("memory", []) || []).slice(-60).forEach(function (m) { var t = (m && m.text) || m; if (t) add("memory", t, t, (m.auto ? "She learned this on her own: " : "You told her: ") + t); });
+      (S.get("memory", []) || []).slice(-60).forEach(function (m) { var t = (m && m.text) || m; if (t) add("memory", t, t, (m.auto ? "She learned this on her own: " : "You told her: ") + t, t); });
       (S.get("connections", []) || []).filter(function (x) { return x.type === "agent"; }).forEach(function (a) { add("agents", a.id || a.name, a.name, a.name + (a.backup ? " · backup brain" : " · say “ask " + a.name + " …”")); });
       var X = root.FridayExtras;
       if (X) {
-        X.routines().forEach(function (r) { add("routines", r.id || r.phrase, r.phrase, "“" + r.phrase + "” · " + ((r.steps || []).length ? (r.steps || []).join(", ") : "greeting only")); });
+        X.routines().forEach(function (r) { add("routines", r.id || r.phrase, r.phrase, "“" + r.phrase + "” · " + ((r.steps || []).length ? (r.steps || []).join(", ") : "greeting only"), r.phrase + " " + (r.steps || []).join(" ")); });
         X.habits().list.forEach(function (h) { add("habits", h.id, h.name, h.name + (h.goal > 1 ? " · goal " + h.goal + " a day" : " · once a day")); });
       }
       var l = S.get("lists", null);
@@ -265,6 +313,48 @@
     } catch (e) {}
     return out;
   };
+  // ---------- connections: what each learned thing is about ----------
+  var TOPICS = {
+    money: /\b(money|pay|paid|rent|bank|budget|cost|price|save|saving|savings|loan|card|\$\d*)\b/,
+    bills: /\b(bill|bills|due|subscription|electric|water bill|phone bill|insurance)\b/,
+    spending: /\b(spend|spent|spending|bought|buy|shopping|store)\b/,
+    calendar: /\b(birthday|anniversary|appointment|meeting|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekend|tomorrow|tonight|morning|evening)\b/,
+    countdowns: /\b(trip|vacation|holiday|christmas|thanksgiving|halloween|new year|wedding|graduation|countdown)\b/,
+    home: /\b(light|lights|lamp|tv|home|house|room|bedroom|kitchen|living room|apple tv|homepod|scene)\b/,
+    habits: /\b(water|gym|workout|run|running|walk|steps|sleep|meditate|stretch|vitamins?)\b/,
+    lists: /\b(grocery|groceries|list|to-?do|milk|eggs|bread)\b/,
+    notes: /\b(note|notes|remember|password hint|idea)\b/,
+    weather: /\b(weather|rain|snow|cold|hot|sunny|umbrella|jacket)\b/,
+    timers: /\b(timer|alarm|wake up|nap|minutes)\b/,
+    voice: /\b(voice|talk|speak|sound|loud|quiet|accent)\b/,
+    vision: /\b(photo|picture|camera|look at|see)\b/,
+    coding: /\b(code|coding|app|github|program|website)\b/,
+    research: /\b(news|read|book|study|school|class|learn|history)\b/,
+    messages: /\b(text|texts|message|email|call)\b/,
+    contacts: /\b(mom|dad|mother|father|brother|sister|aunt|uncle|cousin|grandma|grandpa|friend|family)\b/,
+    routines: /\b(routine|every day|always|usually|every night|every morning)\b/
+  };
+  var STOP = { this: 1, that: 1, with: 1, from: 1, have: 1, likes: 1, like: 1, loves: 1, love: 1, wants: 1, want: 1, about: 1, their: 1, there: 1, would: 1, should: 1, been: 1, every: 1, always: 1, really: 1, when: 1, what: 1, they: 1, them: 1, just: 1, prefers: 1, prefer: 1, uses: 1, gets: 1, does: 1, doesn: 1, into: 1, over: 1, after: 1, before: 1, usually: 1, favorite: 1, thinks: 1, says: 1, said: 1, very: 1, much: 1, more: 1, some: 1, than: 1, also: 1, only: 1, still: 1, being: 1, your: 1, will: 1, years: 1, year: 1, name: 1, named: 1 };
+  FridayNeural.prototype._topicsFor = function (text, parent) {
+    var t = " " + String(text || "").toLowerCase().replace(/[’]/g, "'") + " ";
+    var out = [];
+    if (this._partnerRe && this._partnerRe.test(t) && parent !== "partner") out.push("partner");
+    var keys = Object.keys(TOPICS);
+    for (var i = 0; i < keys.length && out.length < 3; i++) {
+      var k = keys[i];
+      if (k !== parent && this.nodes[k] && TOPICS[k].test(t)) out.push(k);
+    }
+    return out.slice(0, 3);
+  };
+  function keyWords(text, owner) {
+    var w = String(text || "").toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/), out = {};
+    w.forEach(function (x) {
+      x = x.replace(/'s$/, "");
+      if (x.length >= 4 && !STOP[x] && x !== owner) out[x] = 1;
+    });
+    return out;
+  }
+
   FridayNeural.prototype._syncLeaves = function () {
     var S = store(), self = this, want = this._wantLeaves(), keep = {};
     if (!this._seen) this._seen = {};
@@ -276,7 +366,7 @@
     Object.keys(byParent).forEach(function (pid) {
       var arr = byParent[pid], parent = self.nodes[pid];
       if (!parent) return;
-      var n = arr.length, rad = Math.min(0.22, 0.09 + 0.014 * Math.sqrt(n));
+      var n = arr.length, rad = Math.min(0.3, 0.1 + 0.02 * Math.sqrt(n));
       arr.forEach(function (w, k) {
         keep[w.id] = 1;
         var d = fib(Math.max(n, 6), k, parent.seed);
@@ -287,10 +377,33 @@
           lf = self.leaves[w.id] = { id: w.id, parent: pid, p: pos, born: isNew ? performance.now() : -1, seed: Math.random() * 100 };
           if (isNew) { self.pulse(pid, "New: " + w.label, false); }
         }
-        lf.p = pos; lf.label = w.label; lf.tip = w.tip;
+        lf.p = pos; lf.label = w.label; lf.tip = w.tip; lf.text = w.text;
+        if (lf._linkText !== w.text) { lf._linkText = w.text; lf.links = self._topicsFor(w.text, pid); }
+        if (lf.born > 0 && !lf._sent) {
+          // a new bubble: light the way from her core to it, then out to what it's about
+          lf._sent = true;
+          for (var q = 0; q < 3; q++) self.packets.push({ a: pid, b: w.id, t: -0.9 - q * 0.12, speed: 0.8, silver: q === 1 });
+          (lf.links || []).forEach(function (to, li) {
+            for (var q2 = 0; q2 < 2; q2++) self.packets.push({ a: w.id, b: to, t: -1.8 - li * 0.3 - q2 * 0.12, speed: 0.75, silver: false });
+            self.flash[to] = Math.max(self.flash[to] || 0, 0.6);
+          });
+        }
       });
     });
     Object.keys(this.leaves).forEach(function (id) { if (!keep[id]) delete self.leaves[id]; });
+    // memories that share something (the same person, place or thing) are joined too
+    var owner = "";
+    try { owner = String((root.FRIDAY_CONFIG.getProfile() || {}).ownerName || "").toLowerCase(); } catch (e0) {}
+    var mem = Object.keys(this.leaves).filter(function (id) { return self.leaves[id].parent === "memory"; }).map(function (id) { return { id: id, k: keyWords(self.leaves[id].text, owner) }; });
+    var pairs = [], per = {};
+    for (var i = 0; i < mem.length && pairs.length < 40; i++) {
+      for (var j = i + 1; j < mem.length && pairs.length < 40; j++) {
+        if ((per[mem[i].id] || 0) >= 2 || (per[mem[j].id] || 0) >= 2) continue;
+        var shared = Object.keys(mem[i].k).filter(function (x) { return mem[j].k[x]; });
+        if (shared.length) { pairs.push([mem[i].id, mem[j].id]); per[mem[i].id] = (per[mem[i].id] || 0) + 1; per[mem[j].id] = (per[mem[j].id] || 0) + 1; }
+      }
+    }
+    this.leafLinks = pairs;
     Object.keys(keep).forEach(function (k) { self._seen[k] = 1; });
     try { if (S) S.set("neuralSeen", Object.keys(keep)); } catch (e) {}
   };
@@ -351,9 +464,10 @@
 
   // ---------- drawing ----------
   FridayNeural.prototype._project = function (p, cx, cy, R) {
-    var cy_ = Math.cos(this.rotY), sy_ = Math.sin(this.rotY), cx_ = Math.cos(this.rotX), sx_ = Math.sin(this.rotX);
-    var x = p[0] * cy_ + p[2] * sy_, z = -p[0] * sy_ + p[2] * cy_;
-    var y = p[1] * cx_ - z * sx_; z = p[1] * sx_ + z * cx_;
+    var m = this.M;
+    var x = m[0] * p[0] + m[1] * p[1] + m[2] * p[2];
+    var y = m[3] * p[0] + m[4] * p[1] + m[5] * p[2];
+    var z = m[6] * p[0] + m[7] * p[1] + m[8] * p[2];
     var persp = 2.6 / (2.6 - z);
     return { x: cx + x * R * persp, y: cy + y * R * persp, z: z, s: persp };
   };
@@ -376,8 +490,11 @@
     var t = ts / 1000;
     if (this.canvas.clientWidth !== this._cw || this.canvas.clientHeight !== this._ch) this.resize();
     if (!this.dragging) {
-      this.velY += (0.05 - this.velY) * 0.02;
-      this.rotY += this.velY * dt * (this.active ? 1.8 : 1);
+      // glide after a flick, then settle into a slow turn
+      var idle = 0.05 * (this.active ? 1.8 : 1);
+      this.spinY += (idle - this.spinY) * Math.min(1, dt * 1.6);
+      this.spinX += (0 - this.spinX) * Math.min(1, dt * 1.6);
+      this.turn(this.spinY * dt, this.spinX * dt);
     }
     var ctx = this.ctx, w = this.canvas.width, h = this.canvas.height, dpr = this.dpr;
     var cx = w / 2, cy = h * 0.5, R = Math.min(w * 0.5, h * 0.42);
@@ -409,6 +526,19 @@
       P[id] = q;
     });
 
+    // project learned bubbles
+    var nowMs = performance.now();
+    var leafIds = Object.keys(this.leaves);
+    leafIds.forEach(function (id) {
+      var lf = self.leaves[id];
+      if (!P[lf.parent]) return;
+      var wob = [Math.sin(t * 0.5 + lf.seed) * 0.01, Math.cos(t * 0.43 + lf.seed) * 0.01, 0];
+      var q = self._project([lf.p[0] + wob[0], lf.p[1] + wob[1], lf.p[2]], cx, cy, R);
+      lf.sx = q.x; lf.sy = q.y; lf.sz = q.z;
+      P[id] = q;
+    });
+    var selLeaf = this.selected && this.leaves[this.selected] ? this.selected : null;
+
     // links
     LINKS.forEach(function (L) {
       var a = P[L[0]], b = P[L[1]];
@@ -422,6 +552,35 @@
       ctx.strokeStyle = hot > 0.05 ? rgba(GOLD, 0.12 + hot * 0.45) : rgba(SILVER, 0.05 + depth * 0.09);
       ctx.lineWidth = (0.6 + hot * 1.6) * dpr;
       ctx.stroke();
+    });
+
+    // learned bubbles: a line to the part of her they belong to, and lines to what they're about
+    leafIds.forEach(function (id) {
+      var lf = self.leaves[id], a = P[id], par = P[lf.parent];
+      if (!a || !par) return;
+      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 6000);
+      var on = selLeaf === id || self.selected === lf.parent;
+      var depth = (a.z + 1) / 2;
+      ctx.strokeStyle = rgba(GOLD_SOFT, 0.1 + 0.14 * depth + pop * 0.5 + (on ? 0.3 : 0));
+      ctx.lineWidth = (0.7 + pop * 1.2 + (on ? 0.6 : 0)) * dpr;
+      ctx.beginPath(); ctx.moveTo(par.x, par.y); ctx.lineTo(a.x, a.y); ctx.stroke();
+      (lf.links || []).forEach(function (to) {
+        var b = P[to];
+        if (!b) return;
+        var c = self._curve(a, b, cx, cy);
+        var hot = on || self.selected === to;
+        ctx.strokeStyle = rgba(GOLD, 0.05 + 0.07 * depth + pop * 0.45 + (hot ? 0.35 : 0));
+        ctx.lineWidth = (0.55 + pop + (hot ? 0.6 : 0)) * dpr;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke();
+      });
+    });
+    (this.leafLinks || []).forEach(function (L) {
+      var a = P[L[0]], b = P[L[1]];
+      if (!a || !b) return;
+      var hot = selLeaf === L[0] || selLeaf === L[1];
+      ctx.strokeStyle = rgba(SILVER, 0.06 + 0.08 * ((a.z + b.z + 2) / 4) + (hot ? 0.4 : 0));
+      ctx.lineWidth = (0.5 + (hot ? 0.7 : 0)) * dpr;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
 
     // packets
@@ -450,35 +609,41 @@
     this.packets = keep.slice(-260);
     if (this.active && Math.random() < 0.06) this.pulse(this.active === "thinking" ? "thinking" : this.active, null, true);
 
-    // learned bubbles around their parent
-    var nowMs = performance.now();
-    Object.keys(this.leaves).forEach(function (id) {
-      var lf = self.leaves[id], par = P[lf.parent];
-      if (!par) return;
-      var wob = [Math.sin(t * 0.5 + lf.seed) * 0.01, Math.cos(t * 0.43 + lf.seed) * 0.01, 0];
-      var q = self._project([lf.p[0] + wob[0], lf.p[1] + wob[1], lf.p[2]], cx, cy, R);
-      lf.sx = q.x; lf.sy = q.y; lf.sz = q.z;
+    // learned bubbles, back to front
+    var showKids = this.selected && this.nodes[this.selected] ? this.selected : null;
+    leafIds.slice().sort(function (x, y) { return (self.leaves[x].sz || 0) - (self.leaves[y].sz || 0); }).forEach(function (id) {
+      var lf = self.leaves[id], q = P[id];
+      if (!q) return;
       var grow = lf.born < 0 ? 1 : Math.min(1, (nowMs - lf.born) / 1200);
-      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 4000);
-      var depth = (q.z + 1) / 2, a = (0.25 + depth * 0.6) * grow;
-      ctx.strokeStyle = rgba(GOLD_SOFT, 0.08 + 0.1 * depth + pop * 0.4);
-      ctx.lineWidth = 0.6 * dpr;
-      ctx.beginPath(); ctx.moveTo(par.x, par.y); ctx.lineTo(q.x, q.y); ctx.stroke();
-      var rr = (1.8 + 1.2 * depth + pop * 3) * dpr * q.s * grow;
-      if (pop > 0 || self.selected === id) {
-        var gg = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, rr * 5);
-        gg.addColorStop(0, rgba(GOLD, 0.35 * Math.max(pop, self.selected === id ? 0.7 : 0)));
-        gg.addColorStop(1, rgba(GOLD, 0));
-        ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(q.x, q.y, rr * 5, 0, TAU); ctx.fill();
+      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 6000);
+      var depth = (q.z + 1) / 2;
+      var sel = selLeaf === id;
+      var rr = (2.6 + 2.4 * depth + pop * 4 + (sel ? 2 : 0)) * dpr * q.s * grow;
+      var col = lf.parent === "memory" ? SILVER : GOLD_SOFT;
+      if (self._glow) {
+        var g = rr * (sel || pop > 0 ? 6 : 4);
+        ctx.globalAlpha = Math.min(1, (0.18 + 0.32 * depth + pop * 0.7 + (sel ? 0.5 : 0)) * grow);
+        ctx.drawImage(self._glow, q.x - g, q.y - g, g * 2, g * 2);
+        ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = rgba(lf.parent === "memory" ? SILVER : GOLD_SOFT, a);
+      ctx.fillStyle = rgba(col, (0.35 + depth * 0.6) * grow);
       ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, TAU); ctx.fill();
-      if (self.selected === id || pop > 0.5) {
+      ctx.fillStyle = rgba([255, 255, 255], (0.25 + 0.35 * depth) * grow);
+      ctx.beginPath(); ctx.arc(q.x - rr * 0.3, q.y - rr * 0.3, rr * 0.35, 0, TAU); ctx.fill();
+      if (sel) {
+        ctx.strokeStyle = rgba(GOLD, 0.9); ctx.lineWidth = 1.2 * dpr;
+        ctx.beginPath(); ctx.arc(q.x, q.y, rr + 4 * dpr, 0, TAU); ctx.stroke();
+      }
+      // names: a brand-new bubble, the one you tapped, or all of a part's bubbles when you tap that part
+      if (sel || pop > 0.25 || (showKids === lf.parent && depth > 0.4)) {
         ctx.globalCompositeOperation = "source-over";
-        ctx.font = "500 " + 9.5 * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.font = "500 " + (sel || pop > 0.25 ? 10.5 : 9) * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillStyle = rgba([239, 236, 232], 0.9);
-        ctx.fillText(lf.label, q.x, q.y - rr - 6 * dpr);
+        var ty = q.y - rr - 6 * dpr;
+        ctx.fillStyle = "rgba(0,0,0,0.6)";
+        ctx.fillText(lf.label, q.x + 0.8 * dpr, ty + 0.8 * dpr);
+        ctx.fillStyle = rgba([239, 236, 232], sel || pop > 0.25 ? 0.95 : 0.6 + 0.35 * depth);
+        ctx.fillText(lf.label, q.x, ty);
         ctx.globalCompositeOperation = "lighter";
       }
     });
@@ -558,7 +723,7 @@
     Object.keys(this.leaves || {}).forEach(function (id) {
       var lf = self.leaves[id];
       var d = Math.hypot(lf.sx - x, lf.sy - y);
-      if (d < 16 * self.dpr && d < bd * 0.8) { bd = d; best = id; }
+      if (d < 20 * self.dpr && d < bd * 0.8) { bd = d; best = id; }
     });
     this.selected = best === this.selected ? null : best;
     if (best) this.flash[best] = 1;
@@ -572,23 +737,32 @@
     var lf = this.leaves && this.leaves[this.selected];
     if (lf) {
       var pd = this.nodes[lf.parent] ? this.nodes[lf.parent].def : {};
-      lf = { def: { label: lf.label, tip: lf.tip, panel: pd.panel } };
+      lf = { def: { label: lf.label, tip: lf.tip, panel: pd.panel, openLabel: pd.label } };
     }
     var n = lf || this.nodes[this.selected];
     if (!n) { card.classList.add("hidden"); return; }
     var d = n.def, self = this;
     card.classList.remove("hidden");
-    var key = this.selected + "|" + (lf ? d.tip : this._info(this.selected));
+    var key = this.selected + "|" + (lf ? d.tip + "|" + ((this.leaves[this.selected].links || []).join(",")) : this._info(this.selected));
     if (card._key === key) return;
     card._key = key;
     card.innerHTML = "";
     var h = document.createElement("b"); h.textContent = d.label || "Core";
     var p = document.createElement("p"); p.textContent = d.tip || "";
-    var live = document.createElement("div"); live.className = "neural-live"; live.textContent = lf ? "Learned" : this._info(this.selected);
+    var liveText = this._info(this.selected);
+    if (lf) {
+      var real = this.leaves[this.selected], names = [];
+      var pn = this.nodes[real.parent] ? this.nodes[real.parent].def.label : "";
+      if (pn) names.push(pn);
+      (real.links || []).forEach(function (k) { if (self.nodes[k]) names.push(self.nodes[k].def.label); });
+      var mates = (this.leafLinks || []).filter(function (L) { return L[0] === self.selected || L[1] === self.selected; }).length;
+      liveText = "Learned · connected to " + names.join(", ") + (mates ? " and " + mates + " related memor" + (mates === 1 ? "y" : "ies") : "");
+    }
+    var live = document.createElement("div"); live.className = "neural-live"; live.textContent = liveText;
     card.appendChild(h); card.appendChild(p); card.appendChild(live);
     if (d.panel && this.onOpen) {
       var b = document.createElement("button");
-      b.type = "button"; b.className = "btn gold"; b.textContent = "Open " + (d.label || "");
+      b.type = "button"; b.className = "btn gold"; b.textContent = "Open " + (d.openLabel || d.label || "");
       b.onclick = function () { self.selected = null; self.onOpen(d.panel); };
       card.appendChild(b);
     }
