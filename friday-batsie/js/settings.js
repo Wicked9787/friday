@@ -25,7 +25,7 @@
       morningBriefing: true,
       wakeGreeting: true,
       chips: null,
-      render: "hd",
+      render: "max",
       mood: "normal",
       nightMode: false,
       nightFrom: 22,
@@ -49,10 +49,26 @@
       liveListen: true,
       textsInApp: true,
       bgMinutes: 3,
+      talkStyle: "pill",
+      orbTalk: true,
+      hideOrbTyping: false,
+      speakTyped: false,
+      suggestions: true,
+      font: "sf",
+      uiSize: 1,
+      refreshEvery: 0,
+      refreshHour: 10,
       billAlerts: true,
       countdownAlerts: true
     };
-    var s = Object.assign(defaults, root.FridayStorage.get("settings", {}));
+    var stored = root.FridayStorage.get("settings", {}) || {};
+    // 3.3: the best quality (Max) replaces HD once. Original stays Original.
+    if (!stored.renderMax33) {
+      if (stored.render !== "original") stored.render = "max";
+      stored.renderMax33 = true;
+      root.FridayStorage.set("settings", stored);
+    }
+    var s = Object.assign(defaults, stored);
     if (!Array.isArray(s.chips)) {
       s.chips = cloneChips((root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.DEFAULT_CHIPS) || []);
     }
@@ -288,7 +304,7 @@
   };
 
   // A small picture of each layout: where the orb sits and where the bubbles go.
-  var LP_FRAMES = { orbit: [0.46, 0.28], ring: [0.46, 0.26], dock: [0.42, 0.32], grid: [0.24, 0.2], arc: [0.34, 0.26], orbonly: [0.5, 0.34], immersive: [0.5, 0.47], orbtop: [0.27, 0.27], orbdock: [0.8, 0.15], orbclock: [0.58, 0.3], double: [0.44, 0.24], spiral: [0.3, 0.24], home: [0.22, 0.18], list: [0.28, 0.22], sheet: [0.25, 0.2] };
+  var LP_FRAMES = { orbit: [0.46, 0.28], ring: [0.46, 0.26], dock: [0.42, 0.32], grid: [0.24, 0.2], arc: [0.34, 0.26], orbonly: [0.5, 0.34], immersive: [0.5, 0.42], orbtop: [0.27, 0.27], orbdock: [0.8, 0.15], orbclock: [0.58, 0.3], double: [0.44, 0.24], spiral: [0.3, 0.24], home: [0.22, 0.18], list: [0.28, 0.22], sheet: [0.25, 0.2] };
   function layoutPreview(id) {
     var W = 64, H = 112, f = LP_FRAMES[id] || LP_FRAMES.orbit, cx = W / 2, cy = f[0] * H, r = f[1] * W * 0.9;
     var g = "lpg" + id, dots = [], i, a;
@@ -382,6 +398,7 @@
     this._bindShortcutSetup();
     this._bind30();
     this._bind31();
+    this._bind33();
     this._bindNav();
     this._syncHeaders();
 
@@ -429,6 +446,8 @@
     function keyPh() { key.placeholder = root.FridayStorage.hasApiKey() ? "Key saved. Paste a new one to replace it." : "Paste your Groq key"; }
     function syncKey() {
       keyPh();
+      var mk = document.getElementById("mainkey-current");
+      if (mk) mk.textContent = root.FridayStorage.hasApiKey() ? "Saved" : "Not set";
       mask.textContent = root.FridayStorage.hasApiKey() ? "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
     }
     this._syncKey = syncKey;
@@ -677,6 +696,210 @@
     if (hint) hint.textContent = "Tap a voice to choose it, or ▶ to hear it first. AI voices sound the most natural; Premium iPhone voices come next.";
   };
 
+  // ---------- 3.3: font and size ----------
+  var FONTS = [
+    { id: "sf", name: "SF Pro", note: "iPhone look", stack: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif' },
+    { id: "inter", name: "Inter", note: "Clean, modern", stack: '"Inter", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "outfit", name: "Outfit", note: "Soft, round", stack: '"Outfit", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "sora", name: "Sora", note: "Wide, techy", stack: '"Sora", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "space", name: "Space Grotesk", note: "Techy", stack: '"Space Grotesk", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "exo", name: "Exo 2", note: "Futuristic", stack: '"Exo 2", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "rajdhani", name: "Rajdhani", note: "HUD, sci-fi", stack: '"Rajdhani", -apple-system, BlinkMacSystemFont, sans-serif' },
+    { id: "orbitron", name: "Orbitron", note: "Sci-fi titles", stack: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif', title: '"Orbitron", -apple-system, BlinkMacSystemFont, sans-serif' }
+  ];
+  var SIZE_NAMES = { "1": "Normal", "0.9": "Small", "0.8": "Extra small", "0.72": "Tiny" };
+  function applyType(v) {
+    v = v || {};
+    var f = FONTS.filter(function (x) { return x.id === (v.font || "sf"); })[0] || FONTS[0];
+    var de = document.documentElement;
+    de.style.setProperty("--font", f.stack);
+    de.style.setProperty("--font-title", f.title || f.stack);
+    var z = +v.uiSize || 1;
+    if (!(z >= 0.6 && z <= 1.2)) z = 1;
+    de.style.setProperty("--ui-zoom", String(z));
+  }
+  root.FridayApplyType = applyType;
+  root.FridayFonts = FONTS;
+  try { applyType(root.FridayLoadSettings ? root.FridayLoadSettings() : {}); } catch (e) {}
+
+  FridaySettings.prototype._bind33 = function () {
+    var self = this, v = this.values;
+    function save() { saveSettings(v); }
+    function talk() { if (root.__fridayApplyTalkbar) root.__fridayApplyTalkbar(); }
+    function setText(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+    function bubblesApi() { return root.__friday && root.__friday.bubbles; }
+
+    // main screen
+    var ts = document.getElementById("talk-style");
+    function syncTs() {
+      if (ts) ts.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-talk-style") === (v.talkStyle || "pill")); });
+      setText("mainscreen-current", v.talkStyle === "dock" ? "Glass dock" : "Pill bar");
+    }
+    if (ts) ts.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-talk-style]");
+      if (!b) return;
+      v.talkStyle = b.getAttribute("data-talk-style");
+      save(); syncTs(); talk();
+    });
+    syncTs();
+    function bindToggle(id, key, dflt, after) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.checked = dflt ? v[key] !== false : v[key] === true;
+      el.addEventListener("change", function () { v[key] = el.checked; save(); if (after) after(); talk(); });
+    }
+    bindToggle("set-orb-talk", "orbTalk", true);
+    bindToggle("set-hide-orb", "hideOrbTyping", false);
+    bindToggle("set-speak-typed", "speakTyped", false);
+    bindToggle("set-suggestions", "suggestions", true, function () { syncQuick(); });
+
+    // quick switches on the hub mirror the real switches
+    var pairs = [["qs-handsfree", "set-handsfree"], ["qs-live", "set-live-listen"], ["qs-suggest", "set-suggestions"]];
+    function syncQuick() {
+      pairs.forEach(function (p) {
+        var q = document.getElementById(p[0]), o = document.getElementById(p[1]);
+        if (q && o) q.checked = o.checked;
+      });
+    }
+    pairs.forEach(function (p) {
+      var q = document.getElementById(p[0]);
+      if (q) q.addEventListener("change", function () {
+        var o = document.getElementById(p[1]);
+        if (!o) return;
+        o.checked = q.checked;
+        o.dispatchEvent(new Event("change"));
+      });
+    });
+    this._syncQuick = syncQuick;
+    syncQuick();
+
+    // font and size
+    var fg = document.getElementById("font-grid");
+    function syncFont() {
+      if (fg) fg.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-font") === (v.font || "sf")); });
+      var f = FONTS.filter(function (x) { return x.id === (v.font || "sf"); })[0] || FONTS[0];
+      var z = +v.uiSize || 1;
+      setText("font-current", f.name + (z !== 1 ? " · " + (SIZE_NAMES[String(z)] || "Small") : ""));
+      var us0 = document.getElementById("ui-size");
+      if (us0) us0.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", +b.getAttribute("data-size") === z); });
+    }
+    if (fg && !fg.children.length) FONTS.forEach(function (f) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-font", f.id);
+      b.style.fontFamily = f.title || f.stack;
+      b.appendChild(document.createTextNode(f.name));
+      var sm = document.createElement("small");
+      sm.textContent = f.note;
+      b.appendChild(sm);
+      b.onclick = function () { v.font = f.id; save(); applyType(v); syncFont(); };
+      fg.appendChild(b);
+    });
+    var us = document.getElementById("ui-size");
+    if (us) us.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-size]");
+      if (!b) return;
+      v.uiSize = +b.getAttribute("data-size");
+      save(); applyType(v); syncFont();
+      var bb = bubblesApi(); if (bb) bb.layout();
+    });
+    applyType(v);
+    syncFont();
+
+    // links (Connections page): one step, with a bubble on her home screen
+    function normLink(url) {
+      url = String(url || "").trim();
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && /^[\w.-]+\.[a-z]{2,}([\/:?#]|$)/i.test(url)) url = "https://" + url;
+      return url;
+    }
+    function addLink(name, url, extra) {
+      var list = loadConnections();
+      var c = Object.assign({ id: "c" + Math.random().toString(36).slice(2, 9), name: name, url: url, kind: "link" }, extra || {});
+      list.push(c);
+      saveConnections(list);
+      if (self._renderConnections) self._renderConnections();
+      var bb = bubblesApi();
+      if (bb && bb.add) { try { bb.add({ kind: "link", label: name, gold: true, size: "lg", action: "url", url: url, connectionId: c.id, addedAt: Date.now() }); } catch (e) {} }
+      return c;
+    }
+    self._addLink = addLink;
+    var la = document.getElementById("btn-link-add");
+    if (la) la.onclick = function () {
+      var ne = document.getElementById("link-name"), ue = document.getElementById("link-url");
+      var name = String((ne || {}).value || "").trim(), url = normLink((ue || {}).value);
+      if (!name) { setText("link-status", "Give it a name, like Refresh apps or Spotify."); return; }
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) { setText("link-status", "Paste a link that starts with https:// or an app link like spotify://."); return; }
+      addLink(name, url);
+      ne.value = ""; ue.value = "";
+      setText("link-status", "Added " + name + ". It's on her home screen, and you can say “open " + name + "”.");
+    };
+    var rr = document.getElementById("btn-ready-refresh");
+    if (rr) rr.onclick = function () {
+      if (loadConnections().some(function (c) { return c.ready === "refresh"; })) {
+        setText("refresh-status", "Refresh apps is already in your links. Tap its bubble or say “refresh my apps”.");
+        return;
+      }
+      var R = root.FridayRefresh;
+      (R ? R.url() : Promise.resolve("localdevvpn://enable?scheme=altload")).then(function (url) {
+        addLink("Refresh apps", url, { ready: "refresh" });
+        setText("refresh-status", "Added. Tap the Refresh apps bubble or say “refresh my apps”: LocalDevVPN comes on and your installer opens, then you tap Refresh.");
+      });
+    };
+
+    // refresh reminder
+    var re = document.getElementById("refresh-every"), rh = document.getElementById("refresh-hour");
+    function hourLabel(h) { return (h % 12 || 12) + (h < 12 ? " AM" : " PM"); }
+    if (rh && !rh.options.length) for (var h = 6; h <= 22; h++) { var o = document.createElement("option"); o.value = String(h); o.textContent = hourLabel(h); rh.appendChild(o); }
+    function syncRefresh() {
+      var n = +v.refreshEvery || 0;
+      if (re) re.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", +b.getAttribute("data-every") === n); });
+      if (rh) rh.value = String(v.refreshHour || 10);
+      setText("refresh-current", n ? "Every " + n + " days" : "Off");
+    }
+    function reschedule() { if (root.FridayRefresh && root.FridayRefresh.schedule) root.FridayRefresh.schedule(true); }
+    if (re) re.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-every]");
+      if (!b) return;
+      v.refreshEvery = +b.getAttribute("data-every");
+      save(); syncRefresh(); reschedule();
+      if (v.refreshEvery && root.__fridayTurnOnNotifications) root.__fridayTurnOnNotifications();
+    });
+    if (rh) rh.onchange = function () { v.refreshHour = +rh.value || 10; save(); syncRefresh(); reschedule(); };
+    var rn = document.getElementById("btn-refresh-now");
+    if (rn) rn.onclick = function () { if (root.FridayRefresh) root.FridayRefresh.run(); };
+    syncRefresh();
+
+    // Cloudflare (two boxes: account ID + token)
+    var cfo = document.getElementById("btn-cf-open"), cfb = document.getElementById("cf-box");
+    if (cfo && cfb) cfo.onclick = function () { cfb.hidden = !cfb.hidden; };
+    var cfs = document.getElementById("btn-cf-site");
+    if (cfs) cfs.onclick = function () { try { window.open("https://dash.cloudflare.com/profile/api-tokens", "_blank"); } catch (e) {} };
+    var cfa = document.getElementById("btn-cf-add");
+    if (cfa) cfa.onclick = function () {
+      var B = root.FridayBrain;
+      var acc = String((document.getElementById("cf-account") || {}).value || "").trim();
+      var tokEl = document.getElementById("cf-token");
+      var tok = String((tokEl || {}).value || "").trim();
+      var say = function (t) { setText("paste-key-status", t); };
+      if (!/^[a-f0-9]{32}$/i.test(acc)) { say("The Account ID is 32 letters and numbers. Find it on the right side of your Cloudflare dashboard."); return; }
+      if (tok.length < 20) { say("Paste the whole Cloudflare API token."); return; }
+      if (!B || !B.addCloudflare) return;
+      cfa.disabled = true;
+      say("Checking Cloudflare…");
+      B.addCloudflare(acc, tok, say).then(function (r) {
+        cfa.disabled = false;
+        if (r.ok) {
+          if (tokEl) tokEl.value = "";
+          if (self._renderConnections) self._renderConnections();
+          if (self._syncBrain) self._syncBrain();
+          say("Cloudflare is added and on as a backup brain (model " + r.model + "). You can also say “ask Cloudflare …”.");
+        } else {
+          say(r.reason === "auth" ? "Cloudflare didn't accept that token. Make a token with the Workers AI template and paste it again." : "Cloudflare didn't answer (" + r.reason + "). Check the Account ID and token.");
+        }
+      });
+    };
+  };
+
   // ---------- 3.1: Settings in pages ----------
   FridaySettings.prototype._bindNav = function () {
     var self = this;
@@ -691,8 +914,23 @@
       if (body) body.scrollTop = 0;
       self.page = pid || "";
       if (pid === "phone" && self._refreshPhone) self._refreshPhone();
+      if (pid) {
+        var item = document.querySelector('#settings-menu .smenu-item[data-page="' + pid + '"]');
+        var grp = item && item.closest(".sgroup");
+        if (grp && self.pickGroup) self.pickGroup(grp.getAttribute("data-group"));
+      } else if (self._syncQuick) self._syncQuick();
     }
     this.showPage = show;
+    function pickGroup(g) {
+      g = g || self._group || "her";
+      self._group = g;
+      document.querySelectorAll("#settings-menu .sgroup").forEach(function (el) { el.hidden = el.getAttribute("data-group") !== g; });
+      document.querySelectorAll("#settings-hub .shub-b").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-group") === g); });
+    }
+    this.pickGroup = pickGroup;
+    var hub = document.getElementById("settings-hub");
+    if (hub) hub.addEventListener("click", function (e) { var b = e.target.closest(".shub-b"); if (b) pickGroup(b.getAttribute("data-group")); });
+    pickGroup("her");
     if (menu) menu.addEventListener("click", function (e) { var b = e.target.closest(".smenu-item"); if (b) show(b.getAttribute("data-page")); });
     if (back) back.onclick = function () { show(""); };
     root.__fridaySettingsShow = function (id) {
@@ -1152,12 +1390,14 @@
     if (wm) wm.addEventListener("click", function (e) { var b = e.target.closest("button[data-web]"); if (!b) return; v.webMode = b.getAttribute("data-web"); saveSettings(v); syncWeb(); });
     syncWeb();
 
-    var hd = document.getElementById("render-hd"), og = document.getElementById("render-og");
+    var mx = document.getElementById("render-max"), hd = document.getElementById("render-hd"), og = document.getElementById("render-og");
     function syncRender() {
-      var isHd = v.render !== "original";
-      if (hd) hd.classList.toggle("on", isHd);
-      if (og) og.classList.toggle("on", !isHd);
+      var r = v.render === "original" ? "original" : (v.render === "hd" ? "hd" : "max");
+      if (mx) mx.classList.toggle("on", r === "max");
+      if (hd) hd.classList.toggle("on", r === "hd");
+      if (og) og.classList.toggle("on", r === "original");
     }
+    if (mx) mx.onclick = function () { v.render = "max"; saveSettings(v); syncRender(); self.onRender("max"); };
     if (hd) hd.onclick = function () { v.render = "hd"; saveSettings(v); syncRender(); self.onRender("hd"); };
     if (og) og.onclick = function () { v.render = "original"; saveSettings(v); syncRender(); self.onRender("original"); };
     syncRender();
@@ -1250,10 +1490,15 @@
   };
 
   FridaySettings.prototype._syncConnectionsHeader = function () {
+    var all = loadConnections();
+    var links = all.filter(function (c) { return c.type !== "agent"; }).length;
+    var brains = all.filter(function (c) { return c.type === "agent"; }).length;
     var el = document.getElementById("connections-current");
-    if (!el) return;
-    var n = loadConnections().length;
-    el.textContent = n ? (n + (n === 1 ? " connected" : " connected")) : "None";
+    if (el) el.textContent = links ? links + (links === 1 ? " link" : " links") : "None";
+    var le = document.getElementById("links-empty");
+    if (le) le.hidden = links > 0;
+    var be = document.getElementById("brains-empty");
+    if (be) be.hidden = brains > 0;
   };
 
   FridaySettings.prototype._bindConnections = function () {
@@ -1287,6 +1532,8 @@
     function renderList() {
       var list = current();
       listEl.innerHTML = "";
+      var linksEl = document.getElementById("links-list");
+      if (linksEl) linksEl.innerHTML = "";
       list.forEach(function (c, i) {
         var row = document.createElement("div");
         row.className = "connection-row";
@@ -1309,7 +1556,7 @@
         var add = document.createElement("button");
         add.type = "button";
         add.className = "btn gold";
-        add.textContent = "Add bubble";
+        add.textContent = "Bubble";
         if (c.type === "agent") {
           add.textContent = "Test";
           add.className = "btn";
@@ -1368,10 +1615,12 @@
           bk.appendChild(cb);
           row.appendChild(bk);
         }
-        listEl.appendChild(row);
+        if (c.type === "agent" || !linksEl) listEl.appendChild(row);
+        else linksEl.appendChild(row);
       });
       self._syncConnectionsHeader();
     }
+    self._renderConnections = renderList;
 
     var addBtn = document.getElementById("btn-conn-add");
     if (addBtn) {
@@ -1425,6 +1674,7 @@
       var gPaid = document.createElement("optgroup"); gPaid.label = "AI · paid or other";
       Object.keys(AGENT_PRESETS).forEach(function (k) {
         var pr = AGENT_PRESETS[k];
+        if (pr.twoBox) return; // Cloudflare has its own two-box form under Paste a key
         var o = document.createElement("option");
         o.value = k; o.textContent = pr.label || pr.name || k;
         (pr.free ? gFree : gPaid).appendChild(o);
@@ -1523,6 +1773,7 @@
     });
     renderIcons();
     renderList();
+    if (typeEl && typeEl.onchange) typeEl.onchange();
   };
 
   FridaySettings.prototype._bindShortcutSetup = function () {

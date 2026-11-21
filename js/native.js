@@ -52,15 +52,28 @@
         return ok;
       } catch (e) { return false; }
     },
-    at: async function (key, title, body, when) {
+    at: async function (key, title, body, when, extra) {
       var P = plugin("LocalNotifications");
       if (!P || !notify.allowed()) return false;
       var t = when instanceof Date ? when : new Date(when);
       if (!(t > new Date(Date.now() + 1000))) return false;
+      var n = { id: hashId(key), title: title, body: body, schedule: { at: t, allowWhileIdle: true }, sound: "default" };
+      if (extra) n.extra = extra;
       try {
-        await P.schedule({ notifications: [{ id: hashId(key), title: title, body: body, schedule: { at: t, allowWhileIdle: true }, sound: "default" }] });
+        await P.schedule({ notifications: [n] });
         return true;
       } catch (e) { return false; }
+    },
+    // Runs fn(extra) when you tap one of her notifications.
+    onTap: function (fn) {
+      var P = plugin("LocalNotifications");
+      if (!P || !P.addListener) return;
+      try {
+        P.addListener("localNotificationActionPerformed", function (e) {
+          var n = e && e.notification;
+          try { fn((n && n.extra) || {}, n); } catch (er) {}
+        });
+      } catch (e) {}
     },
     cancel: async function (key) {
       var P = plugin("LocalNotifications");
@@ -250,6 +263,25 @@
       if (!P) return { ok: false };
       try { var r = await P.composeText({ to: [number], body: body }); return { ok: true, result: (r && r.result) || "" }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    // Which app links open on this iPhone, e.g. canOpen(["altload","sidestore"]) -> { altload: true, sidestore: false }.
+    canOpen: async function (schemes) {
+      var P = plugin("FridayKit");
+      if (!P || !P.canOpen) return null;
+      try { var r = await P.canOpen({ schemes: schemes }); return (r && r.apps) || null; }
+      catch (e) { return null; }
+    },
+    // iPhone's heat level: "nominal", "fair", "serious" or "critical". fn runs now and whenever it changes.
+    watchHeat: function (fn) {
+      var P = plugin("FridayKit");
+      if (!P || !P.thermal) return;
+      P.thermal().then(function (r) { if (r && r.state) fn(r.state); }, function () {});
+      if (P.addListener) { try { P.addListener("thermal", function (e) { if (e && e.state) fn(e.state); }); } catch (e) {} }
+    },
+    darkKeyboard: async function () {
+      var P = plugin("FridayKit");
+      if (!P || !P.darkKeyboard) return false;
+      try { await P.darkKeyboard(); return true; } catch (e) { return false; }
     }
   };
 

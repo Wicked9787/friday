@@ -28,6 +28,12 @@ if (!xml.includes("<key>CFBundleURLTypes</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLName</key>\n\t\t\t<string>${scheme}</string>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array>\n\t\t\t\t<string>${scheme}</string>\n\t\t\t</array>\n\t\t</dict>\n\t</array>\n` + xml.slice(i);
 }
+// App links Friday can check for (so "refresh my apps" finds your installer). iPhone only allows up to 50.
+const QUERY = ["localdevvpn", "altload", "altstore", "sidestore", "altserver", "feather", "livecontainer"];
+if (!xml.includes("<key>LSApplicationQueriesSchemes</key>")) {
+  const i = xml.lastIndexOf("</dict>");
+  xml = xml.slice(0, i) + `\t<key>LSApplicationQueriesSchemes</key>\n\t<array>\n` + QUERY.map(q => `\t\t<string>${q}</string>\n`).join("") + `\t</array>\n` + xml.slice(i);
+}
 // Background audio: lets her keep a conversation going for a few minutes after you switch apps
 // (only while you're talking with her; she goes to sleep after the time set in the app).
 if (!xml.includes("<key>UIBackgroundModes</key>")) {

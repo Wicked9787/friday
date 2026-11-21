@@ -34,9 +34,9 @@
     groq:       { label: "Groq (free)", name: "Groq", base: GROQ_BASE, model: "openai/gpt-oss-120b", style: "openai", keyUrl: "https://console.groq.com/keys", free: true },
     gemini:     { label: "Google Gemini (free tier)", name: "Gemini", base: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-flash-latest", style: "gemini", keyUrl: "https://aistudio.google.com/apikey", free: true },
     openrouter: { label: "OpenRouter (free models)", name: "OpenRouter", base: "https://openrouter.ai/api/v1", model: "openai/gpt-oss-20b:free", style: "openai", keyUrl: "https://openrouter.ai/keys", free: true },
-    cerebras:   { label: "Cerebras (free tier)", name: "Cerebras", base: "https://api.cerebras.ai/v1", model: "gpt-oss-120b", style: "openai", keyUrl: "https://cloud.cerebras.ai", free: true },
-    mistral:    { label: "Mistral (free tier)", name: "Mistral", base: "https://api.mistral.ai/v1", model: "mistral-small-latest", style: "openai", keyUrl: "https://console.mistral.ai/api-keys", free: true },
-    github:     { label: "GitHub Models (free)", name: "GitHub", base: "https://models.github.ai/inference", model: "openai/gpt-4.1-mini", style: "openai", keyUrl: "https://github.com/settings/tokens", free: true },
+    cloudflare: { label: "Cloudflare Workers AI (free daily)", name: "Cloudflare", base: "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1", model: "@cf/meta/llama-3.3-70b-instruct-fp8-fast", style: "openai", keyUrl: "https://dash.cloudflare.com/profile/api-tokens", free: true, twoBox: true },
+    cerebras:   { label: "Cerebras (needs a card)", name: "Cerebras", base: "https://api.cerebras.ai/v1", model: "gpt-oss-120b", style: "openai", keyUrl: "https://cloud.cerebras.ai" },
+    mistral:    { label: "Mistral (needs a card)", name: "Mistral", base: "https://api.mistral.ai/v1", model: "mistral-small-latest", style: "openai", keyUrl: "https://console.mistral.ai/api-keys" },
     openai:     { label: "ChatGPT / OpenAI (paid)", name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini", style: "openai", keyUrl: "https://platform.openai.com/api-keys" },
     xai:        { label: "Grok / xAI (paid)", name: "Grok", base: "https://api.x.ai/v1", model: "grok-4-fast", style: "openai", keyUrl: "https://console.x.ai" },
     deepseek:   { label: "DeepSeek (paid, cheap)", name: "DeepSeek", base: "https://api.deepseek.com/v1", model: "deepseek-chat", style: "openai", keyUrl: "https://platform.deepseek.com/api_keys" },
@@ -211,6 +211,40 @@
     return full.trim();
   }
 
+  // 3.3: some AI sites block requests from inside apps (CORS). The installed app can send them
+  // straight from the iPhone instead, so backup brains still work. Cloudflare always goes this way.
+  function nativeHttp() {
+    var C = root.Capacitor;
+    try { return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.CapacitorHttp || null; } catch (e) { return null; }
+  }
+  function mustGoNative(url) { return /api\.cloudflare\.com/.test(url || ""); }
+  async function http(url, init) {
+    init = init || {};
+    var H = nativeHttp();
+    async function viaNative() {
+      var data = init.body;
+      if (typeof data === "string") { try { data = JSON.parse(data); } catch (e) {} }
+      if (data && typeof data === "object") { delete data.stream; delete data.stream_options; }
+      var r = await H.request({ url: url, method: init.method || "GET", headers: init.headers || {}, data: data, connectTimeout: 20000, readTimeout: 90000 });
+      if (init.signal && init.signal.aborted) { var ab = new Error("aborted"); ab.name = "AbortError"; throw ab; }
+      var d = r && r.data;
+      var text = typeof d === "string" ? d : JSON.stringify(d == null ? "" : d);
+      var st = +(r && r.status) || 0;
+      return {
+        ok: st >= 200 && st < 300, status: st, body: null, native: true,
+        text: function () { return Promise.resolve(text); },
+        json: function () { return Promise.resolve(typeof d === "string" ? JSON.parse(d) : d); }
+      };
+    }
+    if (H && mustGoNative(url)) return viaNative();
+    try { return await fetch(url, init); }
+    catch (e) {
+      if (e && e.name === "AbortError") throw e;
+      if (H) return viaNative();
+      throw e;
+    }
+  }
+
   async function callOpenAI(base, key, model, messages, opts) {
     base = String(base || "").trim().replace(/\/+$/, "");
     var url = /\/chat\/completions$/.test(base) ? base : base + "/chat/completions";
@@ -219,7 +253,7 @@
     var body = openaiBody(model, messages, opts);
     var res;
     try {
-      res = await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body), signal: opts.signal });
+      res = await http(url, { method: "POST", headers: headers, body: JSON.stringify(body), signal: opts.signal });
     } catch (e) {
       if (e && e.name === "AbortError") throw e;
       throw BrainError("network", "offline");
@@ -235,8 +269,9 @@
       }
       throw BrainError(errText.slice(0, 200) || ("HTTP " + res.status), kind);
     }
-    if (opts.stream && opts.onDelta) return readStream(res, opts.onDelta);
+    if (opts.stream && opts.onDelta && !res.native && res.body) return readStream(res, opts.onDelta);
     var data = await res.json();
+    if (data && data.result && !data.choices && data.success !== undefined) data = data.result;
     var text = extractText(data);
     if (opts.onDelta && text) opts.onDelta(text);
     return text;
@@ -478,7 +513,7 @@
         .filter(function (id) { return !/embed|tts|image|aqa|imagen|veo|live|audio|robotics|computer-use/i.test(id); })
         .sort();
     } else {
-      res = await fetch(base + "/models", { headers: key ? { Authorization: "Bearer " + key } : {} });
+      res = await http(base + "/models", { headers: key ? { Authorization: "Bearer " + key } : {} });
     }
     if (!res.ok) throw new Error("HTTP " + res.status);
     var data = await res.json();
@@ -504,7 +539,6 @@
     [/^csk-/, ["cerebras"]],
     [/^sk-ant-/, ["anthropic"]],
     [/^xai-/, ["xai"]],
-    [/^(github_pat_|ghp_|gho_)/, ["github"]],
     [/^sk-(proj|svcacct|admin)-/, ["openai"]],
     [/^sk-[a-f0-9]{32}$/, ["deepseek", "openai"]],
     [/^sk-/, ["openai", "deepseek"]],
@@ -521,8 +555,7 @@
     openrouter: [/gpt-oss-120b:free$/, /gpt-oss-20b:free$/, /llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /gemma.*:free$/, /mistral.*:free$/, /:free$/],
     cerebras: [/^gpt-oss-120b$/, /llama-3\.3-70b/, /qwen-3/, /llama/],
     groq: [/^openai\/gpt-oss-120b$/, /^openai\/gpt-oss-20b$/, /^llama-3\.3-70b-versatile$/],
-    mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^open-mistral-nemo/, /^mistral-small/],
-    github: [/gpt-4\.1-mini$/, /gpt-4o-mini$/]
+    mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^open-mistral-nemo/, /^mistral-small/]
   };
   function pickModels(provider, ids) {
     var out = [], pr = PRESETS[provider] || {};
@@ -597,8 +630,50 @@
     return { ok: false, reason: lastReason || "unknown" };
   }
 
+  // Cloudflare Workers AI: free every day (no card). Needs your Account ID and an API token.
+  var CF_MODELS = ["@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/openai/gpt-oss-120b", "@cf/meta/llama-3.1-8b-instruct-fast"];
+  async function addCloudflare(account, token, onStep) {
+    account = String(account || "").trim().toLowerCase();
+    token = String(token || "").trim().replace(/^Bearer\s+/i, "").replace(/\s+/g, "");
+    var step = typeof onStep === "function" ? onStep : function () {};
+    if (!/^[a-f0-9]{32}$/.test(account)) return { ok: false, reason: "account" };
+    if (token.length < 20) return { ok: false, reason: "short" };
+    var st = store();
+    var base = "https://api.cloudflare.com/client/v4/accounts/" + account + "/ai/v1";
+    var all = st.get("connections", []) || [];
+    var same = all.filter(function (c) { return c && c.type === "agent" && c.provider === "cloudflare" && c.baseUrl === base && st.getAgentKey(c.id) === token; })[0];
+    if (same) { same.backup = true; st.set("connections", all); return { ok: true, already: true, name: same.name, model: same.model }; }
+    var lastReason = "";
+    for (var j = 0; j < CF_MODELS.length; j++) {
+      var agent = { id: "a" + Math.random().toString(36).slice(2, 9), name: "Cloudflare", type: "agent", provider: "cloudflare", style: "openai", baseUrl: base, model: CF_MODELS[j], kind: "chat" };
+      st.setAgentKey(agent.id, token);
+      step("Testing Cloudflare (" + CF_MODELS[j].split("/").pop() + ")…");
+      var works = false, limited = false;
+      try {
+        var out = await callAgent(agent, [{ role: "user", content: "Reply with the single word: ready" }], { max_tokens: 20, temperature: 0 });
+        works = !!String(out || "").trim();
+      } catch (e) {
+        lastReason = (e && e.kind) || "other";
+        if (lastReason === "busy" || lastReason === "daily") { works = true; limited = true; }
+      }
+      if (works) {
+        all = st.get("connections", []) || [];
+        agent.name = uniqueName("Cloudflare", all);
+        agent.backup = true;
+        all.push(agent);
+        st.set("connections", all);
+        return { ok: true, provider: "cloudflare", name: agent.name, model: agent.model, limited: limited };
+      }
+      st.setAgentKey(agent.id, "");
+      if (lastReason === "auth" || lastReason === "offline") break;
+    }
+    return { ok: false, reason: lastReason || "unknown" };
+  }
+
   root.FridayBrain = {
     addKey: addKey,
+    addCloudflare: addCloudflare,
+    http: http,
     guessProviders: guessProviders,
     pickModels: pickModels,
     noteUse: noteUse,

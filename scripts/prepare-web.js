@@ -7,7 +7,7 @@ const profile = process.env.FRIDAY_PROFILE === "batsie" ? "batsie" : "sky";
 
 const entries = [
   "index.html", "config.js", "manifest.webmanifest", "sw.js",
-  "apple-touch-icon.png", "make_profile.html", "css", "js", "icons",
+  "apple-touch-icon.png", "make_profile.html", "css", "js", "icons", "fonts",
   "profiles", "scriptable", "friday-sky", "friday-batsie"
 ];
 

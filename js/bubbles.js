@@ -315,6 +315,13 @@
       var cr = chips.getBoundingClientRect();
       if (cr.top > cy) bottom = Math.min(bottom, cr.top - 4);
     }
+    // 3.3: keep bubbles above her words and the talk bar at the bottom
+    if (document.body.classList.contains("talkbar-on")) {
+      var cap = document.getElementById("caption"), tb = document.getElementById("talkbar");
+      var capR = cap && cap.offsetParent !== null ? cap.getBoundingClientRect() : null;
+      if (capR && capR.top > cy) bottom = Math.min(bottom, capR.top - 4);
+      else if (tb) { var tr = tb.getBoundingClientRect(); if (tr.top > cy) bottom = Math.min(bottom, tr.top - 60); }
+    }
     return {
       l: -w / 2 + 6, r: w / 2 - 6, t: top - cy, b: bottom - cy,
       orbR: f.radiusK * Math.min(w, h) * 1.02 + 4
@@ -744,6 +751,9 @@
     var usage = root.FridayStorage.get("usage", {}) || {};
     usage[key] = (usage[key] || 0) + 1;
     root.FridayStorage.set("usage", usage);
+    var at = root.FridayStorage.get("usageAt", {}) || {};
+    at[key] = Date.now();
+    root.FridayStorage.set("usageAt", at);
   };
 
   FridayBubbles.prototype.noteAppMentions = function (text) {
@@ -774,7 +784,7 @@
     });
   };
 
-  // Auto-add up to a few small suggestion bubbles from memory and frequent actions.
+  // Auto-add up to a few small suggestion bubbles from the things you use most.
   // Returns true if it already re-rendered.
   FridayBubbles.prototype.refreshSuggestions = function () {
     var self = this;
@@ -796,13 +806,8 @@
       candidates.push(spec);
     }
 
-    memory.forEach(function (m) {
-      var text = String((m && m.text) || m || "").trim();
-      if (!text) return;
-      var key = "memory:" + normKey(text).replace(/\s+/g, " ").slice(0, 80);
-      var label = text.length > 18 ? text.slice(0, 16) + "…" : text;
-      addCand({ suggestKey: key, kind: "memory", label: label, action: "panel", panel: "memory", fromMemory: true }, 5);
-    });
+    // 3.3: what she learns (memories, birthdays…) lives only in the neural map.
+    // Around her on the main screen: only the things you actually use most.
 
     Object.keys(usage).forEach(function (key) {
       if ((usage[key] || 0) < 2) return;
@@ -872,33 +877,71 @@
     this.save();
     if (!this.refreshSuggestions()) this.render();
   };
+  // 3.3: bubbles you stop using go away after a while (Memory always stays) and come back when you use them again.
+  var FADE_DAYS = 14;
+  FridayBubbles.prototype._fadeStep = function () {
+    var self = this, now = Date.now();
+    var at = root.FridayStorage.get("usageAt", {}) || {};
+    var faded = root.FridayStorage.get("bubblesFaded", {}) || {};
+    var gone = [];
+    this.list = this.list.filter(function (b) {
+      if (b.suggest || (b.action === "panel" && b.panel === "memory")) return true;
+      if (!b.addedAt) { b.addedAt = now; return true; }
+      var k = self.usageKey(b), last = Math.max(at[k] || 0, b.addedAt || 0);
+      if (now - last < FADE_DAYS * 86400000) return true;
+      faded[k] = { at: now, bubble: Object.assign({}, b, { slot: 0 }) };
+      gone.push(b);
+      return false;
+    });
+    // a faded bubble comes back as soon as you use it again
+    var back = [];
+    Object.keys(faded).forEach(function (k) {
+      var f = faded[k];
+      if (!f || !f.bubble) { delete faded[k]; return; }
+      if ((at[k] || 0) >= f.at && !self.list.some(function (b) { return self.usageKey(b) === k; })) {
+        var c = Object.assign({}, f.bubble, { learned: true, addedAt: now, slot: self.list.length });
+        self.list.push(c);
+        back.push(c);
+        delete faded[k];
+      }
+    });
+    root.FridayStorage.set("bubblesFaded", faded);
+    if (gone.length || back.length) {
+      this.list.forEach(function (b, i) { b.slot = i; });
+      this.save();
+    }
+    return gone.length + back.length > 0;
+  };
+
   FridayBubbles.prototype._learnStep = function () {
     if (!this.learning()) return false;
     var self = this;
+    var faded = this._fadeStep();
     var usage = root.FridayStorage.get("usage", {}) || {};
     var dismissed = root.FridayStorage.get("dismissedSuggestions", []) || [];
     var full = root.FridayStorage.get("bubblesFull", []) || [];
+    var fadedMap = root.FridayStorage.get("bubblesFaded", {}) || {};
     var have = {};
     this.list.forEach(function (b) { have[self.usageKey(b)] = 1; });
     var added = [];
     // 1) your own bubbles come back once you've used them a few times
     full.forEach(function (b) {
       var k = self.usageKey(b);
-      if (have[k] || dismissed.indexOf(k) >= 0 || (usage[k] || 0) < 3) return;
-      var c = Object.assign({}, b, { learned: true, slot: self.list.length });
+      if (have[k] || dismissed.indexOf(k) >= 0 || fadedMap[k] || (usage[k] || 0) < 3) return;
+      var c = Object.assign({}, b, { learned: true, addedAt: Date.now(), slot: self.list.length });
       self.list.push(c); have[k] = 1; added.push(c);
     });
     // 2) suggestions you keep using become regular bubbles
     this.list.forEach(function (b) {
       if (b.suggest && (usage[b.suggestKey] || 0) >= 3 && dismissed.indexOf(b.suggestKey) < 0) {
-        b.suggest = false; b.learned = true; added.push(b);
+        b.suggest = false; b.learned = true; b.addedAt = Date.now(); added.push(b);
       }
     });
     if (added.length) {
       this.save();
       if (this.onLearned) this.onLearned(added);
     }
-    return added.length > 0;
+    return added.length > 0 || faded;
   };
 
   FridayBubbles.prototype.activate = function (b) {

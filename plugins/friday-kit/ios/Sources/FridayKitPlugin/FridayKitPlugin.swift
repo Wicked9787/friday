@@ -3,6 +3,7 @@ import Capacitor
 import MediaPlayer
 import MessageUI
 import UIKit
+import ObjectiveC
 
 /// Friday's phone add-on.
 ///   Music: play, pause, skip and "play <artist / song / playlist / album>" from the iPhone's Music library.
@@ -17,10 +18,85 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "musicPlay", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "nowPlaying", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "canText", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "composeText", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "composeText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "canOpen", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "darkKeyboard", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "thermal", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
+    private static var keyboardDone = false
+
+    override public func load() {
+        FridayKitPlugin.useDarkKeyboard()
+        NotificationCenter.default.addObserver(self, selector: #selector(thermalChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
+    }
+
+    // ---------- heat ----------
+    /// iPhone's own heat level, so the orb can ease off before the phone gets hot.
+    private static func thermalName() -> String {
+        switch ProcessInfo.processInfo.thermalState {
+        case .nominal: return "nominal"
+        case .fair: return "fair"
+        case .serious: return "serious"
+        case .critical: return "critical"
+        @unknown default: return "nominal"
+        }
+    }
+
+    @objc private func thermalChanged() {
+        let st = FridayKitPlugin.thermalName()
+        DispatchQueue.main.async {
+            self.notifyListeners("thermal", data: ["state": st], retainUntilConsumed: false)
+        }
+    }
+
+    @objc func thermal(_ call: CAPPluginCall) {
+        call.resolve(["state": FridayKitPlugin.thermalName()])
+    }
+
+    // ---------- keyboard ----------
+    /// Makes the iPhone keyboard always use its dark look inside the app. Only the keyboard changes; the app's own colors stay the same.
+    private static func useDarkKeyboard() {
+        if keyboardDone { return }
+        keyboardDone = true
+        let block: @convention(block) (AnyObject) -> Int = { _ in UIKeyboardAppearance.dark.rawValue }
+        let imp = imp_implementationWithBlock(unsafeBitCast(block, to: AnyObject.self))
+        let sel = NSSelectorFromString("keyboardAppearance")
+        for name in ["WKContentView", "UITextInputTraits"] {
+            guard let cls: AnyClass = NSClassFromString(name) else { continue }
+            if let m = class_getInstanceMethod(cls, sel) {
+                method_setImplementation(m, imp)
+            } else {
+                class_addMethod(cls, sel, imp, "q@:")
+            }
+        }
+    }
+
+    @objc func darkKeyboard(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            FridayKitPlugin.useDarkKeyboard()
+            call.resolve(["ok": true])
+        }
+    }
+
+    // ---------- apps ----------
+    /// Which of these app links can open on this iPhone. Only works for links listed in the app's Info.plist.
+    @objc func canOpen(_ call: CAPPluginCall) {
+        let schemes = call.getArray("schemes", String.self) ?? []
+        DispatchQueue.main.async {
+            var out: [String: Bool] = [:]
+            for raw in schemes {
+                let sc = raw.replacingOccurrences(of: "://", with: "").replacingOccurrences(of: ":", with: "")
+                if let u = URL(string: sc + "://") {
+                    out[sc] = UIApplication.shared.canOpenURL(u)
+                } else {
+                    out[sc] = false
+                }
+            }
+            call.resolve(["apps": out])
+        }
+    }
 
     // ---------- music ----------
     private func authorize(_ done: @escaping (Bool) -> Void) {

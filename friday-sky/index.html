@@ -56,6 +56,33 @@
       <div id="bubbles"></div>
     </div>
     <div id="chips" aria-label="Quick replies"></div>
+    <div id="type-thread" aria-live="polite"></div>
+    <div id="orb-ring" aria-hidden="true"></div>
+    <div id="talkbar">
+      <div class="tb-row">
+        <button type="button" class="tb-btn tb-cam" id="tb-camera" aria-label="Show her a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-1.8h5l1.4 1.8h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.4"/></svg>
+        </button>
+        <button type="button" class="tb-btn tb-type" id="tb-type" aria-label="Type">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+          <span>Type</span>
+        </button>
+        <form id="tb-form" class="tb-form" autocomplete="off">
+          <input type="text" id="tb-input" placeholder="Type to Friday" enterkeyhint="send" autocomplete="off" autocapitalize="sentences" aria-label="Type a message">
+        </form>
+        <button type="button" class="tb-btn tb-send" id="tb-send" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+        </button>
+        <button type="button" class="tb-live" id="tb-live" aria-label="Live listening" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/></svg>
+          <span class="tb-live-t">Live</span>
+        </button>
+        <button type="button" class="tb-btn tb-look" id="tb-look" aria-label="Show her a photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-1.8h5l1.4 1.8h1.6A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.4"/></svg>
+          <span>Look</span>
+        </button>
+      </div>
+    </div>
     <div id="reveal-zone" aria-hidden="true"></div>
     <div id="caption">
       <div class="name" id="caption-name">friday</div>
@@ -85,39 +112,55 @@
     </header>
     <div class="body">
       <nav class="smenu" id="settings-menu" aria-label="Settings sections">
-        <button type="button" class="smenu-item" data-page="looks"><span class="smenu-t">Looks &amp; Layout</span><span class="smenu-s">Orb looks, app icon, layouts</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="voice"><span class="smenu-t">Voice &amp; Talking</span><span class="smenu-s">Voices, talk time, hands-free</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="brain"><span class="smenu-t">Brain &amp; Internet</span><span class="smenu-s">Groq key, backup brains, AI connections</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="phone"><span class="smenu-t">Phone &amp; Shortcut</span><span class="smenu-s">In-app jobs, notifications, Back Tap, Shortcut</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="routines"><span class="smenu-t">Routines</span><span class="smenu-s">Phrases that do several things</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="messages"><span class="smenu-t">Messages &amp; Contacts</span><span class="smenu-s">Messages, contacts, reading texts</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="widgets"><span class="smenu-t">Widgets</span><span class="smenu-s">Home Screen, Lock Screen, Control Center</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="display"><span class="smenu-t">Display &amp; Battery</span><span class="smenu-s">Mood, night mode, charging display, battery</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="daily"><span class="smenu-t">Briefing &amp; Recap</span><span class="smenu-s">Morning briefing, nightly recap, quick replies</span><span class="smenu-chev" aria-hidden="true">›</span></button>
-        <button type="button" class="smenu-item" data-page="backup"><span class="smenu-t">Backup &amp; About</span><span class="smenu-s">Backup, updates, reset</span><span class="smenu-chev" aria-hidden="true">›</span></button>
+        <div class="shub" id="settings-hub"><div class="shub-ring" aria-hidden="true"></div><div class="shub-orb" aria-hidden="true"><span></span></div><button type="button" class="shub-b" data-group="her" style="left:50%;top:4%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg></span><span class="shub-l">Her</span></button><button type="button" class="shub-b" data-group="brains" style="left:80%;top:21%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="3"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg></span><span class="shub-l">Brains</span></button><button type="button" class="shub-b" data-group="home" style="left:80%;top:54%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg></span><span class="shub-l">Home</span></button><button type="button" class="shub-b" data-group="phone" style="left:50%;top:71%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg></span><span class="shub-l">Phone</span></button><button type="button" class="shub-b" data-group="stuff" style="left:20%;top:54%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg></span><span class="shub-l">Your stuff</span></button><button type="button" class="shub-b" data-group="help" style="left:20%;top:21%"><span class="shub-c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10h14V9M10 13h4"/></svg></span><span class="shub-l">Help</span></button></div>
+        <div class="qs-card" id="quick-switches">
+          <label class="qs-row"><span>Hands-free<small>Listens when you open her</small></span><input type="checkbox" id="qs-handsfree"></label>
+          <label class="qs-row"><span>Live listening<small>Words show as you talk</small></span><input type="checkbox" id="qs-live"></label>
+          <label class="qs-row"><span>Suggestions<small>The chips above the text box</small></span><input type="checkbox" id="qs-suggest"></label>
+        </div>
+        <div class="sgroups"><div class="sgroup" data-group="her" hidden><div class="sgroup-h">Her</div><button type="button" class="smenu-item" data-page="looks"><span class="smenu-t">Looks &amp; Layout</span><span class="smenu-s">Orb, main screen, font, size</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="voice"><span class="smenu-t">Voice &amp; Talking</span><span class="smenu-s">Voices, talk time, live listening</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="display"><span class="smenu-t">Mood &amp; Display</span><span class="smenu-s">Mood, night mode, battery</span><span class="smenu-chev" aria-hidden="true">›</span></button></div><div class="sgroup" data-group="brains" hidden><div class="sgroup-h">Brains</div><button type="button" class="smenu-item" data-page="brain"><span class="smenu-t">Brains</span><span class="smenu-s">Main key, Paste a key, backup brains</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="internet"><span class="smenu-t">Internet</span><span class="smenu-s">Web search, faster replies</span><span class="smenu-chev" aria-hidden="true">›</span></button></div><div class="sgroup" data-group="home" hidden><div class="sgroup-h">Home</div><button type="button" class="smenu-item" data-page="lights"><span class="smenu-t">Lights</span><span class="smenu-s">AiDot over Wi-Fi, Apple Home</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="routines"><span class="smenu-t">Routines</span><span class="smenu-s">Phrases that do several things</span><span class="smenu-chev" aria-hidden="true">›</span></button></div><div class="sgroup" data-group="phone" hidden><div class="sgroup-h">Phone</div><button type="button" class="smenu-item" data-page="phone"><span class="smenu-t">In the app</span><span class="smenu-s">What she does herself, contacts</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="messages"><span class="smenu-t">Messages</span><span class="smenu-s">Friday and Jarvis, reading texts</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="shortcut"><span class="smenu-t">Shortcut</span><span class="smenu-s">Prompt, name, Back Tap</span><span class="smenu-chev" aria-hidden="true">›</span></button></div><div class="sgroup" data-group="stuff" hidden><div class="sgroup-h">Your stuff</div><button type="button" class="smenu-item" data-page="connections"><span class="smenu-t">Connections</span><span class="smenu-s">Links, Refresh apps</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="widgets"><span class="smenu-t">Widgets &amp; Charging</span><span class="smenu-s">Widgets, StandBy, charging display</span><span class="smenu-chev" aria-hidden="true">›</span></button><button type="button" class="smenu-item" data-page="daily"><span class="smenu-t">Briefing &amp; Recap</span><span class="smenu-s">Morning, night, headlines</span><span class="smenu-chev" aria-hidden="true">›</span></button></div><div class="sgroup" data-group="help" hidden><div class="sgroup-h">Help</div><button type="button" class="smenu-item" data-page="backup"><span class="smenu-t">Backup &amp; About</span><span class="smenu-s">Backup, version, reset</span><span class="smenu-chev" aria-hidden="true">›</span></button></div></div>
         <p class="smenu-version" id="app-version"></p>
       </nav>
       <section class="spage" id="sp-looks" data-title="Looks &amp; Layout" hidden>
+      <details class="accord" open id="accord-mainscreen">
+        <summary>Main screen <span class="accord-current" id="mainscreen-current">Pill bar</span></summary>
+        <div class="accord-body">
+          <div class="seg" role="group" aria-label="Bottom bar" id="talk-style">
+            <button type="button" data-talk-style="pill">Pill bar</button>
+            <button type="button" data-talk-style="dock">Glass dock</button>
+          </div>
+          <div class="sub">Pill bar: a text box with a Live button, like ChatGPT. Glass dock: Type, Live and Look in a frosted dock.</div>
+          <label class="toggle-row" style="margin-top:12px">Tap her orb to talk <input type="checkbox" id="set-orb-talk"></label>
+          <div class="sub">Tap her orb to start or stop listening. A gold ring shows while she listens.</div>
+          <label class="toggle-row" style="margin-top:12px">Hide her orb while typing <input type="checkbox" id="set-hide-orb"></label>
+          <div class="sub">When you type, her orb steps away until you turn Live back on.</div>
+          <label class="toggle-row" style="margin-top:12px">Speak typed replies <input type="checkbox" id="set-speak-typed"></label>
+          <div class="sub">Off: when you type, she answers on screen only. On: she says it out loud too.</div>
+          <label class="toggle-row" style="margin-top:12px">Suggestions <input type="checkbox" id="set-suggestions"></label>
+          <div class="sub">The quick reply chips above the text box. Edit them below.</div>
+        </div>
+      </details>
       <details class="accord" id="accord-looks">
         <summary>Looks <span class="accord-current" id="looks-current">Core &amp; shells</span></summary>
         <div class="accord-body">
           <div class="seg" role="group" aria-label="Render style">
-            <button type="button" id="render-hd">HD realistic</button>
+            <button type="button" id="render-max">Max (4K)</button>
+            <button type="button" id="render-hd">HD</button>
             <button type="button" id="render-og">Original</button>
           </div>
-          <p class="hint">HD realistic draws every look at full phone sharpness with depth, glass reflections and finer light. Original is the classic look, exactly as before.</p>
+          <p class="hint">Max is the best quality: she's drawn bigger than the screen (about 4K worth of pixels) and shrunk to fit, with more particles, so edges are smoother and the light is finer. It's smart about it: when nobody's talking for a minute, if it starts to stutter, or if the phone gets warm, she eases back to full screen sharpness (and a lighter look if the phone gets hot), then goes back to Max. HD is full screen sharpness all the time. Original is the classic look.</p>
           <p class="hint">Switch Friday’s orb whenever you like. All the looks we made are here. You can also swipe left or right on the orb.</p>
           <div class="looks" id="looks"></div>
         </div>
       </details>
-      <details class="accord" id="accord-icons">
+<details class="accord" id="accord-icons">
         <summary>App icon <span class="accord-current" id="icons-current">Current</span></summary>
         <div class="accord-body">
           <p class="hint">Pick a Home Screen icon, then install the new Web Clip in Settings. After it appears, delete the old icon. This replaces the previous Friday or Jarvis clip.</p>
           <div class="icon-grid" id="icon-grid"></div>
         </div>
       </details>
-      <details class="accord" id="accord-layout">
+<details class="accord" id="accord-layout">
         <summary>Layout <span class="accord-current" id="layout-current">Orbit</span></summary>
         <div class="accord-body">
           <p class="hint">How the bubbles sit around the orb. Edit mode works in every layout, and the bubble order is shared.</p>
@@ -128,8 +171,31 @@
           <button class="btn" type="button" id="btn-settings-reset-layout">Reset layout</button>
         </div>
       </details>
+      <details class="accord" id="accord-font">
+        <summary>Font and size <span class="accord-current" id="font-current">SF Pro</span></summary>
+        <div class="accord-body">
+          <div class="field-label">Font</div>
+          <div class="font-grid" id="font-grid"></div>
+          <div class="sub">Free fonts built into the app, so they work offline. Your typed words and hers use it; the keyboard keys stay Apple's.</div>
+          <div class="field-label" style="margin-top:14px">Size</div>
+          <div class="seg" role="group" aria-label="Size" id="ui-size">
+            <button type="button" data-size="1">Normal</button>
+            <button type="button" data-size="0.9">Small</button>
+            <button type="button" data-size="0.8">Extra small</button>
+            <button type="button" data-size="0.72">Tiny</button>
+          </div>
+          <div class="sub">Shrinks everything in the app (blocks, bubbles, text) so more fits. It can go smaller than iPhone's smallest text.</div>
+        </div>
+      </details>
+      <div class="row row-col">
+        <label>Suggestions</label>
+        <div class="sub">These chips sit above the text box. If a chip runs your shortcut, that tap opens Shortcuts directly.</div>
+        <div id="chip-editor"></div>
+        <button class="btn" type="button" id="btn-chip-add">Add a chip</button>
+      </div>
       </section>
       <section class="spage" id="sp-voice" data-title="Voice &amp; Talking" hidden>
+      
       <details class="accord" open id="accord-voice">
         <summary>Voice <span class="accord-current" id="voice-current">Automatic</span></summary>
         <div class="accord-body">
@@ -181,58 +247,96 @@
         <div class="sub">If you switch apps while you're talking with her, she keeps listening and answering for this long, then goes to sleep. Back Tap or a widget wakes her any time. Uses more battery while it's on. New: the iPhone may still pause her sooner.</div>
         <div class="sub" id="bg-status"></div>
       </div>
+      <div class="row row-col">
+        <label class="toggle-row">Talk over her <input type="checkbox" id="set-barge"></label>
+          <div class="sub">Start talking while she's speaking and she stops to listen. Works best with headphones or a quiet room. Keeps the mic open, so it uses Whisper instead of live listening.</div>
+      </div>
+
       </section>
-      <section class="spage" id="sp-brain" data-title="Brain &amp; Internet" hidden>
-      <details class="accord" id="accord-brain">
+      <section class="spage" id="sp-display" data-title="Mood &amp; Display" hidden>
+      <details class="accord" id="accord-mood">
+        <summary>Mood and night <span class="accord-current" id="mood-current">Normal</span></summary>
+        <div class="accord-body">
+          <div class="mood-row" id="mood-row"></div>
+          <p class="hint">You can also say “focus mode”, “hype mode”, “calm mode”, “bedtime mode”, or “back to normal”.</p>
+          <label class="toggle-row" style="margin-top:12px">Night mode <input type="checkbox" id="set-night"></label>
+          <div class="sub">At night the orb dims, her voice is softer and slower, and she keeps it short.</div>
+          <div class="life-two" style="margin-top:8px">
+            <select id="set-night-from" aria-label="Night starts"></select>
+            <select id="set-night-to" aria-label="Night ends"></select>
+          </div>
+        </div>
+      </details>
+      <details class="accord" id="accord-battery">
+        <summary>Battery</summary>
+        <div class="accord-body">
+          <label class="toggle-row">Resting orb <input type="checkbox" id="set-rest-orb"></label>
+          <div class="sub">After a minute with no talking or tapping, the orb slows down and draws fewer frames. It wakes up the moment you tap or speak.</div>
+          <label class="toggle-row" style="margin-top:12px">Calmer orb at night <input type="checkbox" id="set-night-orb"></label>
+          <div class="sub">During night mode hours, the orb keeps your look but glows softer and moves slower.</div>
+          <p class="hint">If your iPhone is in Low Power Mode, she notices and switches to a lighter orb by herself. The orb always stops when the app is in the background or a panel covers it.</p>
+        </div>
+      </details>
+      </section>
+      <section class="spage" id="sp-brain" data-title="Brains" hidden>
+      <details class="accord" open id="accord-brain">
         <summary>Brain <span class="accord-current" id="brain-current">Groq</span></summary>
         <div class="accord-body">
-          <p class="hint">Her main brain is Groq. If one Groq model is at its limit she tries the next one, then any connection you marked <b>Backup brain</b> in Connections.</p>
+          <p class="hint">Her main brain is Groq. If one Groq model is at its limit she tries the next one, then your backup brains below, in order.</p>
           <div id="brain-status" class="sub"></div>
-          <label class="field-label" style="display:block;margin-top:12px">Internet</label>
-          <div class="life-tabs" id="web-mode">
-            <button type="button" class="life-tab" data-web="smart">When needed</button>
-            <button type="button" class="life-tab" data-web="always">Always check</button>
-            <button type="button" class="life-tab" data-web="off">Off</button>
-          </div>
-          <div class="sub">She searches the web for anything current, reads links you paste, and opens websites (“open amazon.com”). Say “search for …” or “look up …” to make her check online. “Always check” is the most up to date but a little slower and uses more of the free limit.</div>
-          <label class="toggle-row" style="margin-top:12px">Faster replies <input type="checkbox" id="set-fast"></label>
-          <div class="sub">She starts talking while the rest of the answer is still coming in.</div>
-          <label class="toggle-row" style="margin-top:12px">Talk over her <input type="checkbox" id="set-barge"></label>
-          <div class="sub">Start talking while she's speaking and she stops to listen. Works best with headphones or a quiet room. Keeps the mic open, so it uses Whisper instead of live listening.</div>
-          <label class="toggle-row" style="margin-top:12px">Headlines in the briefing <input type="checkbox" id="set-news"></label>
-          <div class="sub">She looks up a couple of top stories for the morning briefing.</div>
-          <button class="btn" type="button" id="btn-diag">Run diagnostics</button>
-          <div class="sub">Checks her key, brains, voices, vision, microphone, Shortcut name and storage. You can also say “run diagnostics”.</div>
+          
+          
+          
+          
+          <div class="field-label" style="margin-top:14px">Backup brains</div>
+          <div id="connections-list"></div>
+          <div class="sub" id="brains-empty">No backup brains yet. Paste a free key below.</div>
         </div>
       </details>
       <div class="row row-col" id="paste-key-row">
         <label for="paste-key">Paste a key <span class="wn-tag">free brains</span></label>
         <input type="password" id="paste-key" placeholder="Paste any AI key here" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         <button class="btn gold" type="button" id="btn-paste-key">Add it</button>
-        <div class="sub" id="paste-key-status">One step: she works out whose key it is (Gemini, OpenRouter, Groq, Cerebras, Mistral, GitHub…), picks a free model, tests it, and turns it on as a backup brain for when Groq is busy. Keys stay on this phone.</div>
+        <div class="sub" id="paste-key-status">One step: she works out whose key it is (Gemini, OpenRouter, Groq, Cloudflare…), picks a free model, tests it, and turns it on as a backup brain for when Groq is busy. Keys stay on this phone.</div>
         <div class="sub">Get a free key:</div>
         <div class="key-links">
           <button class="btn mini" type="button" data-keyurl="https://aistudio.google.com/apikey">Gemini</button>
           <button class="btn mini" type="button" data-keyurl="https://openrouter.ai/keys">OpenRouter</button>
-          <button class="btn mini" type="button" data-keyurl="https://cloud.cerebras.ai">Cerebras</button>
           <button class="btn mini" type="button" data-keyurl="https://console.groq.com/keys">Groq</button>
-          <button class="btn mini" type="button" data-keyurl="https://console.mistral.ai/api-keys">Mistral</button>
+          <button class="btn mini" type="button" id="btn-cf-open">Cloudflare</button>
         </div>
-        <div class="sub">Sign in on the page that opens, make a key, copy it, come back and paste it here.</div>
+        <div class="sub">Sign in on the page that opens, make a key, copy it, come back and paste it here. All free, no card, no trials.</div>
+        <div id="cf-box" hidden>
+          <div class="sub" style="margin-top:10px">Cloudflare needs two things from your Cloudflare dashboard: your <b>Account ID</b> and an <b>API token</b> that can use Workers AI.</div>
+          <input type="text" id="cf-account" placeholder="Cloudflare Account ID" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:8px">
+          <input type="password" id="cf-token" placeholder="Cloudflare API token" autocomplete="off" style="margin-top:8px">
+          <button class="btn gold" type="button" id="btn-cf-add">Add Cloudflare</button>
+          <button class="btn" type="button" id="btn-cf-site">Open Cloudflare</button>
+        </div>
       </div>
-      <details class="accord" id="accord-connections">
-        <summary>Connections <span class="accord-current" id="connections-current">None</span></summary>
+      <details class="accord" id="accord-mainkey">
+        <summary>Main key (Groq) <span class="accord-current" id="mainkey-current">Saved</span></summary>
         <div class="accord-body">
-          <p class="hint">Add a link or app, or any AI. For an AI, say “ask Gemini …” or “have &lt;name&gt; …” and she reads you its answer. Turn on <b>Backup brain</b> and she switches to it by herself when Groq is at its limit. Keys stay on this phone.</p>
-          <div id="connections-list"></div>
+        <label for="set-key">Groq API key</label>
+        <input type="password" id="set-key" placeholder="Not set" autocomplete="off">
+        <div class="sub" id="key-mask"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="button" id="btn-key-save">Replace key</button>
+          <button class="btn danger" type="button" id="btn-key-clear">Clear</button>
+        </div>
+      </div>
+      </details>
+      <details class="accord" id="accord-addai">
+        <summary>Add an AI by hand</summary>
+        <div class="accord-body">
+          <p class="hint">For any AI service Paste a key doesn't know. Say “ask &lt;name&gt; …” and she reads you its answer. Turn on <b>Backup brain</b> and she switches to it by herself when Groq is at its limit. Keys stay on this phone.</p>
+          
           <div class="row row-col" style="margin-top:12px">
-            <label for="conn-name">New connection</label>
+            <label for="conn-name">Name</label>
             <input type="text" id="conn-name" placeholder="Name">
-            <select id="conn-type" style="margin-top:8px">
-              <option value="link">Link or app</option>
-            </select>
-            <input type="text" id="conn-url" placeholder="https://… or an app scheme" style="margin-top:8px">
-            <div id="conn-agent-fields" class="hidden">
+            <select id="conn-type" style="margin-top:8px"></select>
+            <input type="text" id="conn-url" class="hidden" placeholder="https://… or an app scheme" style="margin-top:8px">
+            <div id="conn-agent-fields">
               <input type="text" id="conn-base" placeholder="Base URL, like https://api.openai.com/v1" autocapitalize="off" autocorrect="off" style="margin-top:8px">
               <input type="password" id="conn-key" placeholder="API key (saved only on this phone)" autocomplete="off" style="margin-top:8px">
               <div class="sub" id="conn-keyhint">For Groq you can leave the key blank to use your main Groq key.</div>
@@ -242,34 +346,30 @@
               <label class="toggle-row" style="margin-top:12px">Backup brain <input type="checkbox" id="conn-backup"></label>
               <div class="sub">When Groq is at its limit, she uses this AI on her own, in the order you add them.</div>
             </div>
-            <div class="sub">Optional icon</div>
-            <div id="conn-icons" class="icon-pick"></div>
-            <button class="btn gold" type="button" id="btn-conn-add">Save connection</button>
+            <div id="conn-icons" class="icon-pick hidden"></div>
+            <button class="btn gold" type="button" id="btn-conn-add">Add this AI</button>
           </div>
         </div>
       </details>
+      </section>
+      <section class="spage" id="sp-internet" data-title="Internet" hidden>
       <div class="row row-col">
-        <label for="set-key">Groq API key</label>
-        <input type="password" id="set-key" placeholder="Not set" autocomplete="off">
-        <div class="sub" id="key-mask"></div>
-        <div style="display:flex;gap:8px">
-          <button class="btn" type="button" id="btn-key-save">Replace key</button>
-          <button class="btn danger" type="button" id="btn-key-clear">Clear</button>
-        </div>
+        <label class="field-label">Internet</label>
+          <div class="life-tabs" id="web-mode">
+            <button type="button" class="life-tab" data-web="smart">When needed</button>
+            <button type="button" class="life-tab" data-web="always">Always check</button>
+            <button type="button" class="life-tab" data-web="off">Off</button>
+          </div>
+          <div class="sub">She searches the web for anything current, reads links you paste, and opens websites (“open amazon.com”). Say “search for …” or “look up …” to make her check online. “Always check” is the most up to date but a little slower and uses more of the free limit.</div>
+          <label class="toggle-row" style="margin-top:12px">Faster replies <input type="checkbox" id="set-fast"></label>
+          <div class="sub">She starts talking while the rest of the answer is still coming in.</div>
+      </div>
+      <div class="row row-col">
+        <button class="btn" type="button" id="btn-diag">Run diagnostics</button>
+          <div class="sub">Checks her key, brains, voices, vision, microphone, Shortcut name and storage. You can also say “run diagnostics”.</div>
       </div>
       </section>
-      <section class="spage" id="sp-phone" data-title="Phone &amp; Shortcut" hidden>
-      <div class="row row-col">
-        <label>Done right in the app</label>
-        <div class="sub" id="phone-status">She tries everything she can right in the app first. Only what the iPhone doesn't let apps do, or anything that doesn't work, goes to your Shortcut.</div>
-        <ul class="phone-list" id="phone-list"></ul>
-        <button class="btn gold" type="button" id="btn-notify-on">Turn on notifications</button>
-        <div class="sub" id="notify-sub">So timers, bills and countdowns ring even when the app is closed.</div>
-        <label class="toggle-row" style="margin-top:12px">Texts and calls from the app <input type="checkbox" id="set-texts-inapp"></label>
-        <div class="sub">Texts open already written and you tap Send; calls ask you to confirm. The iPhone requires that tap for apps. Turn off to let your Shortcut send texts on its own.</div>
-        <button class="btn" type="button" id="btn-home-check">Check lights in the app</button>
-        <div class="sub" id="home-status"></div>
-      </div>
+      <section class="spage" id="sp-lights" data-title="Lights" hidden>
       <details class="accord" open id="accord-aidot">
         <summary>AiDot lights <span class="accord-current" id="aidot-current">Off</span></summary>
         <div class="accord-body">
@@ -295,46 +395,15 @@
           </div>
         </div>
       </details>
-      <details class="accord" id="accord-backtap">
-        <summary>Wake with Back Tap</summary>
-        <div class="accord-body">
-          <p class="hint">Double-tap the back of your iPhone and she opens already listening. No Siri needed.</p>
-          <ol class="steps">
-            <li>In <b>Shortcuts</b>, tap <b>+</b>, add <b>Open URLs</b>, and type <b id="bt-url">friday://listen</b>. Name it <b>Wake <span class="sc-assistant">Friday</span></b>.</li>
-            <li>Open iPhone <b>Settings → Accessibility → Touch → Back Tap → Double Tap</b> and pick <b>Wake <span class="sc-assistant">Friday</span></b>.</li>
-          </ol>
-          <button class="btn" type="button" id="btn-copy-wake">Copy the link</button>
-          <p class="hint">Back Tap works when the phone is unlocked. You can also put <span class="sc-assistant">Friday</span> in your Dock: press and hold the icon and drag it down.</p>
-        </div>
-      </details>
-      <details class="accord" open id="accord-shortcut">
-        <summary>Shortcut setup</summary>
-        <div class="accord-body">
-          <ol class="hint" style="padding-left:18px;margin:0 0 10px">
-            <li>Tap <b>Copy prompt</b>.</li>
-            <li>Open the Shortcuts app. Delete your old shortcut named <b class="sc-setup-name">Friday</b> (press and hold it, then Delete).</li>
-            <li>Tap <b>+</b> to make a new shortcut, and paste the prompt into the box that asks what the shortcut should do.</li>
-            <li>Name the new shortcut exactly <b class="sc-setup-name">Friday</b>.</li>
-            <li>Check there is no Speak Text step. Run it once from Shortcuts and allow Home, Messages, Contacts, Calendar, Reminders, Music, Clock, and Focus when it asks.</li>
-          </ol>
-          <textarea id="shortcut-prompt" readonly style="min-height:160px;font-size:12px"></textarea>
-          <button class="btn gold" type="button" id="btn-shortcut-copy" style="margin-top:8px">Copy prompt</button>
-          <button class="btn" type="button" id="btn-shortcut-open">Open Shortcuts</button>
-        </div>
-      </details>
       <div class="row row-col">
-        <label class="toggle-row">Also set long timers on the iPhone
-          <input type="checkbox" id="set-iphone-timers">
-        </label>
-        <div class="sub">Timers of 10 minutes or more are also handed to your Shortcut, so they ring even if the app is closed.</div>
-      </div>
-      <div class="row row-col">
-        <label for="set-shortcut">Shortcut name</label>
-        <input type="text" id="set-shortcut" placeholder="Friday">
-        <div class="sub">Used when Friday needs to set alarms, lights, and other phone jobs.</div>
+        <label>Apple Home</label>
+        <div class="sub">Apple Home lights and scenes go through your Shortcut on this install. AiDot lights below work right in the app.</div>
+        <button class="btn" type="button" id="btn-home-check">Check lights in the app</button>
+        <div class="sub" id="home-status"></div>
       </div>
       </section>
       <section class="spage" id="sp-routines" data-title="Routines" hidden>
+      
       <details class="accord" open id="accord-routines">
         <summary>Routines <span class="accord-current" id="routines-current"></span></summary>
         <div class="accord-body">
@@ -342,8 +411,27 @@
           <div id="routines-box"></div>
         </div>
       </details>
+      
       </section>
-      <section class="spage" id="sp-messages" data-title="Messages &amp; Contacts" hidden>
+      <section class="spage" id="sp-phone" data-title="In the app" hidden>
+      <div class="row row-col">
+        <label>Done right in the app</label>
+        <div class="sub" id="phone-status">She tries everything she can right in the app first. Only what the iPhone doesn't let apps do goes to your Shortcut.</div>
+        <ul class="phone-list" id="phone-list"></ul>
+        <button class="btn gold" type="button" id="btn-notify-on">Turn on notifications</button>
+        <div class="sub" id="notify-sub">So timers, bills and countdowns ring even when the app is closed.</div>
+        <label class="toggle-row" style="margin-top:12px">Texts and calls from the app <input type="checkbox" id="set-texts-inapp"></label>
+        <div class="sub">Texts open already written and you tap Send; calls ask you to confirm. The iPhone requires that tap for apps. Turn off to let your Shortcut send texts on its own.</div>
+        
+      </div>
+      <div class="row row-col">
+        <label>Contacts</label>
+        <div class="sub" id="contacts-status">Sync your contacts so “text Mom” or “call Daddy” goes to the right person. Only names are kept, and they stay on this phone.</div>
+        <button class="btn gold" type="button" id="btn-contacts-sync">Sync contacts</button>
+        <datalist id="contact-names"></datalist>
+      </div>
+      </section>
+      <section class="spage" id="sp-messages" data-title="Messages" hidden>
       <details class="accord" open id="accord-partner">
         <summary>Messages <span class="accord-current" id="partner-current"></span></summary>
         <div class="accord-body">
@@ -366,12 +454,6 @@
           <button class="btn" type="button" id="btn-copy-msg-url">Copy the link part</button>
         </div>
       </details>
-      <div class="row row-col">
-        <label>Contacts</label>
-        <div class="sub" id="contacts-status">Sync your contacts so “text Mom” or “call Daddy” goes to the right person. Only names are kept, and they stay on this phone.</div>
-        <button class="btn gold" type="button" id="btn-contacts-sync">Sync contacts</button>
-        <datalist id="contact-names"></datalist>
-      </div>
       <details class="accord" id="accord-readtexts">
         <summary>Read my texts and emails out loud</summary>
         <div class="accord-body">
@@ -389,7 +471,84 @@
         <input type="tel" id="set-daddy" placeholder="Optional, used as sms:number">
       </div>
       </section>
-      <section class="spage" id="sp-widgets" data-title="Widgets" hidden>
+      <section class="spage" id="sp-shortcut" data-title="Shortcut" hidden>
+      <details class="accord" open id="accord-shortcut">
+        <summary>Shortcut setup</summary>
+        <div class="accord-body">
+          <ol class="hint" style="padding-left:18px;margin:0 0 10px">
+            <li>Tap <b>Copy prompt</b>.</li>
+            <li>Open the Shortcuts app. Delete your old shortcut named <b class="sc-setup-name">Friday</b> (press and hold it, then Delete).</li>
+            <li>Tap <b>+</b> to make a new shortcut, and paste the prompt into the box that asks what the shortcut should do.</li>
+            <li>Name the new shortcut exactly <b class="sc-setup-name">Friday</b>.</li>
+            <li>Check there is no Speak Text step. Run it once from Shortcuts and allow Home, Messages, Contacts, Calendar, Reminders, Music, Clock, and Focus when it asks.</li>
+          </ol>
+          <textarea id="shortcut-prompt" readonly style="min-height:160px;font-size:12px"></textarea>
+          <button class="btn gold" type="button" id="btn-shortcut-copy" style="margin-top:8px">Copy prompt</button>
+          <button class="btn" type="button" id="btn-shortcut-open">Open Shortcuts</button>
+        </div>
+      </details>
+      <div class="row row-col">
+        <label for="set-shortcut">Shortcut name</label>
+        <input type="text" id="set-shortcut" placeholder="Friday">
+        <div class="sub">Used when Friday needs to set alarms, lights, and other phone jobs.</div>
+      </div>
+      <div class="row row-col">
+        <label class="toggle-row">Also set long timers on the iPhone
+          <input type="checkbox" id="set-iphone-timers">
+        </label>
+        <div class="sub">Timers of 10 minutes or more are also handed to your Shortcut, so they ring even if the app is closed.</div>
+      </div>
+      <details class="accord" id="accord-backtap">
+        <summary>Wake with Back Tap</summary>
+        <div class="accord-body">
+          <p class="hint">Double-tap the back of your iPhone and she opens already listening. No Siri needed.</p>
+          <ol class="steps">
+            <li>In <b>Shortcuts</b>, tap <b>+</b>, add <b>Open URLs</b>, and type <b id="bt-url">friday://listen</b>. Name it <b>Wake <span class="sc-assistant">Friday</span></b>.</li>
+            <li>Open iPhone <b>Settings → Accessibility → Touch → Back Tap → Double Tap</b> and pick <b>Wake <span class="sc-assistant">Friday</span></b>.</li>
+          </ol>
+          <button class="btn" type="button" id="btn-copy-wake">Copy the link</button>
+          <p class="hint">Back Tap works when the phone is unlocked. You can also put <span class="sc-assistant">Friday</span> in your Dock: press and hold the icon and drag it down.</p>
+        </div>
+      </details>
+      </section>
+      <section class="spage" id="sp-connections" data-title="Connections" hidden>
+      <div class="row row-col" id="links-row">
+        <label for="link-name">Add a link <span class="wn-tag">one step</span></label>
+        <input type="text" id="link-name" placeholder="Name, like Refresh apps" autocomplete="off">
+        <input type="text" id="link-url" placeholder="Link or app link, like https://… or spotify://" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:8px">
+        <button class="btn gold" type="button" id="btn-link-add">Add</button>
+        <div class="sub" id="link-status">It gets a bubble on her home screen, and you can say “open &lt;name&gt;”.</div>
+        <div class="sub">Ready-made:</div>
+        <div class="key-links">
+          <button class="btn mini" type="button" id="btn-ready-refresh">Refresh apps</button>
+        </div>
+        <div class="sub" id="refresh-status">Refresh apps turns on LocalDevVPN and opens your app installer in one tap, so you just tap Refresh.</div>
+      </div>
+      <details class="accord" open id="accord-links">
+        <summary>Your links <span class="accord-current" id="connections-current">None</span></summary>
+        <div class="accord-body">
+          <div id="links-list"></div>
+          <div class="sub" id="links-empty">No links yet.</div>
+        </div>
+      </details>
+      <details class="accord" id="accord-refresh">
+        <summary>Refresh reminder <span class="accord-current" id="refresh-current">Off</span></summary>
+        <div class="accord-body">
+          <p class="hint">Free sideloaded apps stop opening after 7 days unless you refresh them. She can remind you, and tapping the reminder turns on the VPN and opens your installer.</p>
+          <div class="seg" role="group" aria-label="Refresh reminder" id="refresh-every">
+            <button type="button" data-every="0">Off</button>
+            <button type="button" data-every="3">Every 3 days</button>
+            <button type="button" data-every="5">Every 5 days</button>
+            <button type="button" data-every="6">Every 6 days</button>
+          </div>
+          <select id="refresh-hour" aria-label="Reminder time" style="margin-top:10px"></select>
+          <button class="btn" type="button" id="btn-refresh-now">Refresh apps now</button>
+          <div class="sub">You can also say “refresh my apps”.</div>
+        </div>
+      </details>
+      </section>
+      <section class="spage" id="sp-widgets" data-title="Widgets &amp; Charging" hidden>
+      
       <div class="row row-col">
         <label>Widget styles</label>
         <div class="sub">Pick a style, then copy its script into Scriptable. You can have several widgets with different styles.</div>
@@ -425,21 +584,7 @@
         </select>
         <div class="sub">A reminder for the Scriptable widget parameter. It does not change the widget by itself.</div>
       </div>
-      </section>
-      <section class="spage" id="sp-display" data-title="Display &amp; Battery" hidden>
-      <details class="accord" id="accord-mood">
-        <summary>Mood and night <span class="accord-current" id="mood-current">Normal</span></summary>
-        <div class="accord-body">
-          <div class="mood-row" id="mood-row"></div>
-          <p class="hint">You can also say “focus mode”, “hype mode”, “calm mode”, “bedtime mode”, or “back to normal”.</p>
-          <label class="toggle-row" style="margin-top:12px">Night mode <input type="checkbox" id="set-night"></label>
-          <div class="sub">At night the orb dims, her voice is softer and slower, and she keeps it short.</div>
-          <div class="life-two" style="margin-top:8px">
-            <select id="set-night-from" aria-label="Night starts"></select>
-            <select id="set-night-to" aria-label="Night ends"></select>
-          </div>
-        </div>
-      </details>
+      
       <details class="accord" id="accord-bedside">
         <summary>Charging display</summary>
         <div class="accord-body">
@@ -452,16 +597,6 @@
             <li>Add <b>Open URLs</b> with <b id="bs-url">friday://charging</b> and tap Done.</li>
           </ol>
           <p class="hint">Your iPhone's own StandBy (charging, locked and turned sideways) can also show your Friday widget. That uses the least battery.</p>
-        </div>
-      </details>
-      <details class="accord" id="accord-battery">
-        <summary>Battery</summary>
-        <div class="accord-body">
-          <label class="toggle-row">Resting orb <input type="checkbox" id="set-rest-orb"></label>
-          <div class="sub">After a minute with no talking or tapping, the orb slows down and draws fewer frames. It wakes up the moment you tap or speak.</div>
-          <label class="toggle-row" style="margin-top:12px">Calmer orb at night <input type="checkbox" id="set-night-orb"></label>
-          <div class="sub">During night mode hours, the orb keeps your look but glows softer and moves slower.</div>
-          <p class="hint">If your iPhone is in Low Power Mode, she notices and switches to a lighter orb by herself. The orb always stops when the app is in the background or a panel covers it.</p>
         </div>
       </details>
       </section>
@@ -486,13 +621,12 @@
         <select id="set-recap-hour" aria-label="Recap time"></select>
       </div>
       <div class="row row-col">
-        <label>Quick replies</label>
-        <div class="sub">These chips sit under the orb. If a chip runs your shortcut, that tap opens Shortcuts directly.</div>
-        <div id="chip-editor"></div>
-        <button class="btn" type="button" id="btn-chip-add">Add a chip</button>
+        <label class="toggle-row">Headlines in the briefing <input type="checkbox" id="set-news"></label>
+          <div class="sub">She looks up a couple of top stories for the morning briefing.</div>
       </div>
       </section>
       <section class="spage" id="sp-backup" data-title="Backup &amp; About" hidden>
+      
       <div class="row row-col">
         <label>Version</label>
         <div class="sub" id="app-version-about"></div>
@@ -538,6 +672,7 @@
           <p>You can also ask a free AI helper to edit a file you paste in, then upload that file back on GitHub. A short walkthrough is in the how-to-update guide.</p>
         </div>
       </details>
+      
       </section>
     </div>
   </section>
@@ -682,35 +817,39 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.2.1</h1>
-      <p class="wn-tag">Fixes</p>
+      <h1>What's new in 3.3</h1>
+      <p class="wn-tag">New main screen</p>
       <ul>
-        <li>Google's new Gemini keys (they start with AQ.) now work in Paste a key</li>
-        <li>Music on your phone always stays in the app. If a song isn't in your library, she tells you instead of opening anything</li>
+        <li>A bar along the bottom of every layout: camera, a text box, and a gold Live button that turns live listening on or off with one tap</li>
+        <li>Tap the text box and the keyboard comes up while her orb stays. Typed answers show as text (she can read them out loud if you turn that on)</li>
+        <li>Pick the Pill bar or the Glass dock, tap her orb to talk, hide her orb while typing, and turn the suggestions on or off (Settings → Her → Looks)</li>
+        <li>The iPhone keyboard is always dark now. Her colors stay the same</li>
+        <li>Max (4K) quality for her orb, now the default: sharper and finer. It eases off on its own when she's resting, if it starts to stutter, or if the phone gets warm, so no lag and no overheating</li>
+        <li>The Immersive (full screen) look is a little smaller so she isn't cut off at the edges</li>
       </ul>
-      <p class="wn-tag">Direct lights</p>
+      <p class="wn-tag">New Settings</p>
       <ul>
-        <li>Sign in to AiDot once (Settings → Phone &amp; Shortcut) and she switches your lights herself over home Wi-Fi. No Shortcut, no VPN</li>
-        <li>Exact brightness, warm or cool white, and colors: “turn the bedroom lamp blue”, “lights to 40 percent”, “are the lights on?”</li>
-        <li>Away from home, Apple Home or your Shortcut takes over on its own</li>
+        <li>Settings opens on 6 bubbles (Her, Brains, Home, Phone, Your stuff, Help) with one-tap switches for Hands-free, Live listening and Suggestions</li>
+        <li>8 fonts and 4 sizes, down to Tiny (smaller than iPhone's smallest)</li>
+        <li>Connections works like Paste a key: name, link, done. It gets a bubble and you can say “open” and its name</li>
       </ul>
-      <p class="wn-tag">Free brains</p>
+      <p class="wn-tag">Refresh my apps</p>
       <ul>
-        <li>Paste a key (Settings → Brain &amp; Internet): she works out if it's Gemini, OpenRouter, Groq, Cerebras or Mistral, picks a free model, tests it and makes it a backup brain</li>
+        <li>Say “refresh my apps” or tap the Refresh apps bubble: LocalDevVPN comes on and your installer opens. No Shortcut</li>
+        <li>An optional reminder every few days. Tap the reminder and it does the same thing</li>
       </ul>
-      <p class="wn-tag">3.1</p>
+      <p class="wn-tag">Bubbles</p>
       <ul>
-        <li>She hears you live and knows when you're done, like ChatGPT. Smoother, natural voice: Friday sounds like a woman, Jarvis like a man</li>
-        <li>Music on your phone, calls and texts right in the app; your Shortcut is the backup and jumps straight back to her</li>
-        <li>Orb and StandBy widgets, a few minutes of talking in the background, and a neural map where everything she learns becomes a connected bubble</li>
+        <li>Fresh start: Memory, Lists, Timer and Chat. She adds what you use most, and bubbles you stop using fade away until you use them again. Your old set is saved</li>
+        <li>Everything she learns lives in the neural map, not on the main screen</li>
       </ul>
-      <p class="wn-tag">Since 2.0</p>
+      <p class="wn-tag">Brains and fixes</p>
       <ul>
-        <li>Reminders, calendar, battery, timers and contacts right in the app. Wake her with Back Tap, no Siri</li>
-        <li>Several jobs in one sentence, routines, messages between Friday and Jarvis, nightly recap, spending, habits and translator</li>
-        <li>Settings in pages, widget styles, Full orb and other orb-only layouts, 8 new HD looks, and a neural map that grows</li>
+        <li>Cloudflare is a new free backup brain (Settings → Brains → Paste a key → Cloudflare). Google's new Gemini keys (AQ.) work</li>
+        <li>Backup brains work even when a site blocks requests from apps</li>
+        <li>AiDot lights straight over home Wi-Fi, and music on your phone always stays in the app</li>
       </ul>
-      <p class="hint">To turn on direct lights, sign in to AiDot in Settings → Phone &amp; Shortcut. The first time, iPhone asks to let her find devices on your local network: tap Allow.</p>
+      <p class="hint">Your layouts and orb looks are the same; the bar just sits at the bottom. To add the Refresh apps bubble: Settings → Your stuff → Connections → Refresh apps.</p>
       <button class="btn gold" type="button" id="btn-wn-shortcut">Show me</button>
       <button class="btn" type="button" id="btn-wn-close">Later</button>
     </div>

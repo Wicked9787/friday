@@ -18,6 +18,9 @@
   ];
 
   var QUALITY = {
+    // 3.3 Max: draws above the screen's own resolution (about 4K worth of pixels on iPhone) and shrinks it down,
+    // with more particles. Smoothest edges and finest detail the phone can show.
+    max:   { name: "max",   dpr: 4.0, ss: 1.34, dens: 1.6, dust: 5200, streams: 5600, bloom: 4, point: 0.9 },
     ultra: { name: "ultra", dpr: 3.0, dens: 1.3, dust: 3800, streams: 4200, bloom: 4, point: 0.94 },
     high: { name: "high", dpr: 2.5, dens: 1.0, dust: 2800, streams: 3200, bloom: 3, point: 1.0 },
     med:  { name: "med",  dpr: 2.0, dens: 0.62, dust: 1600, streams: 1800, bloom: 2, point: 1.08 },
@@ -1142,12 +1145,13 @@
     return applym(M, [0, 1, 0]);
   }
 
-  function readHD() {
+  function readRender() {
     try {
       var s = JSON.parse(localStorage.getItem("friday.settings") || "{}");
-      return s.render !== "original";
-    } catch (e) { return true; }
+      return s.render === "original" ? "original" : (s.render === "hd" ? "hd" : "max");
+    } catch (e) { return "max"; }
   }
+  function readHD() { return readRender() !== "original"; }
 
   function FridayOrb(canvas, opts) {
     opts = opts || {};
@@ -1200,8 +1204,9 @@
 
     this.look = "N";
     this.hd = opts.hd == null ? readHD() : !!opts.hd;
-    this.quality = opts.thumb ? QUALITY.med : (this.hd ? QUALITY.ultra : QUALITY.high);
-    this._qOrder = ["ultra", "high", "med", "low"];
+    this.max = !opts.thumb && this.hd && (opts.hd == null ? readRender() === "max" : !!opts.max);
+    this.quality = opts.thumb ? QUALITY.med : (this.max ? QUALITY.max : (this.hd ? QUALITY.ultra : QUALITY.high));
+    this._qOrder = ["max", "ultra", "high", "med", "low"];
     this.speaker = "idle";
     this.volume = 0;
     this.talk = 0;
@@ -1316,18 +1321,46 @@
     this._rebuild();
   };
 
-  // "hd" (realistic, full resolution) or "original" (the classic look).
+  // "max" (realistic, drawn above screen resolution), "hd" (realistic, full resolution) or "original" (the classic look).
   FridayOrb.prototype.setRender = function (mode) {
-    var hd = mode !== "original";
-    if (hd === this.hd) return;
+    var hd = mode !== "original", max = !this._thumb && hd && mode !== "hd";
+    if (hd === this.hd && max === !!this.max) return;
     this.hd = hd;
-    if (!this._thumb) this.quality = hd ? QUALITY.ultra : QUALITY.high;
+    this.max = max;
+    this._ssSlow = false;
+    this._ssBack = 0;
+    if (!this._thumb) this.quality = max ? QUALITY.max : (hd ? QUALITY.ultra : QUALITY.high);
     if (!this._thumb && this._light) { this._qFull = this.quality; this.quality = QUALITY.med; }
     this._fpsWin = [];
     this._freeTargets();
     this.canvas.width = 1;
     this.resize();
     this._rebuild();
+  };
+
+  /* 3.3: iPhone's heat level ("nominal", "fair", "serious", "critical").
+     Serious: no extra resolution and 30 frames a second. Critical: also the lighter quality. Back to normal when it cools. */
+  FridayOrb.prototype.setThermal = function (state) {
+    if (this._thumb) return;
+    var hot = state === "serious" || state === "critical", crit = state === "critical";
+    if (hot === !!this._hot && crit === !!this._crit) return;
+    this._hot = hot;
+    this._heatCap = hot ? 30 : 0;
+    this._fpsWin = [];
+    if (crit !== !!this._crit) {
+      this._crit = crit;
+      if (crit) {
+        if (!this._heatQ) this._heatQ = this.quality;
+        if (["max", "ultra", "high"].indexOf(this.quality.name) >= 0) this.quality = QUALITY.med;
+        this._freeTargets(); this.canvas.width = 1; this.resize(); this._rebuild();
+        return;
+      } else if (this._heatQ) {
+        this.quality = this._heatQ; this._heatQ = null;
+        this._freeTargets(); this.canvas.width = 1; this.resize(); this._rebuild();
+        return;
+      }
+    }
+    this.resize();
   };
 
   /* Battery modes. rest: nobody has talked or touched for a while.
@@ -1351,12 +1384,17 @@
     this._speed = p.speed;
     this._dim = p.dim;
     this._fpsWin = [];
-    var light = !!(p.light || state.saver);
+    var restNow = key === "rest" || key === "nightrest";
+    if (restNow !== !!this._ssRest) {
+      this._ssRest = restNow;
+      if (this.quality.ss && !this._thumb) this.resize();
+    }
+    var light = this.max ? !!state.saver : !!(p.light || state.saver);
     if (!this._thumb && light !== !!this._light) {
       this._light = light;
       if (light) {
         this._qFull = this.quality;
-        var order = this._qOrder || ["ultra", "high", "med", "low"];
+        var order = this._qOrder || ["max", "ultra", "high", "med", "low"];
         if (order.indexOf(this.quality.name) < order.indexOf("med")) this.quality = QUALITY.med;
       } else if (this._qFull) {
         this.quality = this._qFull;
@@ -1397,6 +1435,7 @@
       self._raf = requestAnimationFrame(loop);
       // Battery saver: when resting or at night, draw fewer frames per second.
       var cap = self._fpsCap || 0;
+      if (self._heatCap && (!cap || self._heatCap < cap)) cap = self._heatCap;
       if (cap && self._lastDraw && ts - self._lastDraw < 1000 / cap - 2) return;
       self._lastDraw = ts;
       self._frame(ts);
@@ -1420,13 +1459,17 @@
     var cvs = this.canvas;
     var cssW = this._fixedW || Math.max(1, window.innerWidth);
     var cssH = this._fixedH || Math.max(1, window.innerHeight);
-    var dpr = this._thumb ? 1 : Math.min(this.quality.dpr, window.devicePixelRatio || 1);
+    var dev = window.devicePixelRatio || 1;
+    var ss = this.quality.ss && !this._ssSlow && !this._ssRest && !this._hot ? this.quality.ss : 1;
+    this._ssOn = ss > 1;
+    var dpr = this._thumb ? 1 : Math.min(this.quality.dpr, dev * ss);
     this._dpr = dpr;
     this._cssW = cssW;
     this._cssH = cssH;
     var w = Math.max(1, Math.round(cssW * dpr));
     var h = Math.max(1, Math.round(cssH * dpr));
     if (cvs.width !== w || cvs.height !== h) {
+      this._fpsWin = [];
       cvs.width = w;
       cvs.height = h;
       if (!this._thumb) {
@@ -1787,7 +1830,7 @@
 
     if (!this._thumb && this._fallbackStep < 9 && ++this._frames === 12) this._selfCheck();
     if (this._thumb) return;
-    if (!this._fpsCap) this._fpsWin.push(dt);
+    if (!this._fpsCap && !this._heatCap) this._fpsWin.push(dt);
     if (this._fpsWin.length > 90) this._fpsWin.shift();
     this._checked += dt;
     if (this._checked > 2.2) {
@@ -1801,6 +1844,30 @@
     var s = 0, i;
     for (i = 0; i < this._fpsWin.length; i++) s += this._fpsWin[i];
     var fps = this._fpsWin.length / s;
+    // Max: if the phone can't keep the extra resolution smooth, drop just that (back to full screen sharpness).
+    // One-off hiccups (loading, a notification) don't count: the slowest few frames are left out.
+    var sorted = this._fpsWin.slice().sort(function (a, b) { return a - b; });
+    var keep = sorted.slice(0, Math.max(1, sorted.length - Math.ceil(sorted.length * 0.12)));
+    var ts = 0;
+    for (i = 0; i < keep.length; i++) ts += keep[i];
+    var steady = keep.length / ts;
+    var nowMs = Date.now();
+    if (this._ssOn && steady < 52) {
+      this._ssSlow = true;
+      this._ssSlowAt = nowMs;
+      this._ssBack = Math.min(600000, (this._ssBack || 60000) * 2);
+      this.resize();
+      this._fpsWin = [];
+      this._lpHits = 0;
+      return;
+    }
+    // ...and tries Max again later if things have been smooth for a while (waiting longer each time).
+    if (this.max && this._ssSlow && !this._light && !this._hot && !this._ssRest && this.quality.name === "max" && steady > 58 && nowMs - (this._ssSlowAt || 0) > (this._ssBack || 120000)) {
+      this._ssSlow = false;
+      this.resize();
+      this._fpsWin = [];
+      return;
+    }
     // iPhone Low Power Mode holds apps to about 30 frames a second.
     if (!this._fpsCap && fps > 25 && fps < 35) {
       this._lpHits = (this._lpHits || 0) + 1;

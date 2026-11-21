@@ -8,8 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.2.1";
-  var APP_LABEL = "Gemini Fix";
+  var APP_VERSION = "3.3.0";
+  var APP_LABEL = "New Look";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -63,7 +63,7 @@
     grid: { cyN: 0.24, radiusK: 0.20 },
     arc: { cyN: 0.34, radiusK: 0.26 },
     orbonly: { cyN: 0.50, radiusK: 0.34 },
-    immersive: { cyN: 0.50, radiusK: 0.47 },
+    immersive: { cyN: 0.50, radiusK: 0.42 },
     orbtop: { cyN: 0.27, radiusK: 0.27 },
     orbdock: { cyN: 0.80, radiusK: 0.15 },
     orbclock: { cyN: 0.58, radiusK: 0.30 },
@@ -75,6 +75,11 @@
   };
 
   function applyOrbFrame(mode, revealed) {
+    // While typing with the Pill bar, her orb stays up top even if the bubbles re-arrange.
+    if (typing && orb) {
+      var tv = sv();
+      if (tv.talkStyle !== "dock" && tv.hideOrbTyping !== true) { orb.setFrame({ cyN: 0.2, radiusK: 0.17 }); return; }
+    }
     var oo = window.FridayBubbles && window.FridayBubbles.ORB_ONLY ? window.FridayBubbles.ORB_ONLY : { orbonly: 1 };
     var m = (oo[mode] && revealed) ? "dock" : (mode || "orbit");
     var f = LAYOUT_FRAMES[m] || LAYOUT_FRAMES.orbit;
@@ -161,6 +166,7 @@
   }
 
   function openPanel(id) {
+    if (typing) exitTyping();
     if (id === "photo-take") { if (eyes) eyes.open(""); return; }
     if (id === "bedside") { openBedside(); return; }
     closePanels();
@@ -348,6 +354,7 @@
   function openUrl(url) {
     if (!url) return;
     // Capacitor's WKWebView hands non-http schemes off to iOS; same path works on the web PWA.
+    window.__fridayLastUrl = url;
     try { location.href = url; } catch (e) {}
   }
 
@@ -669,6 +676,19 @@
       if (camCmd) {
         setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
         goShortcut(camCmd, opts);
+        return;
+      }
+      if (refreshCommand(text)) {
+        chat._push("user", text);
+        await FridayRefresh.run(opts);
+        return;
+      }
+      var myLink = linkByName(text);
+      if (myLink) {
+        if (myLink.ready === "refresh") { chat._push("user", text); await FridayRefresh.run(opts); return; }
+        if (bubbles) { bubbles.noteUsage("url:" + myLink.url); bubbles.refreshSuggestions(); }
+        setCaption("Opening " + myLink.name + ".");
+        goUrl(myLink.url, opts);
         return;
       }
       var direct = directAppUrl(text);
@@ -1079,6 +1099,87 @@
   }
   window.__fridayTurnOnNotifications = turnOnNotifications;
 
+  // ---------- 3.3: refresh my apps (LocalDevVPN comes on, then your installer opens) ----------
+  // No Shortcut needed: LocalDevVPN's own link turns the VPN on and then opens the installer.
+  var INSTALLERS = ["altload", "altstore", "sidestore"];
+  var INSTALLER_NAMES = { altload: "AltLoad", altstore: "AltStore", sidestore: "SideStore" };
+  var FridayRefresh = {
+    scheme: async function () {
+      var N = window.FridayNative;
+      var apps = N && N.kit && N.kit.canOpen ? await N.kit.canOpen(INSTALLERS.concat(["localdevvpn"])) : null;
+      if (apps) {
+        FridayStorage.set("hasLocalDevVPN", apps.localdevvpn !== false);
+        for (var i = 0; i < INSTALLERS.length; i++) if (apps[INSTALLERS[i]]) { FridayStorage.set("installerScheme", INSTALLERS[i]); return INSTALLERS[i]; }
+      }
+      return FridayStorage.get("installerScheme", "") || "altload";
+    },
+    url: async function () { return "localdevvpn://enable?scheme=" + (await FridayRefresh.scheme()); },
+    name: function () { var sc = FridayStorage.get("installerScheme", "") || "altload"; return INSTALLER_NAMES[sc] || "your installer"; },
+    run: async function (opts) {
+      opts = opts || {};
+      var url = await FridayRefresh.url();
+      FridayStorage.set("refreshLast", Date.now());
+      FridayRefresh.schedule(true);
+      if (bubbles && !opts.fromBubble) { var rb = bubbles.list.filter(function (b) { return /^localdevvpn:/i.test(b.url || ""); })[0]; if (rb) bubbles.bumpUsage(rb); }
+      var line = "Turning on LocalDevVPN and opening " + FridayRefresh.name() + ". Tap Refresh All when it opens.";
+      if (FridayStorage.get("hasLocalDevVPN", true) === false) line = "I can't find LocalDevVPN on this iPhone, so I'm opening " + FridayRefresh.name() + " instead.";
+      if (FridayStorage.get("hasLocalDevVPN", true) === false) url = (FridayStorage.get("installerScheme", "") || "altload") + "://";
+      setCaption(line);
+      if (!opts.fromBubble && !opts.fromNote) {
+        chat._push("assistant", line);
+        try { voice.speak("On it. Tap Refresh All when it opens.", profile); } catch (e) {}
+      }
+      if (opts.collect) { goUrl(url, opts); return url; }
+      await new Promise(function (r) { setTimeout(r, opts.fromBubble ? 150 : 900); });
+      goUrl(url, opts);
+      return url;
+    },
+    // Reminder on your iPhone every few days at the hour you pick. Tapping it does the refresh.
+    schedule: async function (force) {
+      var N = window.FridayNative;
+      var s = (settings && settings.values) || settingsData || {};
+      var every = +s.refreshEvery || 0;
+      if (!N || !N.notify || !N.notify.available()) return false;
+      await N.notify.cancel("refresh-apps");
+      await N.notify.cancel("refresh-apps-2");
+      if (!every || !N.notify.allowed()) return false;
+      var hour = +s.refreshHour || 10;
+      var last = +FridayStorage.get("refreshLast", 0) || Date.now();
+      if (!FridayStorage.get("refreshLast", 0)) FridayStorage.set("refreshLast", last);
+      var at = new Date(last + every * 86400000);
+      at.setHours(hour, 0, 0, 0);
+      var soon = new Date(); soon.setMinutes(soon.getMinutes() + 2);
+      if (at < soon) { at = new Date(); at.setHours(hour, 0, 0, 0); if (at < soon) at.setDate(at.getDate() + 1); }
+      var title = "Time to refresh your apps";
+      var body = "Tap here and " + (profile.assistantName || "Friday") + " turns on LocalDevVPN and opens " + FridayRefresh.name() + ".";
+      await N.notify.at("refresh-apps", title, body, at, { action: "refresh-apps" });
+      var again = new Date(at.getTime() + 86400000);
+      await N.notify.at("refresh-apps-2", "Your apps still need a refresh", body, again, { action: "refresh-apps" });
+      return at;
+    }
+  };
+  window.FridayRefresh = FridayRefresh;
+  function refreshCommand(text) {
+    var t = String(text || "").toLowerCase().replace(/[.!?,]/g, "").trim();
+    if (/^(?:hey \w+ )?(?:please )?(?:refresh|re-?sign|renew)(?: all)? (?:my |the |all my |all the )?(?:apps|sideloaded apps|app)(?: please)?$/.test(t)) return true;
+    if (/^(?:hey \w+ )?(?:please )?(?:open|launch|pull up|start)(?: up)? (?:the |my )?(?:altload|alt load|altstore|alt store|sidestore|side store)(?: app)?(?: please)?$/.test(t)) return true;
+    if (/^(?:hey \w+ )?(?:turn on|start|connect) (?:the )?(?:vpn|localdevvpn|local dev vpn) and (?:open|refresh) /.test(t)) return true;
+    return false;
+  }
+  // "open <name>" for links you added in Settings, Connections.
+  function linkByName(text) {
+    var m = String(text || "").toLowerCase().replace(/[.!?,]/g, "").match(/^(?:hey \w+ )?(?:please )?(?:open|launch|pull up|go to|start)(?: up)? (?:the |my )?(.+?)(?: app| link)?(?: please)?$/);
+    if (!m) return null;
+    var want = m[1].trim();
+    var list = FridayStorage.get("connections", []) || [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (!c || c.type === "agent" || !c.url) continue;
+      if (String(c.name || "").toLowerCase().trim() === want) return c;
+    }
+    return null;
+  }
+
   // ---------- 3.0: battery savers for the orb ----------
   var lastActivity = Date.now();
   function applyPower() {
@@ -1176,6 +1277,7 @@
   function toggleListen() {
     // One tap starts a hands-free conversation; she stops listening on her own
     // when you pause. Tapping again ends the conversation.
+    if (typing) exitTyping();
     if (handsFree || voice.listening || voice.speaking || busy) {
       handsFree = false;
       if (voice.speaking) voice.stopSpeak();
@@ -1189,6 +1291,183 @@
     }
     handsFree = handsFreeOn();
     beginListen();
+  }
+
+  // ---------- 3.3: talk bar (Pill bar or Glass dock) and typing on the main screen ----------
+  var typing = false, typingIdle = 0, typedQuiet = false, threadPending = null;
+  function sv() { return (settings && settings.values) || settingsData || {}; }
+  function applyTalkbar() {
+    var v = sv(), b = document.body;
+    b.classList.add("talkbar-on");
+    b.classList.toggle("talk-dock", v.talkStyle === "dock");
+    b.classList.toggle("talk-pill", v.talkStyle !== "dock");
+    b.classList.toggle("no-suggestions", v.suggestions === false);
+    b.classList.toggle("hide-orb-typing", v.hideOrbTyping === true);
+    var inp = document.getElementById("tb-input");
+    if (inp) inp.placeholder = "Type to " + (profile.assistantName || "Friday");
+    if (typing) placeOrbForTyping();
+    if (bubbles) bubbles.layout();
+    syncLive();
+  }
+  function liveOn() { return !!(handsFree || (voice && voice.listening)); }
+  function syncLive() {
+    var el = document.getElementById("tb-live");
+    if (el) {
+      var on = liveOn() && !typing;
+      el.classList.toggle("on", on);
+      el.setAttribute("aria-pressed", on ? "true" : "false");
+      el.setAttribute("aria-label", typing ? "Back to talking" : (on ? "Live listening is on. Tap to stop" : "Live listening is off. Tap to start"));
+    }
+    syncRing();
+  }
+  // The orb as the button: a gold ring shows while she's listening.
+  function syncRing() {
+    var r = document.getElementById("orb-ring");
+    if (!r || !orb) return;
+    var on = sv().orbTalk !== false && !typing && !!(voice && voice.listening) && !document.querySelector(".panel.open");
+    if (on) {
+      var w = window.innerWidth, h = window.innerHeight;
+      var cyN = orb._cyN == null ? 0.46 : orb._cyN, rk = orb._radiusK == null ? 0.28 : orb._radiusK;
+      var d = Math.round(Math.min(w, h) * rk * 2 + 20);
+      r.style.width = r.style.height = d + "px";
+      r.style.left = Math.round(w / 2) + "px";
+      r.style.top = Math.round(h * cyN) + "px";
+    }
+    r.classList.toggle("on", on);
+  }
+  function setKb(px) { document.documentElement.style.setProperty("--kb", Math.max(0, Math.round(px || 0)) + "px"); }
+  function placeOrbForTyping() {
+    if (!orb) return;
+    var v = sv();
+    if (v.talkStyle !== "dock" && v.hideOrbTyping !== true) orb.setFrame({ cyN: 0.2, radiusK: 0.17 });
+    else if (bubbles) bubbles.setRevealed(bubbles.revealed);
+  }
+  function enterTyping() {
+    if (typing) { bumpTyping(); return; }
+    typing = true;
+    handsFree = false;
+    if (voice && voice.listening) {
+      document.getElementById("listen-dot").classList.remove("on");
+      voice.stopListen().catch(function () {});
+    }
+    if (orb && !busy && !(voice && voice.speaking)) orb.setTalking("idle", 0);
+    document.body.classList.add("typing");
+    placeOrbForTyping();
+    renderThread();
+    syncLive();
+    bumpTyping();
+  }
+  function exitTyping() {
+    if (!typing) return;
+    typing = false;
+    clearTimeout(typingIdle);
+    document.body.classList.remove("typing");
+    var inp = document.getElementById("tb-input");
+    if (inp && document.activeElement === inp) inp.blur();
+    if (bubbles) bubbles.setRevealed(bubbles.revealed);
+    else applyLayout(sv().layout || "orbit", true);
+    setKb(0);
+    syncLive();
+  }
+  function bumpTyping() {
+    clearTimeout(typingIdle);
+    typingIdle = setTimeout(function () {
+      var inp = document.getElementById("tb-input");
+      if (typing && document.activeElement !== inp && !busy && !(voice && voice.speaking) && !(inp && inp.value)) exitTyping();
+    }, 90000);
+  }
+  function renderThread() {
+    var box = document.getElementById("type-thread");
+    if (!box) return;
+    var hist = ((chat && chat.history) || []).filter(function (m) { return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim(); });
+    var items = hist.slice(-4).map(function (m) { return { role: m.role, text: m.content }; });
+    if (threadPending) {
+      var last = items[items.length - 1];
+      if (!last || last.role !== "user" || last.text !== threadPending) items.push({ role: "user", text: threadPending });
+      items = items.slice(-4);
+    }
+    box.innerHTML = "";
+    items.forEach(function (m) {
+      var d = document.createElement("div");
+      d.className = m.role === "user" ? "tt-me" : "tt-her";
+      d.textContent = m.text;
+      box.appendChild(d);
+    });
+    if (threadPending) {
+      var dots = document.createElement("div");
+      dots.className = "tt-dots";
+      dots.textContent = "•••";
+      box.appendChild(dots);
+    }
+    box.scrollTop = box.scrollHeight;
+  }
+  async function sendTyped() {
+    var inp = document.getElementById("tb-input");
+    var text = String((inp && inp.value) || "").trim();
+    if (!text) return;
+    inp.value = "";
+    enterTyping();
+    threadPending = text;
+    renderThread();
+    typedQuiet = sv().speakTyped !== true;
+    try { await handleUtterance(text, { typed: true }); }
+    catch (e) {}
+    finally {
+      typedQuiet = false;
+      threadPending = null;
+      handsFree = false;
+      renderThread();
+      bumpTyping();
+    }
+  }
+  function liveTap() {
+    if (typing) { exitTyping(); handsFree = true; beginListen(); syncLive(); return; }
+    if (liveOn() || (voice && voice.speaking) || busy) toggleListen();
+    else { handsFree = true; beginListen(); }
+    syncLive();
+  }
+  function orbTap() {
+    if (sv().orbTalk === false) return;
+    if (typing) { exitTyping(); handsFree = true; beginListen(); syncLive(); return; }
+    toggleListen();
+    syncLive();
+  }
+  function bindTalkbar() {
+    var inp = document.getElementById("tb-input");
+    var form = document.getElementById("tb-form");
+    if (form) form.addEventListener("submit", function (ev) { ev.preventDefault(); sendTyped(); });
+    var send = document.getElementById("tb-send");
+    if (send) send.addEventListener("click", function () { sendTyped(); if (inp) inp.focus(); });
+    if (inp) {
+      inp.addEventListener("focus", function () { enterTyping(); });
+      inp.addEventListener("blur", function () { bumpTyping(); });
+    }
+    var tt = document.getElementById("tb-type");
+    if (tt) tt.addEventListener("click", function () { enterTyping(); if (inp) inp.focus(); });
+    var live = document.getElementById("tb-live");
+    if (live) live.addEventListener("click", liveTap);
+    ["tb-camera", "tb-look"].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) b.addEventListener("click", function () { if (eyes) eyes.open(""); });
+    });
+    if (window.visualViewport) {
+      var vv = window.visualViewport;
+      var onVV = function () {
+        if (!typing) { setKb(0); return; }
+        var kb = window.innerHeight - vv.height - vv.offsetTop;
+        setKb(kb > 60 ? kb : 0);
+        if (vv.offsetTop > 0 || window.scrollY) window.scrollTo(0, 0);
+      };
+      vv.addEventListener("resize", onVV);
+      vv.addEventListener("scroll", onVV);
+    }
+    // Typed replies are text only unless "Speak typed replies" is on.
+    var sp = voice.speak.bind(voice), qu = voice.queue.bind(voice);
+    voice.speak = function () { if (typedQuiet) return Promise.resolve(); return sp.apply(null, arguments); };
+    voice.queue = function () { if (typedQuiet) return; return qu.apply(null, arguments); };
+    window.__fridayApplyTalkbar = applyTalkbar;
+    applyTalkbar();
+    setInterval(syncLive, 400);
   }
 
   var lastPhoto = null;
@@ -1299,8 +1578,8 @@
     document.getElementById("btn-wn-shortcut").onclick = function () {
       done();
       openPanel("settings");
-      if (window.__fridaySettingsShow) window.__fridaySettingsShow("aidot-status");
-      setTimeout(function () { var el = document.getElementById("accord-aidot"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
+      if (window.__fridaySettingsShow) window.__fridaySettingsShow("accord-mainscreen");
+      setTimeout(function () { var el = document.getElementById("accord-mainscreen"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
     };
   }
 
@@ -1414,12 +1693,18 @@
         else if (act.type === "shortcut") {
           setCaption("On it.");
           runShortcut(act.command);
-        } else if (act.type === "url") openUrl(act.url);
+        } else if (act.type === "url" && /^localdevvpn:\/\/enable/i.test(act.url || "")) FridayRefresh.run({ fromBubble: true });
+        else if (act.type === "url") openUrl(act.url);
       },
       onAddRequest: function () { openPanel("add-bubble"); },
       onLayout: function (mode, revealed) { applyOrbFrame(mode, revealed); },
       frameFor: function (mode) { return LAYOUT_FRAMES[mode] || LAYOUT_FRAMES.orbit; }
     });
+    // 3.3: a fresh start once. She begins with a few bubbles and adds what you use; your old set is saved.
+    if (!FridayStorage.get("learnDefault33", false)) {
+      FridayStorage.set("learnDefault33", true);
+      if (!bubbles.learning()) bubbles.setLearning(true);
+    }
 
     settings = new FridaySettings({
       profile: profile,
@@ -1454,9 +1739,11 @@
     applyLayout(settings.values.layout || "orbit", true);
     tickStageClock();
     setInterval(tickStageClock, 15000);
-    window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook, voice: voice };
+    window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook, voice: voice,
+      typing: function () { return typing; }, enterTyping: enterTyping, exitTyping: exitTyping, sendTyped: sendTyped, liveOn: liveOn };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
+    bindTalkbar();
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
     if (window.__friday) window.__friday.neural = neural;
@@ -1464,7 +1751,7 @@
 
     document.getElementById("orb-canvas").addEventListener("click", function () {
       if (document.querySelector(".panel.open")) return;
-      toggleListen();
+      orbTap();
     });
 
     (function bindLookSwipe() {
@@ -1492,7 +1779,7 @@
         if (!moved && Date.now() - t0 < 450) {
           if (document.querySelector(".panel.open")) return;
           if (ev.type === "touchend" && ev.cancelable) ev.preventDefault();
-          toggleListen();
+          orbTap();
         }
       }
       zone.addEventListener("touchstart", start, { passive: true });
@@ -1760,7 +2047,20 @@
     window.addEventListener("friday:countdowns", scheduleLifeAlerts);
     scheduleLifeAlerts();
     if (window.FridayNative && FridayNative.isApp() && FridayNative.notify.refresh) {
-      FridayNative.notify.refresh().then(function (on) { if (on) scheduleLifeAlerts(); if (settings && settings._refreshPhone) settings._refreshPhone(); });
+      FridayNative.notify.refresh().then(function (on) { if (on) { scheduleLifeAlerts(); FridayRefresh.schedule(); } if (settings && settings._refreshPhone) settings._refreshPhone(); });
+    }
+    // 3.3: tapping the refresh reminder does the refresh; the dark keyboard is set once
+    if (window.FridayNative) {
+      FridayNative.notify.onTap(function (extra) {
+        if (extra && extra.action === "refresh-apps") setTimeout(function () { FridayRefresh.run({ fromNote: true }); }, 700);
+      });
+      if (FridayNative.kit.darkKeyboard) FridayNative.kit.darkKeyboard();
+      // Max but smart: the orb eases off if the phone gets warm, and comes back when it cools
+      if (FridayNative.kit.watchHeat) FridayNative.kit.watchHeat(function (st) {
+        window.__fridayHeat = st;
+        if (orb && orb.setThermal) orb.setThermal(st);
+      });
+      FridayRefresh.scheme();
     }
     // keep contact names fresh (no prompt if already allowed)
     if (window.FridayNative && window.FridayNative.contacts.available() && window.FridayNative.contacts.syncedAt() && Date.now() - window.FridayNative.contacts.syncedAt() > 3 * 864e5) {

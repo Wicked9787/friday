@@ -1,22 +1,80 @@
-# Friday and Jarvis 3.2.1 · Gemini Fix
+# Friday and Jarvis 3.3 · New Look
 
-Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.2.1. Your memory and settings carry over. Install it over the old one in AltStore.
+Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.3. Your memory, settings and keys carry over. Install it over the old one in AltStore.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.2.1-GeminiFix.ipa` | **Install this one.** Friday 3.2.1 for Sky. |
-| `Jarvis-v3.2.1-GeminiFix.ipa` | Jarvis 3.2.1 for Batsie. |
+| `Friday-v3.3.0-NewLook.ipa` | **Install this one.** Friday 3.3 for Sky. |
+| `Jarvis-v3.3.0-NewLook.ipa` | Jarvis 3.3 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
-The version number shows in AltStore and in the app (Settings → Backup & About).
+The version number shows in AltStore and in the app (Settings → Help → Backup & About).
 
-## Fixes in 3.2.1 · Gemini Fix
+## New main screen
 
-- **Google's new Gemini keys work.** Since mid-2026, new keys from Google AI Studio start with `AQ.` instead of `AIza`, and they only work through Google's own Gemini connection. Friday now uses that connection for every Gemini key, old or new. Paste it in Settings → Brain & Internet → Paste a key.
-- **Music on your phone always stays in the app.** If a song, artist or playlist isn't in your library, she says so instead of handing it to the Shortcut or opening the Music app. HomePod, speakers and volume still go to your Shortcut, because iPhone doesn't let apps do those.
-- The Shortcut prompt's music step now only covers the HomePod, speakers and volume. Updating your Shortcut is optional; the app simply stops sending phone music to it.
+Your layouts and orb looks stay exactly the same. A bar now sits along the bottom of whichever layout you use.
+
+- **Pill bar** (the default): camera, a text box, and a gold **Live** button. One tap on Live turns live listening on or off.
+- **Glass dock** (an option): Type, Live and Look buttons in a glass bar.
+- **Typing:** tap the text box (or Type) and the keyboard comes up. With the Pill bar her orb moves up top; with the Glass dock it stays big and dims. Her answers show as text above the bar. Tap Live to go back to talking.
+- **Settings → Her → Looks & Layout → Main screen:**
+  - Pill bar or Glass dock
+  - **Tap her orb to talk** (a gold ring shows while she's listening)
+  - **Hide her orb while typing** (until Live is back on)
+  - **Speak typed replies** (off: typed answers are text only)
+  - **Suggestions** (the chips above the bar) on or off
+- **Dark keyboard:** the iPhone keyboard is always the dark one in the app. Her own colors don't change.
+- **Immersive** (Full orb) is a little smaller so she isn't cut off at the edges.
+
+## Max (4K) quality, but smart
+
+Her orb now draws in **Max** by default: bigger than the screen (about 4K worth of pixels) and shrunk to fit, with more particles. Edges are smoother and the light is finer. (HD already used every pixel the screen has; Max adds the smoothing and extra detail.)
+
+So she never lags or overheats the phone, Max eases off on its own:
+
+- **Resting:** after a minute with nobody talking, she drops the extra resolution (still full screen sharpness).
+- **If it starts to stutter:** the extra resolution goes first, then some particles. Never laggier than HD.
+- **If the phone gets warm:** she reads iPhone's heat sensor. Warm: no extra resolution and 30 frames a second. Hot: the lighter look. When it cools, she's back to Max.
+- **Low Power Mode:** the lighter look, like before.
+
+Change it in Settings → Her → Looks & Layout → Looks: **Max (4K)**, **HD** or **Original**.
+
+## New Settings
+
+- Settings opens on **6 bubbles around her orb**: Her, Brains, Home, Phone, Your stuff, Help. Tap one to see its pages.
+- **Quick switches** right under the bubbles: Hands-free, Live listening and Suggestions, one tap each.
+- **Font and size** (Her → Looks & Layout): SF Pro (iPhone's own), Inter, Outfit, Sora, Space Grotesk, Exo 2, Rajdhani or Orbitron (Orbitron is used for titles). They come with the app and work offline. Size: Normal, Small, Extra small or **Tiny** (smaller than iPhone's smallest text).
+- **Brains:** your AI brains are listed under Brains with Test and Remove. The main Groq key is tucked into its own closed section.
+
+## Connections and Refresh my apps
+
+Settings → Your stuff → **Connections** works like Paste a key:
+
+- **Add a link:** type a name and paste a link (a website or an app link like `spotify://`), tap Add. It gets a bubble on her screen, and you can say "open" and its name.
+- **Refresh apps** (ready-made): tap it once to add the Refresh apps bubble.
+
+**Refresh my apps:** say "refresh my apps" (or "open AltStore") or tap the bubble. LocalDevVPN turns on and your installer opens; tap **Refresh All**. No Shortcut. She finds your installer by herself (AltStore, SideStore or AltLoad). If LocalDevVPN isn't installed, she opens the installer straight away.
+
+**Reminder:** Connections → **Refresh reminder**: every 3, 5 or 6 days at the hour you pick, with a second nudge the next day. Tapping the reminder does the refresh. Free Apple ID apps last 7 days, so 5 or 6 days is a good pick.
+
+## Bubbles
+
+- **Fresh start:** Memory, Lists, Timer and Chat. She adds the ones you use most. Your old set is saved; turning off Bubbles that learn (Looks & Layout → Layout) brings it back.
+- **Unused bubbles fade away** after 2 weeks and come back as soon as you use them again. Memory always stays. You can still edit, add and remove bubbles yourself.
+- **Everything she learns lives in the neural map,** not on the main screen.
+
+## Free brains
+
+- **Cloudflare Workers AI** is a new free backup brain: free every day, no card, no trial. Settings → Brains → Paste a key → **Cloudflare**. Paste your **Account ID** (right side of your Cloudflare dashboard) and an **API token** made with the **Workers AI** template. You can also say "ask Cloudflare …".
+- **Backup brains work even when a site blocks requests from apps:** the installed app sends them straight from the iPhone instead.
+- Cerebras and Mistral now need a card and GitHub Models was retired, so their buttons are gone.
+
+## Fixes from 3.2.1
+
+- **Google's new Gemini keys work.** New keys from Google AI Studio start with `AQ.` and only work through Google's own Gemini connection; Friday uses it for every Gemini key.
+- **Music on your phone always stays in the app.** If something isn't in your library, she says so instead of opening the Music app. HomePod, speakers and volume still go to your Shortcut. The Shortcut prompt's music step now only covers those (updating your Shortcut is optional).
 
 ## Direct lights with AiDot (new in 3.2)
 
@@ -25,7 +83,7 @@ Your AiDot (Leedarson) lights can now be switched straight from the app over you
 **Set it up once:**
 
 1. Make sure your lights are in the **AiDot app** and work there.
-2. In the app: Settings → **Phone & Shortcut** → **AiDot lights**. Pick your country, type your AiDot email and password, tap **Sign in to AiDot**.
+2. In the app: Settings → **Home** → **Lights** → **AiDot lights**. Pick your country, type your AiDot email and password, tap **Sign in to AiDot**.
 3. Your lights show up in a list. Tap a light's **On** button. The first time, iPhone asks to let the app find devices on your local network: tap **Allow**.
 
 **Then just say:**
@@ -50,16 +108,16 @@ Your AiDot (Leedarson) lights can now be switched straight from the app over you
 
 ## Paste a key: free backup brains (new in 3.2)
 
-Settings → **Brain & Internet** → **Paste a key**. Paste any AI key and tap **Add it**. She works out whose key it is, picks a free model that service offers today, tests it, and turns it on as a **backup brain**: when Groq hits its free limit, she switches to it by herself.
+Settings → **Brains** → **Paste a key**. Paste any AI key and tap **Add it**. She works out whose key it is, picks a free model that service offers today, tests it, and turns it on as a **backup brain**: when Groq hits its free limit, she switches to it by herself.
 
 | Key starts with | Service | Free? |
 |---|---|---|
 | `AQ.…` or `AIza…` | Google Gemini | Free tier |
 | `sk-or-…` | OpenRouter | Free models |
 | `gsk_…` | Groq (becomes your main key if you don't have one) | Free |
-| `csk-…` | Cerebras | Free tier |
-| 32 letters and numbers | Mistral | Free tier |
-| `github_pat_…` | GitHub Models | Free |
+| Account ID + API token | Cloudflare Workers AI (tap **Cloudflare** under the box) | Free every day |
+
+Cerebras and Mistral now ask for a card, and GitHub Models was retired, so they're gone from the free list.
 
 The buttons under the box open each service's key page: sign in, make a key, copy it, come back and paste it. Paid keys (ChatGPT, Claude, Grok, DeepSeek) work too, but she asks first because they can cost money. You can also say "ask Gemini …" once it's added. Keys stay on this phone.
 
