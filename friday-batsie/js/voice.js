@@ -828,6 +828,21 @@
     try { if (navigator.audioSession && navigator.audioSession.type !== t) navigator.audioSession.type = t; } catch (e) {}
   }
   FridayVoice.audioSessionType = audioSessionType;
+  // In the app: send her voice to the main speaker (or AirPods), never the quiet earpiece the mic can leave behind.
+  async function speakerOn() {
+    var L = nativeListen();
+    var st = root.FridayStorage.get("settings", {}) || {};
+    if (!L || !L.speakerOn || st.bargeIn) return null;
+    try {
+      var r = await Promise.race([L.speakerOn(), new Promise(function (res) { setTimeout(function () { res(null); }, 700); })]);
+      if (r && r.route) root.FridayStorage.set("voiceRoute", r.route);
+      return r;
+    } catch (e) { return null; }
+  }
+  function speakerOff() {
+    var L = nativeListen();
+    if (L && L.speakerOff) { try { L.speakerOff(); } catch (e) {} }
+  }
   function diag(d) { try { root.FridayStorage.set("voiceDiag", Object.assign({ at: Date.now() }, d)); } catch (e) {} }
   FridayVoice.prototype._outCtx = function () {
     if (!this._out || this._out.state === "closed" || this._out.state === "interrupted") {
@@ -1068,8 +1083,10 @@
     if (!text) return this.whenDone();
     this._queue = this._queue || [];
     var tail = this._queue[this._queue.length - 1];
-    if (tail && !tail._pre && !tail.lang && !lang && (tail.text + " " + text).length <= 190) tail.text += " " + text;
-    else this._queue.push({ text: text, profile: profile, lang: lang || null });
+    // the first line of a reply goes alone, so she starts talking as soon as possible
+    var lead = !this._pumping && !this._queue.length;
+    if (tail && !tail._lead && !tail._pre && !tail.lang && !lang && (tail.text + " " + text).length <= 190) tail.text += " " + text;
+    else this._queue.push({ text: text, profile: profile, lang: lang || null, _lead: lead });
     if (!this._pumping) this._pump();
     return this.whenDone();
   };
@@ -1077,6 +1094,8 @@
   FridayVoice.prototype._pump = async function () {
     audioSessionType("playback");
     this._pumping = true;
+    this.speaking = true;
+    await speakerOn();
     this.speaking = true;
     this._onState("speak-start");
     this._startBargeIn();
@@ -1103,6 +1122,7 @@
         this._pumping = false;
         this.speaking = false;
         if (!this._keepOsc) audioSessionType("auto");
+        if (!this.listening && !this._keepOsc) speakerOff();
         this._stopEnvelope();
         this._stopBargeIn();
         this._onVolume(0, "idle");
@@ -1141,6 +1161,7 @@
 
   FridayVoice.prototype._previewAI = async function (voiceId, line) {
     audioSessionType("playback");
+    await speakerOn();
     var gen = this._gen = (this._gen || 0) + 1;
     this.speaking = true;
     this._onState("speak-start");

@@ -916,7 +916,9 @@
         else if (d.path === "iphone") msg = "Played with the iPhone voice, because the AI voice isn't available" + (why ? ": " + why : ".");
         else if (d.path === "none") msg = "No sound: iOS has her audio paused (" + (d.state || "unknown") + "). Close and reopen the app.";
         else msg = Date.now() - started < 400 ? "Nothing played. Turn the volume up and check silent mode, then try again." : "Done.";
-        setText("voice-test-status", msg + " If you heard nothing, check the volume and silent mode.");
+        var rt = String(root.FridayStorage.get("voiceRoute", "") || "");
+        var where = /Receiver/i.test(rt) ? " Sound went to the earpiece (top speaker)." : /Speaker/i.test(rt) ? " Sound went to the main speaker." : /Bluetooth|Headphones|AirPlay|Car/i.test(rt) ? " Sound went to your headphones or speaker." : "";
+        setText("voice-test-status", msg + where + " If you heard nothing, check the volume.");
       });
     };
     var bgSeg = document.getElementById("bg-minutes");

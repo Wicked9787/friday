@@ -17,7 +17,10 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "available", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "cancel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "speakerOn", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "speakerOff", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "route", returnType: CAPPluginReturnPromise)
     ]
 
     private let engine = AVAudioEngine()
@@ -208,6 +211,47 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             call.resolve()
         }
+    }
+
+    /// Before she talks: play through the main speaker (or AirPods / car), even on silent,
+    /// with any music turned down while she speaks. Skipped while listening.
+    @objc func speakerOn(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.request != nil {
+                call.resolve(["ok": false, "reason": "listening"])
+                return
+            }
+            let audio = AVAudioSession.sharedInstance()
+            do {
+                try audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+                try audio.setActive(true, options: [])
+                call.resolve(["ok": true, "route": self.routeName()])
+            } catch {
+                call.resolve(["ok": false, "reason": error.localizedDescription])
+            }
+        }
+    }
+
+    /// After she talks: let other audio (music) come back up.
+    @objc func speakerOff(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if self.request == nil {
+                try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+            }
+            call.resolve()
+        }
+    }
+
+    @objc func route(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let audio = AVAudioSession.sharedInstance()
+            call.resolve(["route": self.routeName(), "category": audio.category.rawValue, "volume": Double(audio.outputVolume)])
+        }
+    }
+
+    private func routeName() -> String {
+        let outs = AVAudioSession.sharedInstance().currentRoute.outputs
+        return outs.map { $0.portType.rawValue }.joined(separator: ",")
     }
 
     private func finish() {
