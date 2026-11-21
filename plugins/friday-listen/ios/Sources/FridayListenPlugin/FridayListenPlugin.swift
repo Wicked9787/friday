@@ -28,6 +28,8 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
     private var stopCall: CAPPluginCall?
     private var session = 0
     private var tapInstalled = false
+    private var sessionActive = false
+    private var observing = false
 
     static func authName(_ s: SFSpeechRecognizerAuthorizationStatus) -> String {
         switch s {
@@ -53,6 +55,8 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func start(_ call: CAPPluginCall) {
         let lang = call.getString("lang") ?? "en-US"
+        // Names she should expect (Batsie, Sky, contacts...), so iOS spells them right.
+        let hints = Array((call.getArray("hints", String.self) ?? []).prefix(100))
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 guard status == .authorized else {
@@ -65,14 +69,14 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
                             call.reject("mic-denied")
                             return
                         }
-                        self.begin(call, lang: lang)
+                        self.begin(call, lang: lang, hints: hints)
                     }
                 }
             }
         }
     }
 
-    private func begin(_ call: CAPPluginCall, lang: String) {
+    private func begin(_ call: CAPPluginCall, lang: String, hints: [String]) {
         if let old = stopCall {
             stopCall = nil
             old.resolve(["text": lastText])
@@ -88,6 +92,11 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         lastText = ""
 
         let audio = AVAudioSession.sharedInstance()
+        if !observing {
+            observing = true
+            // A call, Siri or another app taking the mic ends this listen cleanly, so the app knows.
+            NotificationCenter.default.addObserver(self, selector: #selector(onInterruption(_:)), name: AVAudioSession.interruptionNotification, object: audio)
+        }
         do {
             // Speaker stays loud, AirPods stay in full-quality mode (the iPhone mic listens), music isn't ducked.
             // The mode is left as is afterwards, so her voice playing next isn't interrupted by a switch.
@@ -95,6 +104,7 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
                 try audio.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
             }
             try audio.setActive(true, options: [])
+            sessionActive = true
         } catch {
             call.reject("audio-session")
             return
@@ -103,6 +113,9 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
+        if !hints.isEmpty {
+            req.contextualStrings = hints
+        }
         if #available(iOS 16.0, *) {
             req.addsPunctuation = true
         }
@@ -227,6 +240,19 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         request?.endAudio()
         task = nil
         request = nil
+        // Hand the audio back, so her voice (played by the web view) isn't left cut off.
+        if sessionActive {
+            sessionActive = false
+            try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        }
+    }
+
+    @objc private func onInterruption(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw), type == .began else { return }
+        DispatchQueue.main.async {
+            if self.request != nil { self.finish() }
+        }
     }
 }
 

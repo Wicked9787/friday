@@ -32,6 +32,13 @@
   var notify = {
     available: function () { return !!plugin("LocalNotifications"); },
     allowed: function () { return S().get("notifyAllowed", false) === true && notify.available(); },
+    // Read what iPhone Settings says (no prompt), so the app never shows "Turn on" when it's already on.
+    refresh: async function () {
+      var P = plugin("LocalNotifications");
+      if (!P) return false;
+      try { var cur = await P.checkPermissions(); var ok = granted(cur && cur.display); S().set("notifyAllowed", ok); return ok; }
+      catch (e) { return notify.allowed(); }
+    },
     ask: async function () {
       var P = plugin("LocalNotifications");
       if (!P) return false;

@@ -8,8 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.1.3";
-  var APP_LABEL = "In-App Phone";
+  var APP_VERSION = "3.1.4";
+  var APP_LABEL = "Voice Fix";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -218,18 +218,22 @@
   /* 3.0: when one sentence needs several things outside the app (Shortcut jobs,
      opening an app), they wait here. The first runs now; each time the Shortcut
      hands back to Friday, the next one starts. */
+  var handedOffAt = 0; // when she sent you to another app on purpose (Shortcut, call, Music...)
   function goShortcut(cmd, opts) {
     if (opts && opts.collect) { opts.collect.push({ kind: "shortcut", value: cmd }); return; }
     leftForApp = true;
+    handedOffAt = Date.now();
     runShortcut(cmd);
   }
   function goUrl(url, opts) {
     if (opts && opts.collect) { opts.collect.push({ kind: "url", value: url }); return; }
     leftForApp = true;
+    handedOffAt = Date.now();
     openUrl(url);
   }
   function runLeaveItem(it) {
     if (!it) return;
+    handedOffAt = Date.now();
     if (it.kind === "url") openUrl(it.value);
     else runShortcut(it.value);
   }
@@ -701,7 +705,8 @@
           emitActivity(ph.tool === "home" ? "home" : ph.tool === "battery" ? "core" : ph.tool === "music" || ph.tool === "call" ? "voice" : "calendar", ph.say.slice(0, 70));
           // music is playing now: stop the hands-free conversation so she doesn't listen to the song
           if (ph.tool === "music" && ph.playing && !opts.part) handsFree = false;
-          await voice.speak(ph.say, profile);
+          // when music starts, the music is the answer: she doesn't talk over it
+          if (!(ph.tool === "music" && ph.playing)) await voice.speak(ph.say, profile);
           if (ph.url) goUrl(ph.url, opts);
           return;
         }
@@ -1097,6 +1102,8 @@
   function keepInBackground() {
     var mins = bgMinutes();
     if (!mins || !(voice.listening || voice.speaking || busy || handsFree)) return false;
+    // She sent you to another app on purpose (a Shortcut, a call, Music): don't keep listening there.
+    if (Date.now() - handedOffAt < 8000) return false;
     voice.keepAlive(true);
     var start = Date.now();
     FridayStorage.set("bgWindow", { start: start, mins: mins, awake: 0 });
@@ -1110,6 +1117,7 @@
     return true;
   }
   function endBackgroundWindow(sleep) {
+    var had = !!bgTimer;
     clearTimeout(bgTimer); clearInterval(bgTick); bgTimer = 0; bgTick = 0;
     voice.keepAlive(false);
     if (sleep) {
@@ -1117,6 +1125,7 @@
       try { voice.releaseMic(); } catch (e) {}
       var d = document.getElementById("listen-dot"); if (d) d.classList.remove("on");
     }
+    return had;
   }
 
   function noteActivity() { lastActivity = Date.now(); applyPower(); }
@@ -1699,7 +1708,10 @@
           document.getElementById("listen-dot").classList.remove("on");
           return;
         }
-        endBackgroundWindow(false);
+        // Back from another app: a listen left over from the background may have been cut off by iOS,
+        // so start a fresh one (hands-free picks it up below) instead of waiting on a dead one.
+        if (endBackgroundWindow(false) && voice.listening) { try { voice.releaseMic(); } catch (e) {} }
+        if (window.FridayNative && FridayNative.notify.refresh) FridayNative.notify.refresh().then(function () { if (settings && settings._refreshPhone) settings._refreshPhone(); });
         busy = false;
         if (continueLeaveQueue()) return;
         if (!FridayStorage.hasApiKey() || document.querySelector(".panel.open")) return;
@@ -1746,6 +1758,9 @@
     window.addEventListener("friday:bills", scheduleLifeAlerts);
     window.addEventListener("friday:countdowns", scheduleLifeAlerts);
     scheduleLifeAlerts();
+    if (window.FridayNative && FridayNative.isApp() && FridayNative.notify.refresh) {
+      FridayNative.notify.refresh().then(function (on) { if (on) scheduleLifeAlerts(); if (settings && settings._refreshPhone) settings._refreshPhone(); });
+    }
     // keep contact names fresh (no prompt if already allowed)
     if (window.FridayNative && window.FridayNative.contacts.available() && window.FridayNative.contacts.syncedAt() && Date.now() - window.FridayNative.contacts.syncedAt() > 3 * 864e5) {
       setTimeout(function () { window.FridayNative.contacts.sync(); }, 5000);

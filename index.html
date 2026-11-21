@@ -155,6 +155,10 @@
         <div class="sub">She listens to what you said, like ChatGPT: if it sounds unfinished she waits, if it sounds done she answers. This sets how patient she is. Long is best if she cuts you off.</div>
       </div>
       <div class="row row-col">
+        <button class="btn" type="button" id="btn-voice-test">Test her voice</button>
+        <div class="sub" id="voice-test-status">Plays a short line and tells you how it went.</div>
+      </div>
+      <div class="row row-col">
         <label class="toggle-row">Live listening <input type="checkbox" id="set-live-listen"></label>
         <div class="sub">Your words show up as you talk, using the iPhone's own speech recognition. Free, and faster. Turn off to use Groq's Whisper instead. Talk over her uses Whisper.</div>
         <div class="sub" id="live-listen-status"></div>
@@ -638,7 +642,13 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.1.3</h1>
+      <h1>What's new in 3.1.4</h1>
+      <p class="wn-tag">Voice fix</p>
+      <ul>
+        <li>Her voice plays even when the phone is on silent, and comes back on its own if iOS cuts it off</li>
+        <li>Batsie stays Batsie (no more "Patsy"), and she starts listening again by herself when you come back from another app</li>
+        <li>Settings → Voice &amp; Talking → Test her voice tells you exactly how it went</li>
+      </ul>
       <p class="wn-tag">In-app phone</p>
       <ul>
         <li>She tries everything she can in the app first: lights, music on your phone, calls and texts. Your Shortcut is the backup</li>

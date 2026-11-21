@@ -1,19 +1,31 @@
-# Friday and Jarvis 3.1.3 · In-App Phone
+# Friday and Jarvis 3.1.4 · Voice Fix
 
-Coming from 2.0? This one install has everything from 3.0, 3.1, 3.1.2 and 3.1.3. Your memory and settings carry over.
+Coming from 2.0? This one install has everything from 3.0 through 3.1.4. Your memory and settings carry over.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.1.3-InAppPhone.ipa` | **Install this one.** Friday 3.1.3 for Sky. |
-| `Jarvis-v3.1.3-InAppPhone.ipa` | Jarvis 3.1.3 for Batsie. |
+| `Friday-v3.1.4-VoiceFix.ipa` | **Install this one.** Friday 3.1.4 for Sky. |
+| `Jarvis-v3.1.4-VoiceFix.ipa` | Jarvis 3.1.4 for Batsie. |
 | `…-LightsTest.ipa` | The same app plus Apple Home permission, so lights can run straight from the app. Try it first; if AltStore won't take it, use the regular one. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Backup & About).
 
-## In the app first (new in 3.1.3)
+## Voice fix (new in 3.1.4)
+
+- **Her voice plays even on silent.** The AI voice is now marked as playback (like music or Siri), so silent mode doesn't mute her. While she talks, other music pauses and then carries on.
+- **If iOS cuts her sound off** (after the mic, a call or another app), she notices within a moment, rebuilds her audio and keeps going. If that doesn't work, she finishes the sentence with the iPhone voice instead of going silent.
+- **Live listening hands the audio back** as soon as it stops, and a call or Siri ends a listen cleanly.
+- **Coming back from another app,** she starts a fresh listen by herself (hands-free), no tap.
+- **Batsie stays Batsie.** Live listening and Whisper are told your names (Batsie, Sky, Daddy, your contacts), and if the phone still hears "Patsy", "Batsy", "Betsy" or "bats e", she turns it back into Batsie. A real contact with one of those names is left alone.
+- **Music:** when she starts music, she lets it play instead of talking over it.
+- **Test her voice** (Settings → Voice & Talking) plays a line and tells you how it went: AI voice, iPhone voice and why, or sound blocked.
+- **Notifications:** the app now reads the real setting from iPhone Settings, so "Turn on notifications" only shows when they're really off.
+- **Shortcut prompt:** a last step jumps straight back to Friday (jarvis:// for Jarvis) as soon as a job is done, except when it opens the Camera or Roku on purpose. When she hands you to a Shortcut, a call or Music, she doesn't keep listening in the background.
+
+## In the app first (3.1.3)
 
 She now tries every job she can right in the app, and hands it to your Shortcut only if that doesn't work.
 
@@ -92,7 +104,7 @@ The Shortcut still handles what only it can do: Apple TV, HomePod and music, sen
 
 ### Lights test
 
-`Friday-v3.1.3-LightsTest.ipa` (and `Jarvis-v3.1.3-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
+`Friday-v3.1.4-LightsTest.ipa` (and `Jarvis-v3.1.4-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
 
 - If AltStore installs it and you allow Home access when asked, the lights run straight from the app, to the exact percent.
 - If AltStore refuses it, or Home access doesn't show up, install the regular IPA. Lights keep working through the Shortcut.

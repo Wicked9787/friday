@@ -137,6 +137,86 @@
   }
   FridayVoice.speakable = speakable;
 
+  /* ---------- Names she should hear right ("Batsie", not "Patsy") ---------- */
+  function cleanName(n) { return String(n || "").replace(/[^A-Za-z' -]+/g, " ").replace(/\s+/g, " ").trim(); }
+  // core = only the names that matter most (you, your partner, the assistants): used for fixing mishearings.
+  // Without core, contacts are included too: used as hints for the listener.
+  function knownNames(core) {
+    var out = [], seen = {};
+    function add(n) {
+      n = cleanName(n);
+      if (n.length < 2) return;
+      // "DADDY!!" is said "Daddy"
+      if (n === n.toUpperCase()) n = n.charAt(0) + n.slice(1).toLowerCase();
+      var k = n.toLowerCase();
+      if (!seen[k]) { seen[k] = 1; out.push(n); }
+    }
+    try {
+      var prof = root.FRIDAY_CONFIG.getProfile();
+      [prof.ownerName, prof.assistantName, prof.greetingName, prof.daddyLabel].forEach(add);
+      if (root.FridayExtras && root.FridayExtras.partnerCfg) {
+        var pc = root.FridayExtras.partnerCfg(prof);
+        (pc.names || []).forEach(add); add(pc.contact);
+      }
+      ["Friday", "Jarvis"].forEach(add);
+    } catch (e) {}
+    if (!core) { try { if (root.FridayNative) root.FridayNative.contacts.names().slice(0, 80).forEach(add); } catch (e2) {} }
+    return out;
+  }
+  FridayVoice.nameHints = knownNames;
+  var START_SWAP = { b: "p", p: "b", d: "t", t: "d", g: "k", k: "g", c: "k", v: "f", f: "v", j: "g", s: "z", z: "s" };
+  var COMMON = {};
+  ("patty pets bets party petty tasty ski fry belly jelly silly bully berry merry carry marry sorry happy money honey funny ready heavy every early worry " +
+   "hurry story pretty lady baby body buddy candy city easy empty fifty forty sixty thirty twenty ninety seventy eighty coffee movie cookie rookie " +
+   "selfie hoodie zombie bestie auntie sweetie cutie smoothie batty daisy friday daily dairy diary fairy").split(" ").forEach(function (w) { COMMON[w] = 1; });
+  // Ways speech recognition tends to mishear a name: first sound swapped (b/p, d/t...),
+  // a different ending (-ie / -y / -ey / -ee / -i), the first vowel changed, or split in two.
+  function soundAlikes(name) {
+    var n = String(name || "").toLowerCase();
+    if (n.length < 5 || !/^[a-z]+$/.test(n)) return [];
+    var stems = [n], ends = [""];
+    var m = n.match(/^(.*?)(ie|ey|ee|y|i)$/);
+    if (m && m[1].length >= 3) { stems = [m[1]]; ends = ["ie", "ey", "ee", "y", "i", "ea"]; }
+    var heads = [];
+    stems.forEach(function (st) {
+      heads.push(st);
+      if (START_SWAP[st[0]]) heads.push(START_SWAP[st[0]] + st.slice(1));
+    });
+    heads.slice().forEach(function (h) {
+      var vm = h.match(/^([^aeiou]*)([aeiou])(.*)$/);
+      if (vm) { var alt = { a: "e", e: "a", i: "e", o: "u", u: "o" }[vm[2]]; if (alt) heads.push(vm[1] + alt + vm[3]); }
+    });
+    var out = [];
+    heads.forEach(function (h) { ends.forEach(function (e) { out.push(h + e); }); });
+    if (m && m[1].length >= 3) { out.push(m[1] + " e"); out.push(m[1].slice(0, -1) + " see"); }
+    return out.filter(function (v, i) { return v !== n && out.indexOf(v) === i && !COMMON[v]; });
+  }
+  FridayVoice.soundAlikes = soundAlikes;
+  var _fixCache = { key: "", list: [] };
+  function fixNames(text) {
+    var t = String(text || "");
+    if (!t) return t;
+    var names = knownNames(true);
+    var all = knownNames();
+    var key = all.join("|");
+    if (_fixCache.key !== key) {
+      var known = {};
+      all.forEach(function (n) { n.toLowerCase().split(" ").forEach(function (w) { known[w] = 1; }); known[n.toLowerCase()] = 1; });
+      var list = [];
+      names.forEach(function (n) {
+        var first = n.split(" ")[0];
+        soundAlikes(first).forEach(function (v) {
+          if (known[v]) return; // a real contact with that name stays as it is
+          list.push({ re: new RegExp("\\b" + v.replace(/ /g, "\\s+") + "\\b", "gi"), to: first });
+        });
+      });
+      _fixCache = { key: key, list: list };
+    }
+    _fixCache.list.forEach(function (x) { t = t.replace(x.re, x.to); });
+    return t;
+  }
+  FridayVoice.fixNames = fixNames;
+
   /* Live listening: the iPhone's own speech recognition (Friday's add-on). */
   function nativeListen() {
     var c = root.Capacitor;
@@ -389,7 +469,7 @@
       self._fireSilence();
     });
     try {
-      await L.start({ lang: "en-US" });
+      await L.start({ lang: "en-US", hints: knownNames() });
     } catch (e) {
       this._dropNative();
       throw e;
@@ -407,7 +487,7 @@
       if (!this._speechStart) this._speechStart = this._lastWordsAt;
       this._heard = true;
     }
-    if (this.opts.onPartial) { try { this.opts.onPartial(this._liveText); } catch (e) {} }
+    if (this.opts.onPartial) { try { this.opts.onPartial(fixNames(this._liveText)); } catch (e) {} }
   };
 
   FridayVoice.prototype._fireSilence = function () {
@@ -494,18 +574,20 @@
       } catch (e) {}
       if (!got) got = this._liveText || "";
       this._dropNative();
-      return String(got).trim();
+      var outc = this._out;
+      if (outc && outc.state !== "running") { try { await this._ensureRunning(); } catch (e9) {} }
+      return fixNames(String(got).trim());
     }
     // A read taken after your last word is already the full text: no need to send it again.
     var turn = this._turn;
     if (this._mode === "whisper" && turn && turn.text && turn.at > this._lastLoud) {
       try { if (this._rec && this._rec.state === "recording") this._rec.stop(); } catch (e3) {}
       this._rec = null;
-      return turn.text;
+      return fixNames(turn.text);
     }
     if (this._mode === "webkit") {
       try { if (this._wk) this._wk.stop(); } catch (e) {}
-      return (await this._wkPromise) || (this._webkitText || "");
+      return fixNames((await this._wkPromise) || (this._webkitText || ""));
     }
     var rec = this._rec;
     if (!rec) return "";
@@ -532,6 +614,8 @@
     fd.append("model", root.FRIDAY_CONFIG.WHISPER_MODEL);
     fd.append("language", "en");
     fd.append("response_format", "json");
+    var hint = knownNames().slice(0, 30).join(", ");
+    if (hint) fd.append("prompt", hint.slice(0, 220));
     var res = await fetch(root.FRIDAY_CONFIG.TRANSCRIBE_URL, {
       method: "POST",
       headers: { Authorization: "Bearer " + key },
@@ -546,7 +630,7 @@
       throw new Error("Could not transcribe (" + res.status + ").");
     }
     var data = await res.json();
-    return (data && data.text || "").trim();
+    return fixNames((data && data.text || "").trim());
   };
 
   FridayVoice.prototype.listenOnce = async function () {
@@ -729,8 +813,25 @@
     return res.arrayBuffer();
   };
 
+  // A fresh audio output, for when iOS has cut the old one off (after the mic, a call, another app).
+  FridayVoice.prototype._reviveOut = function () {
+    try { if (this._out && this._out.state !== "closed") this._out.close(); } catch (e) {}
+    this._out = null;
+    this._srcs = [];
+    this._playhead = 0;
+    this._keepOsc = null;
+    return this._outCtx();
+  };
+  // iPhone mutes web audio on silent unless it's marked as playback (like music). Mark it while she talks,
+  // and hand it back afterwards so other apps' music can carry on.
+  function audioSessionType(t) {
+    try { if (navigator.audioSession && navigator.audioSession.type !== t) navigator.audioSession.type = t; } catch (e) {}
+  }
+  FridayVoice.audioSessionType = audioSessionType;
+  function diag(d) { try { root.FridayStorage.set("voiceDiag", Object.assign({ at: Date.now() }, d)); } catch (e) {} }
   FridayVoice.prototype._outCtx = function () {
-    if (!this._out || this._out.state === "closed") {
+    if (!this._out || this._out.state === "closed" || this._out.state === "interrupted") {
+      if (this._out && this._out.state === "interrupted") { try { this._out.close(); } catch (e0) {} }
       var Ctx = window.AudioContext || window.webkitAudioContext;
       this._out = new Ctx();
       this._outGain = this._out.createGain();
@@ -787,8 +888,19 @@
   FridayVoice.prototype._ensureRunning = async function () {
     var ctx = this._outCtx();
     if (ctx.state === "running") return;
-    try { if (ctx.resume) await Promise.race([ctx.resume(), new Promise(function (r) { setTimeout(r, 1500); })]); } catch (e) {}
-    if (ctx.state !== "running") throw new Error("audio-suspended");
+    try { if (ctx.resume) await Promise.race([ctx.resume(), new Promise(function (r) { setTimeout(r, 1200); })]); } catch (e) {}
+    if (ctx.state === "running") return;
+    // still not playing: start over with a new output
+    ctx = this._reviveOut();
+    try { if (ctx.resume) await Promise.race([ctx.resume(), new Promise(function (r) { setTimeout(r, 1200); })]); } catch (e2) {}
+    if (ctx.state !== "running") { diag({ path: "none", issue: "suspended", state: ctx.state }); throw new Error("audio-suspended"); }
+  };
+  // Is sound really coming out? (iOS can leave the clock frozen after the mic was used.)
+  FridayVoice.prototype._flowing = function () {
+    var ctx = this._out;
+    if (!ctx) return Promise.resolve(false);
+    var a = ctx.currentTime;
+    return new Promise(function (res) { setTimeout(function () { res(ctx.state === "running" && ctx.currentTime > a + 0.05); }, 350); });
   };
 
   FridayVoice.prototype._schedule = function (buffer, volume, gapAfter) {
@@ -873,6 +985,7 @@
         voice = self.pickDefault(profile);
       }
       var T = nativeTTS();
+      if (!lang) { var dg = root.FridayStorage.get("voiceDiag", null); if (!dg || Date.now() - (dg.at || 0) > 3000 || dg.path !== "iphone") diag({ path: "iphone", issue: self._aiAllowed() ? "fallback" : "chosen" }); }
       if (voice && voice._native && T) {
         self._fakeEnvelope(text);
         var done = false;
@@ -923,6 +1036,15 @@
           var p = parts[i];
           var gap = /[.!?…]["')\]]*$/.test(p) ? 0.26 : /[,;:]$/.test(p) ? 0.1 : 0.16;
           endAt = this._schedule(buf, mv.volume, gap);
+          if (i === 0 && !(await this._flowing())) {
+            // the sound is stuck: rebuild the output and try this clip again, once
+            (this._srcs || []).forEach(function (x) { try { x.stop(); } catch (e5) {} });
+            this._reviveOut();
+            await this._ensureRunning();
+            endAt = this._schedule(buf, mv.volume, gap);
+            if (!(await this._flowing())) { diag({ path: "iphone", issue: "stuck", state: this._out && this._out.state }); throw new Error("audio-stuck"); }
+            diag({ path: "ai", issue: "revived" });
+          } else if (i === 0) diag({ path: "ai", issue: "" });
         }
         // Start fetching the next line now (more of the reply has arrived by now), then
         // hand over a moment early so it can be lined up with no gap.
@@ -953,6 +1075,7 @@
   };
 
   FridayVoice.prototype._pump = async function () {
+    audioSessionType("playback");
     this._pumping = true;
     this.speaking = true;
     this._onState("speak-start");
@@ -979,6 +1102,7 @@
       if (gen === this._gen) {
         this._pumping = false;
         this.speaking = false;
+        if (!this._keepOsc) audioSessionType("auto");
         this._stopEnvelope();
         this._stopBargeIn();
         this._onVolume(0, "idle");
@@ -1016,6 +1140,7 @@
   };
 
   FridayVoice.prototype._previewAI = async function (voiceId, line) {
+    audioSessionType("playback");
     var gen = this._gen = (this._gen || 0) + 1;
     this.speaking = true;
     this._onState("speak-start");
@@ -1038,6 +1163,7 @@
     } finally {
       if (gen === this._gen) {
         this.speaking = false;
+        if (!this._keepOsc) audioSessionType("auto");
         this._stopEnvelope();
         this._onVolume(0, "idle");
         this._onState("speak-end");
@@ -1125,6 +1251,7 @@
   FridayVoice.prototype.keepAlive = function (on) {
     try {
       if (on) {
+        audioSessionType("playback");
         var ctx = this._outCtx();
         if (ctx.state !== "running" && ctx.resume) ctx.resume();
         if (!this._keepOsc) {
@@ -1139,6 +1266,7 @@
         try { this._keepOsc.stop(); } catch (e1) {}
         try { this._keepGain.disconnect(); } catch (e2) {}
         this._keepOsc = null; this._keepGain = null;
+        if (!this.speaking) audioSessionType("auto");
       }
     } catch (e) {}
     return !!this._keepOsc;
