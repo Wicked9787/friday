@@ -58,6 +58,8 @@
       uiSize: 1,
       refreshEvery: 0,
       refreshHour: 10,
+      privateVoiceURI: "",
+      onDeviceListen: true,
       billAlerts: true,
       countdownAlerts: true
     };
@@ -399,6 +401,7 @@
     this._bind30();
     this._bind31();
     this._bind33();
+    this._bind34();
     this._bindNav();
     this._syncHeaders();
 
@@ -900,11 +903,87 @@
     };
   };
 
+  // ---------- 3.4: private line ----------
+  FridaySettings.prototype._bind34 = function () {
+    var self = this, v = this.values;
+    var PL = root.FridayPrivate;
+    var prof = this.profile || {};
+    var other = prof.id === "batsie" ? "Friday" : "Jarvis", otherScheme = other.toLowerCase();
+    var partner = String(v.partnerNames || (prof.id === "batsie" ? "Sky" : "Batsie")).split(",")[0].trim() || (prof.id === "batsie" ? "Sky" : "Batsie");
+    function el(id) { return document.getElementById(id); }
+    function setText(id, t) { var e = el(id); if (e) e.textContent = t; }
+    var pairBtn = el("btn-private-pair"), verBtn = el("btn-private-verify"), unBtn = el("btn-private-unpair"), wordsEl = el("private-words"), steps = el("private-steps");
+    async function sync() {
+      if (!PL || !PL.available()) { setText("private-current", "Not available"); if (steps) steps.textContent = "This phone can't lock messages."; return; }
+      var st = await PL.status();
+      setText("private-current", !st.paired ? (st.sent ? "Waiting for " + other : "Not paired") : (st.verified ? "Paired · words checked" : "Paired · check the words"));
+      if (steps) {
+        if (!st.paired && !st.sent) steps.innerHTML = "<b>1.</b> Tap <b>Pair</b>. A text with your key opens: tap Send.<br><b>2.</b> " + partner + " opens it in " + other + " (tap the link). " + other + " sends a key back the same way.<br><b>3.</b> You both see 4 safety words. If they match, tap <b>The words match</b> on both phones.";
+        else if (!st.paired) steps.innerHTML = "Your key is on its way to " + partner + ". When " + other + " sends a key back, open it here (tap the link in the text). Didn't go through? Tap <b>Send my key again</b>.";
+        else if (!st.verified) steps.innerHTML = "Check these 4 words with " + partner + " in person or on a call. " + other + " shows them in Settings → Phone → Messages → Private line. Same words? Tap <b>The words match</b>. Different? Tap Unpair and start again.";
+        else steps.innerHTML = "Say <b>“tell " + partner + " privately …”</b> or <b>“send " + partner + " a private message”</b>, or type in Private messages. " + partner + " replies through " + other + " the same way.";
+      }
+      if (pairBtn) { pairBtn.textContent = st.paired || st.sent ? "Send my key again" : "Pair with " + other; pairBtn.className = st.paired ? "btn" : "btn gold"; }
+      if (wordsEl) {
+        wordsEl.hidden = !st.paired;
+        wordsEl.innerHTML = "";
+        (st.words || []).forEach(function (w) { var sp = document.createElement("span"); sp.textContent = w; wordsEl.appendChild(sp); });
+      }
+      if (verBtn) verBtn.hidden = !(st.paired && !st.verified);
+      if (unBtn) unBtn.hidden = !(st.paired || st.haveKey);
+    }
+    this._syncPrivate = sync;
+    if (pairBtn) pairBtn.onclick = function () {
+      if (!root.__fridayPrivateSendKey) return;
+      pairBtn.disabled = true;
+      root.__fridayPrivateSendKey().then(function (r) {
+        pairBtn.disabled = false;
+        if (!r || !r.ok) self.onToast(r && r.reason === "no-contact" ? "Add " + partner + "'s name in Contacts (just below) first." : "Couldn't open the text.");
+        sync();
+      }, function () { pairBtn.disabled = false; });
+    };
+    if (verBtn) verBtn.onclick = function () { PL.verify(true).then(function () { self.onToast("Private line is ready."); sync(); }); };
+    if (unBtn) unBtn.onclick = function () {
+      if (!confirm("Unpair the private line? You'll need to pair again to send private messages.")) return;
+      PL.unpair().then(sync);
+    };
+    var op = el("btn-private-open");
+    if (op) op.onclick = function () { if (root.__friday && root.__friday.openPanel) root.__friday.openPanel("private"); };
+    // voice for private messages (iPhone voices only)
+    var sel = el("private-voice");
+    function fillVoices() {
+      if (!sel || !root.__friday || !root.__friday.voice || !root.__friday.voice.catalog) return;
+      var cat = root.__friday.voice.catalog(false);
+      sel.innerHTML = "";
+      var o0 = document.createElement("option"); o0.value = ""; o0.textContent = "Best iPhone voice (automatic)"; sel.appendChild(o0);
+      cat.filter(function (c) { return c.rank > 0; }).forEach(function (c) {
+        var o = document.createElement("option"); o.value = c.uri; o.textContent = c.name + " · " + c.quality + (c.lang ? " (" + c.lang + ")" : ""); sel.appendChild(o);
+      });
+      sel.value = v.privateVoiceURI || "";
+      if (sel.value !== (v.privateVoiceURI || "")) sel.value = "";
+    }
+    if (sel) {
+      sel.onchange = function () { v.privateVoiceURI = sel.value; saveSettings(v); };
+      sel.addEventListener("focus", fillVoices);
+      setTimeout(fillVoices, 1500);
+    }
+    var vt = el("btn-private-voice-test");
+    if (vt) vt.onclick = function () {
+      var V = root.__friday && root.__friday.voice;
+      if (V && V.speakPrivate) V.speakPrivate("This is how private messages from " + partner + " will sound.", prof);
+    };
+    var od = el("set-ondevice-listen");
+    if (od) { od.checked = v.onDeviceListen !== false; od.onchange = function () { v.onDeviceListen = od.checked; saveSettings(v); }; }
+    setText("private-receive", "When a private message comes in, " + partner + " taps the link in the text to open " + other + ". Or set up the message automation (below) so " + other + " opens and reads it by herself. Either way works.");
+    sync();
+  };
+
   // ---------- 3.1: Settings in pages ----------
   FridaySettings.prototype._bindNav = function () {
     var self = this;
     var menu = document.getElementById("settings-menu"), back = document.getElementById("settings-back"), title = document.getElementById("settings-title");
     function show(pid) {
+      if (pid === "messages" && self._syncPrivate) self._syncPrivate();
       document.querySelectorAll("#panel-settings .spage").forEach(function (p) { p.hidden = p.id !== "sp-" + pid; });
       if (menu) menu.hidden = !!pid;
       if (back) back.hidden = !pid;
@@ -934,6 +1013,7 @@
     if (menu) menu.addEventListener("click", function (e) { var b = e.target.closest(".smenu-item"); if (b) show(b.getAttribute("data-page")); });
     if (back) back.onclick = function () { show(""); };
     root.__fridaySettingsShow = function (id) {
+      if (self._syncPrivate) self._syncPrivate();
       var el = document.getElementById(id);
       var pg = el && el.closest ? el.closest(".spage") : null;
       if (pg) show(pg.id.replace("sp-", ""));

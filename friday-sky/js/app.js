@@ -4,12 +4,13 @@
 
   var cfg = window.FRIDAY_CONFIG;
   var profile = cfg.getProfile();
+  window.__fridayProfile = profile;
   var settingsData = window.FridayLoadSettings();
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.3.0";
-  var APP_LABEL = "New Look";
+  var APP_VERSION = "3.4.0";
+  var APP_LABEL = "Private Line";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -177,6 +178,7 @@
       if (neural) neural.start();
     } else if (neural) neural.stop();
     if (id === "chat") renderChat();
+    if (id === "private") renderPrivate();
     if (id === "notes") renderNotes();
     if (id === "memory") renderMemory();
     if (id === "lists" && life) life.renderLists(document.getElementById("lists-box"));
@@ -650,6 +652,15 @@
       setCaption("Tap to talk");
       return;
     }
+    // 3.4: private messages stop here: no brain, no chat, no memory, no activity log.
+    if (privateCompose && Date.now() - privateCompose.at > 120000) privateCompose = null;
+    var pcmd = window.FridayPrivate ? privateCommand(text) : null;
+    if (pcmd || privateCompose) {
+      setCaption("🔒 Private");
+      busy = true;
+      try { await handlePrivate(text, pcmd, opts); } finally { busy = false; if (neural) neural.setActive(null); }
+      return;
+    }
     setCaption(text);
     if (!opts.part) emitActivity("listening", "Heard: " + text.slice(0, 70));
     if (!opts.part && extras) {
@@ -1021,7 +1032,13 @@
   function handleLink(url) {
     var L = extras ? extras.parseLink(url) : null;
     if (!L) return;
-    if (L.action === "msg") { onIncomingMessage(L); return; }
+    if (L.action === "pl") { onPrivateLink(String((L.query && L.query.d) || "")); return; }
+    if (L.action === "msg") {
+      var plp = window.FridayPrivate ? window.FridayPrivate.findPayload(L.text) : "";
+      if (plp) { onPrivateLink(plp); return; }
+      onIncomingMessage(L);
+      return;
+    }
     if (L.action === "charging" || L.action === "bedside") { openBedside(); return; }
     if (L.action === "unplugged") { closeBedside(); return; }
     if (L.action === "listen" || L.action === "wake") {
@@ -1293,6 +1310,204 @@
     beginListen();
   }
 
+  // ---------- 3.4: private line (locked messages between Friday and Jarvis) ----------
+  // Private messages never reach her AI brain, chat history, memory or the activity log,
+  // and she reads them only with an iPhone voice, so the words stay on the phone.
+  var privateCompose = null;
+  function partnerInfo() {
+    var pc = extras ? extras.partnerCfg(profile) : { names: [], display: "", contact: "", prefix: "" };
+    return pc;
+  }
+  function privateCommand(text) {
+    var pc = partnerInfo();
+    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/^(please |can you |could you )/i, "");
+    var names = (pc.names || []).map(function (n) { return n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
+    if (names.length) {
+      var N = "(?:" + names.join("|") + ")";
+      var pats = [
+        new RegExp("^(?:privately )?(?:tell|message|text) " + N + " privately(?: that| to)?[,:]?\\s*(.*)$", "i"),
+        new RegExp("^privately (?:tell|message|text) " + N + "(?: that| to)?[,:]?\\s*(.*)$", "i"),
+        new RegExp("^(?:send )?(?:a )?private (?:message|text|note) (?:to|for) " + N + "(?: saying| that says)?[,:]?\\s*(.*)$", "i"),
+        new RegExp("^send " + N + " (?:a )?private (?:message|text|note)(?: saying| that says)?[,:]?\\s*(.*)$", "i")
+      ];
+      for (var i = 0; i < pats.length; i++) {
+        var m = t.match(pats[i]);
+        if (m) return { kind: "send", body: (m[1] || "").trim().replace(/[.!]+$/, "") };
+      }
+    }
+    var r = t.match(/^(?:reply privately|private reply|reply in private)(?: saying| with)?[,:]?\s*(.*)$/i);
+    if (r) return { kind: "send", body: (r[1] || "").trim().replace(/[.!]+$/, "") };
+    if (/^(?:open |show |read |check |play )?(?:my |the )?private (?:messages|inbox|line|texts)(?: please)?$/i.test(t) || /^(?:any|do i have any) (?:new )?private messages\??$/i.test(t)) return { kind: "open" };
+    if (/^(?:start|set up|setup|pair) (?:the |a |our )?private line$|^pair (?:with )?(?:friday|jarvis)$/i.test(t)) return { kind: "pair" };
+    return null;
+  }
+  function capFirst(x) { x = String(x || ""); return x.charAt(0).toUpperCase() + x.slice(1); }
+  async function privateSay(line) {
+    setCaption(line);
+    try { await voice.speakPrivate(line, profile); } catch (e) {}
+  }
+  function showPrivateSetup() {
+    openPanel("settings");
+    setTimeout(function () { if (window.__fridaySettingsShow) { var el = window.__fridaySettingsShow("accord-private"); if (el) try { el.scrollIntoView({ block: "start" }); } catch (e) {} } }, 200);
+  }
+  // Opens the text to the other phone (you tap Send). Falls back to your Shortcut, then to the Messages app.
+  async function composeToPartner(body) {
+    var pc = partnerInfo(), N = window.FridayNative;
+    if (!pc.contact) return { ok: false, reason: "no-contact" };
+    if (N && N.isApp() && N.kit && N.kit.available() && (!window.FridayPhone || window.FridayPhone.inAppTexts())) {
+      var num = await N.contacts.numberFor(pc.contact);
+      if (num) {
+        var r = await N.kit.text(num.number, body);
+        if (r.ok) return { ok: true, result: r.result };
+      }
+    }
+    if (N && N.isApp()) { runShortcut("text " + pc.contact + " saying " + body); return { ok: true, result: "shortcut" }; }
+    window.__fridayLastSms = body;
+    var a = document.getElementById("open-messages-btn");
+    if (a) a.remove();
+    a = document.createElement("a");
+    a.id = "open-messages-btn";
+    a.href = "sms:&body=" + encodeURIComponent(body);
+    a.textContent = "Open in Messages";
+    a.setAttribute("style", "position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 150px);transform:translateX(-50%);z-index:9999;padding:12px 22px;border-radius:999px;background:rgba(20,20,20,.85);border:1px solid rgba(214,180,110,.5);color:#e9d3a0;font:600 15px -apple-system,system-ui,sans-serif;text-decoration:none");
+    document.body.appendChild(a);
+    setTimeout(function () { if (a.parentNode) a.remove(); }, 30000);
+    return { ok: true, result: "web" };
+  }
+  async function sendPrivateKey() {
+    var PL = window.FridayPrivate, pc = partnerInfo();
+    if (!PL || !PL.available()) return { ok: false, reason: "no-crypto" };
+    var payload = await PL.myKeyPayload();
+    var r = await composeToPartner(PL.textFor(payload, pc.prefix, "key"));
+    if (r.ok && r.result !== "cancelled") await PL.markSent();
+    if (settings && settings._syncPrivate) settings._syncPrivate();
+    return r;
+  }
+  window.__fridayPrivateSendKey = sendPrivateKey;
+  async function sendPrivate(body) {
+    var PL = window.FridayPrivate, pc = partnerInfo(), who = pc.display || PL.theirs();
+    var st = PL ? await PL.status() : { paired: false };
+    if (!st.paired) { await privateSay("You and " + who + " need to pair the private line first. I'll open it for you."); showPrivateSetup(); return; }
+    if (!st.verified) { await privateSay("Check the 4 safety words with " + who + " first, then tap The words match."); showPrivateSetup(); return; }
+    var sealed = await PL.seal(capFirst(body));
+    await PL.addToInbox({ dir: "out", text: capFirst(body), id: sealed.msg.id, at: sealed.msg.at, state: "ready" });
+    if (panelOpen("private")) renderPrivate();
+    await privateSay("Here's your private message to " + who + ". Tap Send.");
+    var r = await composeToPartner(PL.textFor(sealed.payload, pc.prefix, "msg"));
+    var list = await PL.inbox();
+    list.forEach(function (x) { if (x.id === sealed.msg.id) x.state = r.result === "cancelled" ? "not sent" : "sent"; });
+    await PL.saveInbox(list);
+    if (panelOpen("private")) renderPrivate();
+    if (r.result === "sent") await privateSay("Sent privately.");
+    else if (r.result === "cancelled") await privateSay("Okay, I didn't send it.");
+  }
+  async function handlePrivate(text, cmd, opts) {
+    var pc = partnerInfo(), who = pc.display || (window.FridayPrivate ? window.FridayPrivate.theirs() : "them");
+    opts = opts || {};
+    if (!cmd && privateCompose) {
+      privateCompose = null;
+      if (/^(cancel|never ?mind|stop|forget it|no)\.?$/i.test(text.trim())) { await privateSay("Okay, cancelled."); return; }
+      await sendPrivate(text);
+      return;
+    }
+    if (cmd.kind === "open") { openPanel("private"); var n = (await window.FridayPrivate.inbox()).filter(function (x) { return x.dir === "in"; }).length; await privateSay(n ? "Here are your private messages." : "No private messages yet."); return; }
+    if (cmd.kind === "pair") { showPrivateSetup(); await privateSay("Here's the private line. Tap Pair to send your key to " + who + "."); return; }
+    if (!cmd.body) {
+      privateCompose = { at: Date.now() };
+      await privateSay("Okay. What's the private message for " + who + "?");
+      if (IS_NATIVE && !opts.typed && !voice.listening) { handsFree = true; beginListen(); }
+      return;
+    }
+    await sendPrivate(cmd.body);
+  }
+  function panelOpen(id) { var el = document.getElementById("panel-" + id); return !!(el && el.classList.contains("open")); }
+  async function renderPrivate() {
+    var PL = window.FridayPrivate, box = document.getElementById("private-list");
+    if (!PL || !box) return;
+    var pc = partnerInfo(), who = pc.display || PL.theirs();
+    var st = await PL.status(), list = await PL.inbox();
+    var stEl = document.getElementById("private-panel-status");
+    if (stEl) stEl.textContent = !st.paired ? "Not paired yet. Tap Private line settings to pair with " + PL.theirs() + "." : (st.verified ? "Locked end to end with " + who + ". Only your two phones can read these." : "Paired. Check the safety words with " + who + " in Private line settings before sending.");
+    var inp = document.getElementById("private-text");
+    if (inp) inp.placeholder = "Private message to " + who;
+    box.innerHTML = "";
+    if (!list.length) { var e = document.createElement("div"); e.className = "pl-empty"; e.textContent = "No private messages yet."; box.appendChild(e); return; }
+    list.slice(-60).forEach(function (m) {
+      var d = document.createElement("div");
+      d.className = m.dir === "in" ? "pl-them" : "pl-me";
+      d.textContent = m.text;
+      var w = document.createElement("div");
+      w.className = "pl-when";
+      var dt = new Date(m.at || Date.now());
+      w.textContent = dt.toLocaleDateString([], { month: "short", day: "numeric" }) + ", " + dt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + (m.dir === "out" && m.state && m.state !== "sent" ? " · " + m.state : "");
+      d.appendChild(w);
+      box.appendChild(d);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+  async function onPrivateLink(d) {
+    var PL = window.FridayPrivate;
+    if (!PL || !d) return;
+    var pc = partnerInfo(), who = pc.display || PL.theirs();
+    if (d.indexOf("k.") === 0) {
+      var r = await PL.receiveKey(d.slice(2));
+      if (!r.ok) { if (r.reason !== "own-key") await privateSay("That private line key didn't look right. Ask " + who + " to send it again."); return; }
+      if (settings && settings._syncPrivate) settings._syncPrivate();
+      showPrivateSetup();
+      if (r.needReply) {
+        await privateSay(PL.theirs() + " sent a private line key. I'll open a text with my key so " + PL.theirs() + " can finish pairing. Tap Send.");
+        await sendPrivateKey();
+      }
+      await privateSay("Your safety words are " + r.words.join(", ") + ". Check that " + who + " sees the same 4 words, then tap The words match.");
+      return;
+    }
+    if (d.indexOf("m.") === 0) {
+      var o = await PL.open(d);
+      if (!o.ok) {
+        if (o.reason === "seen") { openPanel("private"); return; }
+        await privateSay(o.reason === "not-paired" ? "A private message came in, but this phone isn't paired yet. Open the private line to pair." : "A private message came in, but I couldn't unlock it. You two may need to pair again.");
+        return;
+      }
+      await PL.addToInbox({ dir: "in", text: o.msg.m, id: o.msg.id, at: o.msg.at || Date.now() });
+      toast("Private message from " + who);
+      emitActivity("speaking", "Private message");
+      if (bedside && bedside.on) bedside.message(who, "Private message");
+      pendingMessage = true;
+      var tries = 0;
+      (function go() {
+        if ((busy || voice.speaking || document.visibilityState === "hidden") && tries++ < 40) { setTimeout(go, 700); return; }
+        if (voice.listening) { try { voice.stopListen().catch(function () {}); } catch (e) {} document.getElementById("listen-dot").classList.remove("on"); }
+        openPanel("private");
+        try { chime(); } catch (e) {}
+        setCaption("Private message from " + who);
+        setTimeout(function () {
+          voice.speakPrivate("Private message from " + who + ". " + o.msg.m, profile).then(function () {
+            pendingMessage = false;
+          });
+        }, 700);
+      })();
+    }
+  }
+  window.__fridayPrivate = { onLink: onPrivateLink, render: renderPrivate, send: sendPrivate, sendKey: sendPrivateKey };
+  function bindPrivate() {
+    var f = document.getElementById("private-form");
+    if (f) f.addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      var inp = document.getElementById("private-text"), t = String((inp && inp.value) || "").trim();
+      if (!t) return;
+      inp.value = "";
+      sendPrivate(t);
+    });
+    var su = document.getElementById("btn-private-setup");
+    if (su) su.onclick = showPrivateSetup;
+    var cl = document.getElementById("btn-private-clear");
+    if (cl) cl.onclick = function () {
+      if (!confirm("Clear the private messages on this phone? This can't be undone.")) return;
+      window.FridayPrivate.clearInbox().then(renderPrivate);
+    };
+    window.addEventListener("friday:private", function () { if (panelOpen("private")) renderPrivate(); });
+  }
+
   // ---------- 3.3: talk bar (Pill bar or Glass dock) and typing on the main screen ----------
   var typing = false, typingIdle = 0, typedQuiet = false, threadPending = null;
   function sv() { return (settings && settings.values) || settingsData || {}; }
@@ -1320,20 +1535,10 @@
     }
     syncRing();
   }
-  // The orb as the button: a gold ring shows while she's listening.
+  // The orb is the button. No ring: her orb itself grows, shrinks and rests to show what she's doing.
   function syncRing() {
     var r = document.getElementById("orb-ring");
-    if (!r || !orb) return;
-    var on = sv().orbTalk !== false && !typing && !!(voice && voice.listening) && !document.querySelector(".panel.open");
-    if (on) {
-      var w = window.innerWidth, h = window.innerHeight;
-      var cyN = orb._cyN == null ? 0.46 : orb._cyN, rk = orb._radiusK == null ? 0.28 : orb._radiusK;
-      var d = Math.round(Math.min(w, h) * rk * 2 + 20);
-      r.style.width = r.style.height = d + "px";
-      r.style.left = Math.round(w / 2) + "px";
-      r.style.top = Math.round(h * cyN) + "px";
-    }
-    r.classList.toggle("on", on);
+    if (r) r.classList.remove("on");
   }
   function setKb(px) { document.documentElement.style.setProperty("--kb", Math.max(0, Math.round(px || 0)) + "px"); }
   function placeOrbForTyping() {
@@ -1407,7 +1612,7 @@
     if (!text) return;
     inp.value = "";
     enterTyping();
-    threadPending = text;
+    threadPending = (privateCompose || (window.FridayPrivate && privateCommand(text))) ? "🔒 Private message" : text;
     renderThread();
     typedQuiet = sv().speakTyped !== true;
     try { await handleUtterance(text, { typed: true }); }
@@ -1578,8 +1783,8 @@
     document.getElementById("btn-wn-shortcut").onclick = function () {
       done();
       openPanel("settings");
-      if (window.__fridaySettingsShow) window.__fridaySettingsShow("accord-mainscreen");
-      setTimeout(function () { var el = document.getElementById("accord-mainscreen"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
+      if (window.__fridaySettingsShow) window.__fridaySettingsShow("accord-private");
+      setTimeout(function () { var el = document.getElementById("accord-private"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
     };
   }
 
@@ -1740,10 +1945,11 @@
     tickStageClock();
     setInterval(tickStageClock, 15000);
     window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook, voice: voice,
-      typing: function () { return typing; }, enterTyping: enterTyping, exitTyping: exitTyping, sendTyped: sendTyped, liveOn: liveOn };
+      typing: function () { return typing; }, enterTyping: enterTyping, exitTyping: exitTyping, sendTyped: sendTyped, liveOn: liveOn, openPanel: openPanel };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
     bindTalkbar();
+    bindPrivate();
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
     if (window.__friday) window.__friday.neural = neural;

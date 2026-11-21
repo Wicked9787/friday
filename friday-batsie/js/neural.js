@@ -1,4 +1,4 @@
-/* Neural map v2: a live 3D map of her mind.
+/* Neural map v3 (3.4): an Obsidian-style graph of her mind, flat or 3D.
    - Nodes for every part of her (thinking, memory, voice, vision, helpers, lists, bills,
      timers, countdowns, notes, weather, Shortcut, AI connections) on slowly turning shells.
    - Pulses travel along the links when something actually happens (listening, thinking,
@@ -167,32 +167,58 @@
       var sq = Math.sqrt(1 - u * u);
       this.dust.push({ p: [Math.cos(th) * sq * rr, u * rr * 0.8, Math.sin(th) * sq * rr], tw: Math.random() * TAU, s: Math.random() });
     }
+    this._initGraph();
     this._bind();
+    var sw = document.getElementById("neural-mode"), hint = document.getElementById("neural-hint");
+    function syncMode() {
+      if (sw) sw.querySelectorAll("button").forEach(function (b) { b.classList.toggle("on", (b.getAttribute("data-mode") === "3d") === self.mode3d); });
+      if (hint) hint.textContent = self.mode3d ? "Activity · drag to turn, pinch to zoom, tap a dot" : "Activity · drag to move, pinch to zoom, tap a dot";
+    }
+    if (sw) sw.addEventListener("click", function (e) { var b = e.target.closest("button[data-mode]"); if (!b) return; self.setMode(b.getAttribute("data-mode") === "3d"); syncMode(); });
+    syncMode();
   }
 
   FridayNeural.prototype._bind = function () {
     var self = this, c = this.canvas;
     this._onResize = function () { if (self.running) self.resize(); };
     window.addEventListener("resize", this._onResize);
-    var x0 = 0, y0 = 0, lx = 0, ly = 0, lt = 0, moved = false, t0 = 0;
+    // 3.4 Obsidian-style: drag moves the map (flat) or turns it (3D), pinch zooms, tap shows a dot.
+    var x0 = 0, y0 = 0, lx = 0, ly = 0, lt = 0, moved = false, t0 = 0, pinch = null;
     function pt(e) { var t = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e); return t; }
     function down(e) {
+      if (e.touches && e.touches.length === 2) {
+        var a = e.touches[0], b = e.touches[1];
+        pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, z: self.cam.zoom };
+        moved = true; return;
+      }
       var p = pt(e); x0 = lx = p.clientX; y0 = ly = p.clientY; moved = false; t0 = lt = Date.now(); self.dragging = true;
       self.spinX = 0; self.spinY = 0;
     }
     function move(e) {
+      if (e.touches && e.touches.length === 2 && pinch) {
+        var a = e.touches[0], b = e.touches[1];
+        var d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+        self.cam.zoom = Math.max(0.3, Math.min(5, pinch.z * d / pinch.d));
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
       if (!self.dragging) return;
       var p = pt(e);
       var dx = p.clientX - lx, dy = p.clientY - ly, now = Date.now(), dtm = Math.max(8, now - lt) / 1000;
       lx = p.clientX; ly = p.clientY; lt = now;
       if (Math.abs(p.clientX - x0) + Math.abs(p.clientY - y0) > 8) moved = true;
-      self.turn(dx * 0.008, dy * 0.008);
-      // remember how fast the finger moved, for the glide after letting go
-      self.spinY = self.spinY * 0.5 + (dx * 0.008 / dtm) * 0.5;
-      self.spinX = self.spinX * 0.5 + (dy * 0.008 / dtm) * 0.5;
+      if (self.mode3d) {
+        self.turn(dx * 0.008, dy * 0.008);
+        self.spinY = self.spinY * 0.5 + (dx * 0.008 / dtm) * 0.5;
+        self.spinX = self.spinX * 0.5 + (dy * 0.008 / dtm) * 0.5;
+      } else {
+        self.cam.x += dx; self.cam.y += dy;
+      }
       if (e.cancelable) e.preventDefault();
     }
     function up(e) {
+      if (e.touches && e.touches.length) return;
+      if (pinch) { pinch = null; self.dragging = false; return; }
       if (!self.dragging) return;
       self.dragging = false;
       if (!moved && Date.now() - t0 < 500) {
@@ -206,6 +232,10 @@
     c.addEventListener("mousedown", down);
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
+    c.addEventListener("wheel", function (e) {
+      self.cam.zoom = Math.max(0.3, Math.min(5, self.cam.zoom * Math.exp(-e.deltaY * 0.0015)));
+      if (e.cancelable) e.preventDefault();
+    }, { passive: false });
     // live activity from the rest of the app
     var map = {
       "friday:lists": ["lists", "List updated"], "friday:bills": ["bills", "Bills updated"],
@@ -275,6 +305,9 @@
     this._renderStats();
     var self = this;
     this._syncLeaves();
+    // open already mostly settled and sized to fit, then let it float into place
+    if (!this._settled) { for (var k = 0; k < 170; k++) this._simulate(); this._settled = true; }
+    this._fit();
     this._statsTimer = setInterval(function () { self._renderStats(); if (self.selected) self._renderCard(); if (++self._lt % 3 === 0) self._syncLeaves(); }, 1000);
     this._lt = 0;
     var loop = function (ts) {
@@ -376,8 +409,9 @@
           var isNew = !firstTime && !self._seen[w.id];
           lf = self.leaves[w.id] = { id: w.id, parent: pid, p: pos, born: isNew ? performance.now() : -1, seed: Math.random() * 100 };
           if (isNew) { self.pulse(pid, "New: " + w.label, false); }
+          self._placeNear(w.id, pid);
         }
-        lf.p = pos; lf.label = w.label; lf.tip = w.tip; lf.text = w.text;
+        lf.label = w.label; lf.tip = w.tip; lf.text = w.text;
         if (lf._linkText !== w.text) { lf._linkText = w.text; lf.links = self._topicsFor(w.text, pid); }
         if (lf.born > 0 && !lf._sent) {
           // a new bubble: light the way from her core to it, then out to what it's about
@@ -404,6 +438,8 @@
       }
     }
     this.leafLinks = pairs;
+    Object.keys(this.g.pos).forEach(function (id) { if (!self.nodes[id] && !self.leaves[id]) { delete self.g.pos[id]; delete self.g.vel[id]; } });
+    this._edges = null;
     Object.keys(keep).forEach(function (k) { self._seen[k] = 1; });
     try { if (S) S.set("neuralSeen", Object.keys(keep)); } catch (e) {}
   };
@@ -463,127 +499,161 @@
   };
 
   // ---------- drawing ----------
-  FridayNeural.prototype._project = function (p, cx, cy, R) {
-    var m = this.M;
-    var x = m[0] * p[0] + m[1] * p[1] + m[2] * p[2];
-    var y = m[3] * p[0] + m[4] * p[1] + m[5] * p[2];
-    var z = m[6] * p[0] + m[7] * p[1] + m[8] * p[2];
-    var persp = 2.6 / (2.6 - z);
-    return { x: cx + x * R * persp, y: cy + y * R * persp, z: z, s: persp };
+  // ---------- 3.4 graph: Obsidian-style dots and lines that float into place ----------
+  FridayNeural.prototype._initGraph = function () {
+    var self = this;
+    this.g = { pos: {}, vel: {}, alpha: 1 };
+    this.cam = { x: 0, y: 0, zoom: 1 };
+    this.mode3d = (store() && store().get("neuralMode", "2d")) === "3d";
+    var rnd = function (n) { return (Math.random() * 2 - 1) * n; };
+    Object.keys(this.nodes).forEach(function (id) {
+      var n = self.nodes[id];
+      var ring = n.def.ring || 0;
+      var ang = Math.atan2(n.p[2], n.p[0]) || Math.random() * TAU, rad = ring ? 70 + ring * 38 : 0;
+      self.g.pos[id] = [Math.cos(ang) * rad + rnd(8), Math.sin(ang) * rad + rnd(8), rnd(60)];
+      self.g.vel[id] = [0, 0, 0];
+    });
   };
-
-  FridayNeural.prototype._curve = function (a, b, cx, cy) {
-    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-    var dx = mx - cx, dy = my - cy, d = Math.sqrt(dx * dx + dy * dy) || 1;
-    var bend = 0.18 * Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
-    return { x: mx + dx / d * bend, y: my + dy / d * bend };
+  FridayNeural.prototype.setMode = function (three) {
+    this.mode3d = !!three;
+    try { store().set("neuralMode", three ? "3d" : "2d"); } catch (e) {}
+    var self = this;
+    Object.keys(this.g.pos).forEach(function (id) { if (three) self.g.pos[id][2] = (Math.random() * 2 - 1) * 60; });
+    this.g.alpha = Math.max(this.g.alpha, 0.8);
+    for (var k = 0; k < 120; k++) this._simulate();
+    this._fit();
   };
-
-  function qpt(a, c, b, t) {
-    var u = 1 - t;
-    return { x: u * u * a.x + 2 * u * t * c.x + t * t * b.x, y: u * u * a.y + 2 * u * t * c.y + t * t * b.y };
-  }
-
+  FridayNeural.prototype._fit = function () {
+    var ids = Object.keys(this.g.pos);
+    if (!ids.length) return;
+    var x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, g = this.g;
+    ids.forEach(function (id) { var p = g.pos[id]; x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    var w = this._cw || 360, h = this._ch || 560;
+    var zx = (w - 40) / Math.max(60, x1 - x0), zy = (h - 90) / Math.max(60, y1 - y0);
+    this.cam.zoom = Math.max(0.35, Math.min(1.6, Math.min(zx, zy)));
+    this._fitZoom = this.cam.zoom;
+    this.cam.x = -((x0 + x1) / 2) * this.cam.zoom;
+    this.cam.y = -((y0 + y1) / 2) * this.cam.zoom + 10;
+  };
+  FridayNeural.prototype._placeNear = function (id, pid) {
+    var pp = this.g.pos[pid] || [0, 0, 0];
+    var a = Math.random() * TAU, r = 18 + Math.random() * 16;
+    this.g.pos[id] = [pp[0] + Math.cos(a) * r, pp[1] + Math.sin(a) * r, pp[2] + (Math.random() * 2 - 1) * 16];
+    this.g.vel[id] = [0, 0, 0];
+    this.g.alpha = Math.max(this.g.alpha, 0.5);
+  };
+  FridayNeural.prototype._edgeList = function () {
+    if (this._edges) return this._edges;
+    var self = this, E = [], deg = {};
+    function add(a, b, len, k) { if (!self.g.pos[a] || !self.g.pos[b]) return; E.push([a, b, len, k]); deg[a] = (deg[a] || 0) + 1; deg[b] = (deg[b] || 0) + 1; }
+    LINKS.forEach(function (L) { add(L[0], L[1], L[0] === "core" ? 95 : 85, 0.05); });
+    Object.keys(this.leaves).forEach(function (id) {
+      var lf = self.leaves[id];
+      add(id, lf.parent, 34, 0.08);
+      (lf.links || []).forEach(function (to) { add(id, to, 110, 0.012); });
+    });
+    (this.leafLinks || []).forEach(function (L) { add(L[0], L[1], 55, 0.03); });
+    this._deg = deg;
+    this._edges = E;
+    return E;
+  };
+  // one step of the layout: everything pushes apart, links pull together, all drift gently to the middle
+  FridayNeural.prototype._simulate = function () {
+    var g = this.g, ids = Object.keys(g.pos), n = ids.length, three = this.mode3d;
+    if (g.alpha < 0.004) return;
+    var E = this._edgeList(), a = g.alpha, i, j;
+    var P = ids.map(function (id) { return g.pos[id]; }), V = ids.map(function (id) { return g.vel[id]; });
+    var isLeaf = ids.map(function (id) { return id.indexOf(":") > 0; });
+    for (i = 0; i < n; i++) {
+      for (j = i + 1; j < n; j++) {
+        var dx = P[i][0] - P[j][0], dy = P[i][1] - P[j][1], dz = three ? P[i][2] - P[j][2] : 0;
+        var d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 > 90000) continue;
+        if (d2 < 4) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 4; }
+        var k = (isLeaf[i] && isLeaf[j] ? 260 : isLeaf[i] || isLeaf[j] ? 420 : 1500) * a / d2;
+        V[i][0] += dx * k; V[i][1] += dy * k; V[j][0] -= dx * k; V[j][1] -= dy * k;
+        if (three) { V[i][2] += dz * k; V[j][2] -= dz * k; }
+      }
+    }
+    E.forEach(function (e) {
+      var pa = g.pos[e[0]], pb = g.pos[e[1]];
+      var dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = three ? pb[2] - pa[2] : 0;
+      var d = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1, f = (d - e[2]) * e[3] * a / d;
+      var va = g.vel[e[0]], vb = g.vel[e[1]];
+      va[0] += dx * f; va[1] += dy * f; vb[0] -= dx * f; vb[1] -= dy * f;
+      if (three) { va[2] += dz * f; vb[2] -= dz * f; }
+    });
+    for (i = 0; i < n; i++) {
+      var pull = ids[i] === "core" ? 0.08 : 0.006;
+      V[i][0] -= P[i][0] * pull * a; V[i][1] -= P[i][1] * pull * a; V[i][2] -= P[i][2] * pull * a;
+      V[i][0] *= 0.62; V[i][1] *= 0.62; V[i][2] *= 0.62;
+      P[i][0] += V[i][0]; P[i][1] += V[i][1];
+      if (three) P[i][2] += V[i][2]; else { P[i][2] *= 0.9; V[i][2] = 0; }
+    }
+    g.alpha *= 0.992;
+  };
+  FridayNeural.prototype._project = function (p, cx, cy) {
+    var z = this.cam.zoom * this.dpr, x = p[0], y = p[1], d = 0, s = 1;
+    if (this.mode3d) {
+      var M = this.M;
+      var rx = M[0] * x + M[1] * y + M[2] * p[2], ry = M[3] * x + M[4] * y + M[5] * p[2], rz = M[6] * x + M[7] * y + M[8] * p[2];
+      s = 520 / Math.max(120, 520 - rz);
+      x = rx * s; y = ry * s; d = Math.max(-1, Math.min(1, rz / 260));
+    }
+    return { x: cx + this.cam.x * this.dpr + x * z, y: cy + this.cam.y * this.dpr + y * z, z: d, s: s };
+  };
+  FridayNeural.prototype._radius = function (id) {
+    var dg = (this._deg && this._deg[id]) || 0;
+    if (id === "core") return 9;
+    if (this.nodes[id]) return Math.min(11, 3.6 + Math.sqrt(dg) * 1.25);
+    return Math.min(7, 2.2 + Math.sqrt(dg) * 0.9);
+  };
   FridayNeural.prototype._draw = function (ts) {
     var dt = this._last ? Math.min(0.05, (ts - this._last) / 1000) : 0.016;
     this._last = ts;
     var t = ts / 1000;
     if (this.canvas.clientWidth !== this._cw || this.canvas.clientHeight !== this._ch) this.resize();
-    if (!this.dragging) {
-      // glide after a flick, then settle into a slow turn
+    if (this.mode3d && !this.dragging) {
       var idle = 0.05 * (this.active ? 1.8 : 1);
       this.spinY += (idle - this.spinY) * Math.min(1, dt * 1.6);
       this.spinX += (0 - this.spinX) * Math.min(1, dt * 1.6);
       this.turn(this.spinY * dt, this.spinX * dt);
     }
-    var ctx = this.ctx, w = this.canvas.width, h = this.canvas.height, dpr = this.dpr;
-    var cx = w / 2, cy = h * 0.5, R = Math.min(w * 0.5, h * 0.42);
+    this._simulate();
+    var ctx = this.ctx, w = this.canvas.width, h = this.canvas.height, dpr = this.dpr, self = this;
+    var cx = w / 2, cy = h * 0.5, zoom = this.cam.zoom;
     ctx.clearRect(0, 0, w, h);
     var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.6);
-    bg.addColorStop(0, this.active ? "rgba(40,28,10,0.55)" : "rgba(24,17,7,0.45)");
+    bg.addColorStop(0, this.active ? "rgba(40,28,10,0.45)" : "rgba(24,17,7,0.35)");
     bg.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-
-    var self = this;
-    // dust (depth layer)
-    ctx.globalCompositeOperation = "lighter";
-    this.dust.forEach(function (d) {
-      var q = self._project(d.p, cx, cy, R);
-      var a = (0.06 + 0.12 * (q.z + 1) / 2) * (0.6 + 0.4 * Math.sin(t * 1.3 + d.tw));
-      ctx.fillStyle = rgba(d.s < 0.75 ? GOLD_SOFT : SILVER, a);
-      var r = (0.6 + d.s * 1.1) * dpr * q.s;
-      ctx.fillRect(q.x - r / 2, q.y - r / 2, r, r);
-    });
-
-    // project nodes
-    var P = {};
-    Object.keys(this.nodes).forEach(function (id) {
-      var n = self.nodes[id];
-      var wob = [Math.sin(t * 0.31 + n.seed) * 0.015, Math.cos(t * 0.27 + n.seed) * 0.015, 0];
-      var q = self._project([n.p[0] + wob[0], n.p[1] + wob[1], n.p[2]], cx, cy, R);
-      n.sx = q.x; n.sy = q.y; n.sz = q.z; n.scale = q.s;
-      self.flash[id] = (self.flash[id] || 0) * Math.exp(-dt * 1.6);
+    var E = this._edgeList(), P = {}, nowMs = performance.now();
+    Object.keys(this.g.pos).forEach(function (id) {
+      var p = self.g.pos[id], sd = (self.nodes[id] && self.nodes[id].seed) || (self.leaves[id] && self.leaves[id].seed) || 0;
+      var wob = [p[0] + Math.sin(t * 0.5 + sd) * 0.8, p[1] + Math.cos(t * 0.43 + sd) * 0.8, p[2]];
+      var q = self._project(wob, cx, cy);
       P[id] = q;
+      if (self.nodes[id]) { self.nodes[id].sx = q.x; self.nodes[id].sy = q.y; self.nodes[id].sz = q.z; self.flash[id] = (self.flash[id] || 0) * Math.exp(-dt * 1.6); }
+      else if (self.leaves[id]) { self.leaves[id].sx = q.x; self.leaves[id].sy = q.y; self.leaves[id].sz = q.z; }
     });
-
-    // project learned bubbles
-    var nowMs = performance.now();
-    var leafIds = Object.keys(this.leaves);
-    leafIds.forEach(function (id) {
-      var lf = self.leaves[id];
-      if (!P[lf.parent]) return;
-      var wob = [Math.sin(t * 0.5 + lf.seed) * 0.01, Math.cos(t * 0.43 + lf.seed) * 0.01, 0];
-      var q = self._project([lf.p[0] + wob[0], lf.p[1] + wob[1], lf.p[2]], cx, cy, R);
-      lf.sx = q.x; lf.sy = q.y; lf.sz = q.z;
-      P[id] = q;
-    });
-    var selLeaf = this.selected && this.leaves[this.selected] ? this.selected : null;
-
-    // links
-    LINKS.forEach(function (L) {
-      var a = P[L[0]], b = P[L[1]];
+    // what's highlighted: the dot you tapped and everything it's linked to (like Obsidian)
+    var sel = this.selected && P[this.selected] ? this.selected : null, near = {};
+    if (sel) { near[sel] = 1; E.forEach(function (e) { if (e[0] === sel) near[e[1]] = 1; if (e[1] === sel) near[e[0]] = 1; }); }
+    function dim(id) { return sel && !near[id] ? 0.18 : 1; }
+    function depthA(q) { return self.mode3d ? 0.35 + 0.65 * (q.z + 1) / 2 : 1; }
+    // lines
+    var lw = Math.max(0.5, Math.min(1.6, 0.8 * Math.sqrt(zoom))) * dpr;
+    E.forEach(function (e) {
+      var a = P[e[0]], b = P[e[1]];
       if (!a || !b) return;
-      var c = self._curve(a, b, cx, cy);
-      var hot = Math.max(self.flash[L[0]] || 0, self.flash[L[1]] || 0);
-      var depth = (a.z + b.z + 2) / 4;
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      ctx.quadraticCurveTo(c.x, c.y, b.x, b.y);
-      ctx.strokeStyle = hot > 0.05 ? rgba(GOLD, 0.12 + hot * 0.45) : rgba(SILVER, 0.05 + depth * 0.09);
-      ctx.lineWidth = (0.6 + hot * 1.6) * dpr;
-      ctx.stroke();
-    });
-
-    // learned bubbles: a line to the part of her they belong to, and lines to what they're about
-    leafIds.forEach(function (id) {
-      var lf = self.leaves[id], a = P[id], par = P[lf.parent];
-      if (!a || !par) return;
-      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 6000);
-      var on = selLeaf === id || self.selected === lf.parent;
-      var depth = (a.z + 1) / 2;
-      ctx.strokeStyle = rgba(GOLD_SOFT, 0.1 + 0.14 * depth + pop * 0.5 + (on ? 0.3 : 0));
-      ctx.lineWidth = (0.7 + pop * 1.2 + (on ? 0.6 : 0)) * dpr;
-      ctx.beginPath(); ctx.moveTo(par.x, par.y); ctx.lineTo(a.x, a.y); ctx.stroke();
-      (lf.links || []).forEach(function (to) {
-        var b = P[to];
-        if (!b) return;
-        var c = self._curve(a, b, cx, cy);
-        var hot = on || self.selected === to;
-        ctx.strokeStyle = rgba(GOLD, 0.05 + 0.07 * depth + pop * 0.45 + (hot ? 0.35 : 0));
-        ctx.lineWidth = (0.55 + pop + (hot ? 0.6 : 0)) * dpr;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.quadraticCurveTo(c.x, c.y, b.x, b.y); ctx.stroke();
-      });
-    });
-    (this.leafLinks || []).forEach(function (L) {
-      var a = P[L[0]], b = P[L[1]];
-      if (!a || !b) return;
-      var hot = selLeaf === L[0] || selLeaf === L[1];
-      ctx.strokeStyle = rgba(SILVER, 0.06 + 0.08 * ((a.z + b.z + 2) / 4) + (hot ? 0.4 : 0));
-      ctx.lineWidth = (0.5 + (hot ? 0.7 : 0)) * dpr;
+      var hot = Math.max(self.flash[e[0]] || 0, self.flash[e[1]] || 0);
+      var on = sel && (e[0] === sel || e[1] === sel);
+      var al = (on ? 0.75 : 0.16 + hot * 0.4) * (on ? 1 : Math.min(dim(e[0]), dim(e[1]))) * Math.min(depthA(a), depthA(b));
+      ctx.strokeStyle = on || hot > 0.1 ? rgba(GOLD, al) : rgba([170, 172, 180], al);
+      ctx.lineWidth = on ? lw * 1.6 : lw;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
-
-    // packets
+    // pulses travel along the lines
     var keep = [];
     this.packets.forEach(function (k) {
       k.t += dt * k.speed;
@@ -592,123 +662,62 @@
       if (k.t < 0) return;
       var a = P[k.a], b = P[k.b];
       if (!a || !b) return;
-      var c = self._curve(a, b, cx, cy);
       var col = k.silver ? SILVER : GOLD;
-      for (var tail = 0; tail < 5; tail++) {
-        var tt = Math.max(0, k.t - tail * 0.025);
-        var q = qpt(a, c, b, tt);
-        var rr = (2.0 - tail * 0.3) * dpr;
-        ctx.fillStyle = rgba(col, (1 - tail / 5) * 0.75);
-        ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, TAU); ctx.fill();
+      for (var tail = 0; tail < 4; tail++) {
+        var tt = Math.max(0, k.t - tail * 0.03);
+        ctx.fillStyle = rgba(col, (1 - tail / 4) * 0.8);
+        ctx.beginPath(); ctx.arc(a.x + (b.x - a.x) * tt, a.y + (b.y - a.y) * tt, (1.8 - tail * 0.3) * dpr, 0, TAU); ctx.fill();
       }
-      var q0 = qpt(a, c, b, k.t);
-      var g = ctx.createRadialGradient(q0.x, q0.y, 0, q0.x, q0.y, 7 * dpr);
-      g.addColorStop(0, rgba(col, 0.22)); g.addColorStop(1, rgba(col, 0));
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(q0.x, q0.y, 7 * dpr, 0, TAU); ctx.fill();
     });
     this.packets = keep.slice(-260);
     if (this.active && Math.random() < 0.06) this.pulse(this.active === "thinking" ? "thinking" : this.active, null, true);
-
-    // learned bubbles, back to front
-    var showKids = this.selected && this.nodes[this.selected] ? this.selected : null;
-    leafIds.slice().sort(function (x, y) { return (self.leaves[x].sz || 0) - (self.leaves[y].sz || 0); }).forEach(function (id) {
-      var lf = self.leaves[id], q = P[id];
-      if (!q) return;
-      var grow = lf.born < 0 ? 1 : Math.min(1, (nowMs - lf.born) / 1200);
-      var pop = lf.born < 0 ? 0 : Math.max(0, 1 - (nowMs - lf.born) / 6000);
-      var depth = (q.z + 1) / 2;
-      var sel = selLeaf === id;
-      var rr = (2.6 + 2.4 * depth + pop * 4 + (sel ? 2 : 0)) * dpr * q.s * grow;
-      var col = lf.parent === "memory" ? SILVER : GOLD_SOFT;
-      if (self._glow) {
-        var g = rr * (sel || pop > 0 ? 6 : 4);
-        ctx.globalAlpha = Math.min(1, (0.18 + 0.32 * depth + pop * 0.7 + (sel ? 0.5 : 0)) * grow);
-        ctx.drawImage(self._glow, q.x - g, q.y - g, g * 2, g * 2);
+    // dots (back to front in 3D)
+    var ids = Object.keys(P);
+    if (this.mode3d) ids.sort(function (x, y) { return P[x].z - P[y].z; });
+    var labelZoom = zoom / (this._fitZoom || 1);
+    ids.forEach(function (id) {
+      var q = P[id], node = self.nodes[id], lf = self.leaves[id];
+      if (!node && !lf) return;
+      var hot = (self.flash[id] || 0);
+      var grow = lf && lf.born > 0 ? Math.min(1, (nowMs - lf.born) / 1200) : 1;
+      var pop = lf && lf.born > 0 ? Math.max(0, 1 - (nowMs - lf.born) / 6000) : 0;
+      var r = self._radius(id) * dpr * Math.max(0.6, Math.min(1.8, Math.sqrt(zoom))) * q.s * grow * (1 + hot * 0.3 + pop * 0.6);
+      var kind = node ? node.def.kind : "leaf";
+      var col = kind === "core" ? CORE : kind === "phone" ? [190, 205, 230] : node ? GOLD_SOFT : (lf.parent === "memory" ? [226, 228, 236] : [210, 190, 150]);
+      var al = dim(id) * depthA(q);
+      if (self._glow && (kind === "core" || hot > 0.05 || pop > 0 || id === sel)) {
+        var gsz = r * (kind === "core" ? 7 : 5);
+        ctx.globalAlpha = Math.min(1, (0.35 + hot * 0.5 + pop * 0.6) * al);
+        ctx.drawImage(self._glow, q.x - gsz, q.y - gsz, gsz * 2, gsz * 2);
         ctx.globalAlpha = 1;
       }
-      ctx.fillStyle = rgba(col, (0.35 + depth * 0.6) * grow);
-      ctx.beginPath(); ctx.arc(q.x, q.y, rr, 0, TAU); ctx.fill();
-      ctx.fillStyle = rgba([255, 255, 255], (0.25 + 0.35 * depth) * grow);
-      ctx.beginPath(); ctx.arc(q.x - rr * 0.3, q.y - rr * 0.3, rr * 0.35, 0, TAU); ctx.fill();
-      if (sel) {
-        ctx.strokeStyle = rgba(GOLD, 0.9); ctx.lineWidth = 1.2 * dpr;
-        ctx.beginPath(); ctx.arc(q.x, q.y, rr + 4 * dpr, 0, TAU); ctx.stroke();
-      }
-      // names: a brand-new bubble, the one you tapped, or all of a part's bubbles when you tap that part
-      if (sel || pop > 0.25 || (showKids === lf.parent && depth > 0.4)) {
-        ctx.globalCompositeOperation = "source-over";
-        ctx.font = "500 " + (sel || pop > 0.25 ? 10.5 : 9) * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
-        ctx.textAlign = "center";
-        var ty = q.y - rr - 6 * dpr;
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillText(lf.label, q.x + 0.8 * dpr, ty + 0.8 * dpr);
-        ctx.fillStyle = rgba([239, 236, 232], sel || pop > 0.25 ? 0.95 : 0.6 + 0.35 * depth);
-        ctx.fillText(lf.label, q.x, ty);
-        ctx.globalCompositeOperation = "lighter";
-      }
-    });
-
-    // nodes, back to front
-    var order = Object.keys(this.nodes).sort(function (a, b) { return self.nodes[a].sz - self.nodes[b].sz; });
-    order.forEach(function (id) {
-      var n = self.nodes[id], d = n.def, q = P[id];
-      var hot = self.flash[id] || 0;
-      var depth = (q.z + 1) / 2;
-      var base = d.kind === "core" ? 11 : d.kind === "mind" ? 6.5 : 5;
-      var r = base * dpr * q.s * (1 + hot * 0.35 + (d.kind === "core" ? 0.06 * Math.sin(t * 2.2) : 0));
-      var col = d.kind === "core" ? CORE : d.kind === "mind" ? SILVER : d.kind === "phone" ? [190, 205, 230] : GOLD_SOFT;
-      var alpha = 0.35 + depth * 0.65;
-      var gr = r * (d.kind === "core" ? 5 : 4);
-      var gl = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, gr);
-      gl.addColorStop(0, rgba(col, (0.18 + hot * 0.4) * alpha));
-      gl.addColorStop(1, rgba(col, 0));
-      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(q.x, q.y, gr, 0, TAU); ctx.fill();
-      if (d.kind === "core") {
-        ctx.save();
-        ctx.translate(q.x, q.y);
-        for (var ring = 0; ring < 2; ring++) {
-          ctx.save();
-          ctx.rotate(t * (0.25 + ring * 0.2) * (ring ? -1 : 1) + ring * 1.1);
-          ctx.strokeStyle = rgba(GOLD, 0.22 + hot * 0.35);
-          ctx.lineWidth = 0.9 * dpr;
-          ctx.beginPath(); ctx.ellipse(0, 0, r * (2.1 + ring * 0.6), r * (0.62 + ring * 0.18), 0, 0, TAU * 0.86); ctx.stroke();
-          ctx.restore();
-        }
-        ctx.restore();
-      }
-      ctx.fillStyle = rgba(col, alpha);
+      ctx.fillStyle = rgba(col, (node ? 0.95 : 0.85) * al);
       ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, TAU); ctx.fill();
-      ctx.fillStyle = rgba([255, 255, 255], 0.5 * alpha);
-      ctx.beginPath(); ctx.arc(q.x - r * 0.3, q.y - r * 0.3, r * 0.35, 0, TAU); ctx.fill();
-      if (self.selected === id) {
-        ctx.strokeStyle = rgba(GOLD, 0.9); ctx.lineWidth = 1.5 * dpr;
-        ctx.beginPath(); ctx.arc(q.x, q.y, r + 6 * dpr, 0, TAU); ctx.stroke();
-      }
-      ctx.globalCompositeOperation = "source-over";
-      var label = d.label;
-      var showLabel = label && (depth > 0.32 || hot > 0.2 || self.selected === id || d.kind === "core");
-      if (showLabel) {
-        var fs = (d.kind === "core" ? 13 : 10 + 1.5 * depth) * dpr;
-        ctx.font = (d.kind === "core" ? "600 " : "500 ") + fs + "px -apple-system, BlinkMacSystemFont, sans-serif";
+      if (id === sel) { ctx.strokeStyle = rgba(GOLD, 0.95); ctx.lineWidth = 1.4 * dpr; ctx.beginPath(); ctx.arc(q.x, q.y, r + 4 * dpr, 0, TAU); ctx.stroke(); }
+      // names fade in as you zoom, like Obsidian; parts of her show sooner than the small dots
+      var label = node ? node.def.label : lf.label;
+      var showAt = kind === "core" ? 0 : node ? 0.75 : 1.8;
+      var la = sel ? (near[id] ? 1 : 0) : Math.max(0, Math.min(1, (labelZoom - showAt) / 0.35));
+      if (pop > 0.25) la = 1;
+      if (label && la > 0.02) {
+        var fs = (kind === "core" ? 12.5 : node ? 10.5 : 9.5) * dpr * Math.max(0.85, Math.min(1.3, Math.sqrt(zoom)));
+        ctx.font = (kind === "core" ? "600 " : "500 ") + fs + "px -apple-system, BlinkMacSystemFont, sans-serif";
         ctx.textAlign = "center";
-        var ly = q.y + r + 13 * dpr;
-        ctx.fillStyle = "rgba(0,0,0,0.55)";
-        ctx.fillText(label, q.x + 0.8 * dpr, ly + 0.8 * dpr);
-        ctx.fillStyle = rgba([239, 236, 232], 0.2 + depth * 0.75);
-        ctx.fillText(label, q.x, ly);
-        var badge = self._badge(id);
-        if (badge && depth > 0.25) {
-          ctx.font = "600 " + 10 * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
-          var bw = ctx.measureText(badge).width + 10 * dpr, bx = q.x + r * 0.7, by = q.y - r - 6 * dpr;
+        ctx.fillStyle = "rgba(0,0,0," + (0.6 * la * al).toFixed(3) + ")";
+        ctx.fillText(label, q.x + 0.8 * dpr, q.y + r + 12 * dpr + 0.8 * dpr);
+        ctx.fillStyle = rgba([232, 230, 226], 0.92 * la * al);
+        ctx.fillText(label, q.x, q.y + r + 12 * dpr);
+        var badge = node ? self._badge(id) : "";
+        if (badge && la > 0.5 && al > 0.5) {
+          ctx.font = "600 " + 9.5 * dpr + "px -apple-system, BlinkMacSystemFont, sans-serif";
+          var bw = ctx.measureText(badge).width + 9 * dpr, bx = q.x + r + bw / 2, by = q.y - r - 4 * dpr;
           ctx.fillStyle = rgba([24, 20, 12], 0.85);
-          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - bw / 2, by - 8 * dpr, bw, 16 * dpr, 8 * dpr) : ctx.rect(bx - bw / 2, by - 8 * dpr, bw, 16 * dpr); ctx.fill();
+          ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - bw / 2, by - 7.5 * dpr, bw, 15 * dpr, 7.5 * dpr) : ctx.rect(bx - bw / 2, by - 7.5 * dpr, bw, 15 * dpr); ctx.fill();
           ctx.fillStyle = rgba(GOLD, 0.95);
-          ctx.fillText(badge, bx, by + 3.5 * dpr);
+          ctx.fillText(badge, bx, by + 3.3 * dpr);
         }
       }
-      ctx.globalCompositeOperation = "lighter";
     });
-    ctx.globalCompositeOperation = "source-over";
   };
 
   // ---------- tap, card, log, stats ----------
@@ -717,13 +726,13 @@
     Object.keys(this.nodes).forEach(function (id) {
       var n = self.nodes[id];
       var d = Math.hypot(n.sx - x, n.sy - y);
-      var lim = (n.def.kind === "core" ? 40 : 30) * self.dpr;
+      var lim = (n.def.kind === "core" ? 36 : 26) * self.dpr;
       if (d < lim && d < bd) { bd = d; best = id; }
     });
     Object.keys(this.leaves || {}).forEach(function (id) {
       var lf = self.leaves[id];
       var d = Math.hypot(lf.sx - x, lf.sy - y);
-      if (d < 20 * self.dpr && d < bd * 0.8) { bd = d; best = id; }
+      if (d < 18 * self.dpr && d < bd * 0.8) { bd = d; best = id; }
     });
     this.selected = best === this.selected ? null : best;
     if (best) this.flash[best] = 1;

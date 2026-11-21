@@ -3,6 +3,7 @@ import Capacitor
 import MediaPlayer
 import MessageUI
 import UIKit
+import Security
 import ObjectiveC
 
 /// Friday's phone add-on.
@@ -21,7 +22,10 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "composeText", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "canOpen", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "darkKeyboard", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "thermal", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "thermal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "secretGet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "secretSet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "secretDelete", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
@@ -53,6 +57,49 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
 
     @objc func thermal(_ call: CAPPluginCall) {
         call.resolve(["state": FridayKitPlugin.thermalName()])
+    }
+
+    // ---------- private line keys (iPhone Keychain, this phone only) ----------
+    private static let secretService = "app.friday.privateline"
+
+    private static func secretQuery(_ key: String) -> [String: Any] {
+        return [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: secretService,
+            kSecAttrAccount as String: key
+        ]
+    }
+
+    @objc func secretGet(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else { call.reject("no-key"); return }
+        var q = FridayKitPlugin.secretQuery(key)
+        q[kSecReturnData as String] = true
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        let st = SecItemCopyMatching(q as CFDictionary, &out)
+        if st == errSecSuccess, let d = out as? Data, let v = String(data: d, encoding: .utf8) {
+            call.resolve(["value": v])
+        } else {
+            call.resolve(["value": NSNull()])
+        }
+    }
+
+    @objc func secretSet(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty, let value = call.getString("value") else { call.reject("no-key"); return }
+        let data = Data(value.utf8)
+        let q = FridayKitPlugin.secretQuery(key)
+        SecItemDelete(q as CFDictionary)
+        var add = q
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let st = SecItemAdd(add as CFDictionary, nil)
+        if st == errSecSuccess { call.resolve(["ok": true]) } else { call.reject("keychain-\(st)") }
+    }
+
+    @objc func secretDelete(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else { call.reject("no-key"); return }
+        SecItemDelete(FridayKitPlugin.secretQuery(key) as CFDictionary)
+        call.resolve(["ok": true])
     }
 
     // ---------- keyboard ----------

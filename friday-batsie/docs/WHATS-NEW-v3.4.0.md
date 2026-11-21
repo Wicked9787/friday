@@ -1,18 +1,63 @@
-# Friday and Jarvis 3.3 · New Look
+# Friday and Jarvis 3.4 · Private Line
 
-Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.3. Your memory, settings and keys carry over. Install it over the old one in AltStore.
+Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.4. Your memory, settings and keys carry over. Install it over the old one in AltStore.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.3.0-NewLook.ipa` | Friday 3.3 for Sky. |
-| `Jarvis-v3.3.0-NewLook.ipa` | **Install this one.** Jarvis 3.3 for Batsie. |
+| `Friday-v3.4.0-PrivateLine.ipa` | Friday 3.4 for Sky. |
+| `Jarvis-v3.4.0-PrivateLine.ipa` | **Install this one.** Jarvis 3.4 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Help → Backup & About).
 
-## New main screen
+## Private line (new in 3.4)
+
+Private messages between Friday and Jarvis, locked end to end. Only your two phones can read them.
+
+**How it works:** each phone makes its own lock key. Only the public half travels, by text. Both phones then work out the same secret key, and every private message is locked on your phone before it leaves. The Messages app only shows scrambled letters and a link. The keys stay in the iPhone Keychain on each phone.
+
+**Pair once (both phones need 3.4):**
+
+1. Friday: Settings → Phone → Messages → **Private line** → **Pair with Jarvis**. A text with your key opens: tap Send.
+2. Batsie taps the link in that text. Jarvis opens and sends her key back the same way (she taps Send).
+3. Tap the link in her text. Both phones now show the same **4 safety words**. Compare them in person or on a call. If they match, tap **The words match** on both phones. (Different words? Tap Unpair and start again.)
+
+**Then just say or type:**
+
+| Say | What happens |
+|---|---|
+| "Tell Batsie privately I'm on my way" | Locked, then the text opens: tap Send |
+| "Send Batsie a private message" | She asks what it is, then sends what you say next |
+| "Reply privately see you at 7" | Private reply to the last person |
+| "Read my private messages" | Opens the Private inbox |
+
+You can also type in the Private inbox.
+
+**Receiving:** Batsie (or you) taps the link in the text to open the app, which unlocks and reads it. Or set up the message automation (Settings → Phone → Messages) and the app opens and reads it by itself. Either way works.
+
+**Privacy:**
+
+- Private messages never go to her AI brain, chat history, memory or the activity log, and they aren't included in backups.
+- She reads them with an **iPhone voice** you pick (Private line → Private messages voice), so the words never leave the phone. For a smoother voice, download a Premium one: iPhone Settings → Accessibility → Spoken Content → Voices → English (for example Zoe or Ava, or Evan or Nathan).
+- **Keep listening on this phone** (on by default) turns your words into text right on the iPhone during live listening. If live listening is off, what you say goes through Groq's Whisper like everything else. Typing is always private.
+- The Private inbox is locked on the phone too. Clear it any time.
+
+## Neural map, Obsidian style (new in 3.4)
+
+The neural map is now a graph like Obsidian's: small glowing dots and thin lines. Dots get bigger the more they connect, and new things she learns float in and settle into clusters.
+
+- **Flat** (the default): drag to move, pinch to zoom. Names fade in as you zoom.
+- **3D**: the same graph turning in space. Drag to turn it, pinch to zoom.
+- Tap a dot to see what it is and light up everything it connects to.
+
+## Also in 3.4
+
+- No more gold ring around her orb. Her orb itself grows, shrinks and rests to show what she's doing.
+
+## New in 3.3: main screen
+
 
 Your layouts and orb looks stay exactly the same. A bar now sits along the bottom of whichever layout you use.
 
@@ -21,7 +66,7 @@ Your layouts and orb looks stay exactly the same. A bar now sits along the botto
 - **Typing:** tap the text box (or Type) and the keyboard comes up. With the Pill bar her orb moves up top; with the Glass dock it stays big and dims. Her answers show as text above the bar. Tap Live to go back to talking.
 - **Settings → Her → Looks & Layout → Main screen:**
   - Pill bar or Glass dock
-  - **Tap her orb to talk** (a gold ring shows while she's listening)
+  - **Tap her orb to talk**
   - **Hide her orb while typing** (until Live is back on)
   - **Speak typed replies** (off: typed answers are text only)
   - **Suggestions** (the chips above the bar) on or off

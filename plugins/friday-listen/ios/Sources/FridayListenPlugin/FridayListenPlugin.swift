@@ -60,6 +60,8 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         let lang = call.getString("lang") ?? "en-US"
         // Names she should expect (Batsie, Sky, contacts...), so iOS spells them right.
         let hints = Array((call.getArray("hints", String.self) ?? []).prefix(100))
+        // Keep listening on this phone: your words are turned into text right on the iPhone, never sent anywhere.
+        let onDevice = call.getBool("onDevice") ?? false
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 guard status == .authorized else {
@@ -72,14 +74,14 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
                             call.reject("mic-denied")
                             return
                         }
-                        self.begin(call, lang: lang, hints: hints)
+                        self.begin(call, lang: lang, hints: hints, onDevice: onDevice)
                     }
                 }
             }
         }
     }
 
-    private func begin(_ call: CAPPluginCall, lang: String, hints: [String]) {
+    private func begin(_ call: CAPPluginCall, lang: String, hints: [String], onDevice: Bool) {
         if let old = stopCall {
             stopCall = nil
             old.resolve(["text": lastText])
@@ -116,6 +118,9 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
         req.taskHint = .dictation
+        if onDevice && rec.supportsOnDeviceRecognition {
+            req.requiresOnDeviceRecognition = true
+        }
         if !hints.isEmpty {
             req.contextualStrings = hints
         }

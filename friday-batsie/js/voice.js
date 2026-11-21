@@ -469,7 +469,8 @@
       self._fireSilence();
     });
     try {
-      await L.start({ lang: "en-US", hints: knownNames() });
+      var lset = root.FridayStorage.get("settings", {}) || {};
+      await L.start({ lang: "en-US", hints: knownNames(), onDevice: lset.onDeviceListen !== false });
     } catch (e) {
       this._dropNative();
       throw e;
@@ -984,7 +985,7 @@
     }, 33);
   };
 
-  FridayVoice.prototype._speakSystem = function (text, profile, mv, lang) {
+  FridayVoice.prototype._speakSystem = function (text, profile, mv, lang, forceVoice) {
     var self = this;
     return new Promise(function (resolve) {
       var u = new SpeechSynthesisUtterance(text);
@@ -997,7 +998,7 @@
         voice = all.filter(function (v) { return (v.lang || "").toLowerCase() === lang.toLowerCase(); })[0] ||
           all.filter(function (v) { return (v.lang || "").toLowerCase().indexOf(pre) === 0; })[0] || null;
       } else {
-        voice = self.pickDefault(profile);
+        voice = forceVoice || self.pickDefault(profile);
       }
       var T = nativeTTS();
       if (!lang) { var dg = root.FridayStorage.get("voiceDiag", null); if (!dg || Date.now() - (dg.at || 0) > 3000 || dg.path !== "iphone") diag({ path: "iphone", issue: self._aiAllowed() ? "fallback" : "chosen" }); }
@@ -1027,9 +1028,18 @@
     });
   };
 
-  FridayVoice.prototype._speakOne = async function (text, profile, gen, lang, pre, first) {
+  FridayVoice.prototype._speakOne = async function (text, profile, gen, lang, pre, first, priv) {
     var mv = this._moodVoice();
     if (lang) { await this._drain(gen); await this._speakSystem(text, profile, mv, lang); return; }
+    // 3.4 private messages: only the iPhone's own voice, so the words never leave the phone.
+    if (priv) {
+      var pv = speakable(text);
+      if (!pv) return;
+      await this._drain(gen);
+      if (!this.speaking || gen !== this._gen) return;
+      await this._speakSystem(pv, profile, mv, null, this.privateVoice(profile));
+      return;
+    }
     var say = speakable(text);
     if (!say) return;
     var rest = say;
@@ -1078,15 +1088,16 @@
   };
 
   // Queue a line. She speaks queued lines in order; used for streamed replies.
-  FridayVoice.prototype.queue = function (text, profile, lang) {
+  FridayVoice.prototype.queue = function (text, profile, lang, opts) {
     text = String(text || "").trim();
     if (!text) return this.whenDone();
+    var priv = !!(opts && opts.priv);
     this._queue = this._queue || [];
     var tail = this._queue[this._queue.length - 1];
     // the first line of a reply goes alone, so she starts talking as soon as possible
     var lead = !this._pumping && !this._queue.length;
-    if (tail && !tail._lead && !tail._pre && !tail.lang && !lang && (tail.text + " " + text).length <= 190) tail.text += " " + text;
-    else this._queue.push({ text: text, profile: profile, lang: lang || null, _lead: lead });
+    if (tail && !tail._lead && !tail._pre && !tail.lang && !lang && !priv && !tail._priv && (tail.text + " " + text).length <= 190) tail.text += " " + text;
+    else this._queue.push({ text: text, profile: profile, lang: lang || null, _lead: lead, _priv: priv });
     if (!this._pumping) this._pump();
     return this.whenDone();
   };
@@ -1105,7 +1116,7 @@
     // Fetch the next line's first clip while this one plays.
     this._prefetchNext = function () {
       var nx = self._queue && self._queue[0];
-      if (nx && !nx.lang && !nx._pre && self._aiAllowed()) {
+      if (nx && !nx.lang && !nx._pre && !nx._priv && self._aiAllowed()) {
         nx._pre = self._fetchClip(splitForTTS(speakable(nx.text), 190)[0], self._aiVoiceId(), self._moodVoice().tag);
         nx._pre.catch(function () {});
       }
@@ -1113,7 +1124,7 @@
     try {
       while (this._queue && this._queue.length && gen === this._gen) {
         var item = this._queue.shift();
-        await this._speakOne(item.text, item.profile, gen, item.lang, item._pre, first);
+        await this._speakOne(item.text, item.profile, gen, item.lang, item._pre, first, item._priv);
         first = false;
       }
       await this._drain(gen);
@@ -1143,6 +1154,29 @@
   FridayVoice.prototype.speak = function (text, profile) {
     this.stopSpeak();
     return this.queue(text, profile);
+  };
+
+  // 3.4: private messages are read with an iPhone voice only (Settings: Private messages voice).
+  FridayVoice.prototype.speakPrivate = function (text, profile) {
+    this.stopSpeak();
+    return this.queue(text, profile, null, { priv: true });
+  };
+  FridayVoice.prototype.privateVoice = function (profile) {
+    var voices = this.listVoices();
+    if (!voices.length) return null;
+    var want = (root.FridayStorage.get("settings", {}) || {}).privateVoiceURI || "";
+    if (want) for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === want) return voices[i];
+    // the best iPhone voice that fits her (Premium first)
+    var gender = (profile && profile.voiceGender) || "";
+    var best = null, bs = -1;
+    voices.forEach(function (v) {
+      if (!/^en/i.test(v.lang || "")) return;
+      var q = voiceQuality(v);
+      if (q.rank === 0) return;
+      var s = q.rank * 10 + (FridayVoice.voiceFitsGender(v.voiceURI, gender, voices) ? 5 : 0) + (/^en-(us|gb)/i.test(v.lang || "") ? 1 : 0);
+      if (s > bs) { bs = s; best = v; }
+    });
+    return best || this.pickDefault(profile);
   };
 
   FridayVoice.prototype.preview = function (uri, profile) {
