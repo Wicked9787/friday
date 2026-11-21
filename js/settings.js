@@ -46,6 +46,7 @@
       partnerNames: "",
       partnerContact: "",
       talkTime: "normal",
+      liveListen: true,
       billAlerts: true,
       countdownAlerts: true
     };
@@ -853,6 +854,18 @@
     bindTog("set-rest-orb", "restingOrb");
     bindTog("set-night-orb", "nightOrb");
     bindTog("set-partner-msgs", "partnerMessages");
+    bindTog("set-live-listen", "liveListen");
+    var lls = document.getElementById("live-listen-status");
+    if (lls) {
+      var lerr = root.FridayStorage.get("liveListenError", null);
+      var why = lerr ? String(lerr.msg || "") : "";
+      var nice = /speech-denied|speech-restricted/.test(why) ? "Speech Recognition is turned off for this app in iPhone Settings."
+        : /mic-denied/.test(why) ? "The microphone is turned off for this app in iPhone Settings."
+        : why ? "It didn't start last time (" + why.slice(0, 60) + ")." : "";
+      lls.textContent = !(root.FridayVoice && root.FridayVoice.liveAvailable && root.FridayVoice.liveAvailable())
+        ? "Works in the installed app."
+        : nice ? nice + " She's using Whisper for now; it tries again next time you open the app." : "Ready.";
+    }
     var rh = document.getElementById("set-recap-hour");
     if (rh) {
       rh.innerHTML = "";

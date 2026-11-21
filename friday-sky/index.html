@@ -95,6 +95,7 @@
         <button type="button" class="smenu-item" data-page="display"><span class="smenu-t">Display &amp; Battery</span><span class="smenu-s">Mood, night mode, charging display, battery</span><span class="smenu-chev" aria-hidden="true">›</span></button>
         <button type="button" class="smenu-item" data-page="daily"><span class="smenu-t">Briefing &amp; Recap</span><span class="smenu-s">Morning briefing, nightly recap, quick replies</span><span class="smenu-chev" aria-hidden="true">›</span></button>
         <button type="button" class="smenu-item" data-page="backup"><span class="smenu-t">Backup &amp; About</span><span class="smenu-s">Backup, updates, reset</span><span class="smenu-chev" aria-hidden="true">›</span></button>
+        <p class="smenu-version" id="app-version"></p>
       </nav>
       <section class="spage" id="sp-looks" data-title="Looks &amp; Layout" hidden>
       <details class="accord" id="accord-looks">
@@ -151,7 +152,12 @@
           <button type="button" data-talk="normal">Normal</button>
           <button type="button" data-talk="long">Long</button>
         </div>
-        <div class="sub">How long she waits when you pause before she decides you're done talking. Long is best if she cuts you off.</div>
+        <div class="sub">She listens to what you said, like ChatGPT: if it sounds unfinished she waits, if it sounds done she answers. This sets how patient she is. Long is best if she cuts you off.</div>
+      </div>
+      <div class="row row-col">
+        <label class="toggle-row">Live listening <input type="checkbox" id="set-live-listen"></label>
+        <div class="sub">Your words show up as you talk, using the iPhone's own speech recognition. Free, and faster. Turn off to use Groq's Whisper instead. Talk over her uses Whisper.</div>
+        <div class="sub" id="live-listen-status"></div>
       </div>
       <div class="row row-col">
         <label class="toggle-row">Hands-free conversation
@@ -176,7 +182,7 @@
           <label class="toggle-row" style="margin-top:12px">Faster replies <input type="checkbox" id="set-fast"></label>
           <div class="sub">She starts talking while the rest of the answer is still coming in.</div>
           <label class="toggle-row" style="margin-top:12px">Talk over her <input type="checkbox" id="set-barge"></label>
-          <div class="sub">Start talking while she's speaking and she stops to listen. Works best with headphones or a quiet room.</div>
+          <div class="sub">Start talking while she's speaking and she stops to listen. Works best with headphones or a quiet room. Keeps the mic open, so it uses Whisper instead of live listening.</div>
           <label class="toggle-row" style="margin-top:12px">Headlines in the briefing <input type="checkbox" id="set-news"></label>
           <div class="sub">She looks up a couple of top stories for the morning briefing.</div>
           <button class="btn" type="button" id="btn-diag">Run diagnostics</button>
@@ -430,6 +436,10 @@
       </section>
       <section class="spage" id="sp-backup" data-title="Backup &amp; About" hidden>
       <div class="row row-col">
+        <label>Version</label>
+        <div class="sub" id="app-version-about"></div>
+      </div>
+      <div class="row row-col">
         <label>Backup and restore</label>
         <div class="sub">Saves memory, notes, lists, bills, countdowns, spending, habits, routines, timers, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
         <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
@@ -614,14 +624,18 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.1</h1>
+      <h1>What's new in 3.1.1</h1>
+      <p class="wn-tag">Live voice</p>
       <ul>
-        <li>Reminders, calendar, battery and timers now work right in the app. Timers, bills and countdowns ring even when it's closed</li>
-        <li>Contacts sync, so “text Mom” always finds the right person</li>
-        <li>Wake her with Back Tap or the Action button, no Siri</li>
-        <li>Settings in pages, widget styles, layout previews and four new orb-only layouts, including Full orb</li>
-        <li>Eight new HD fractured looks, and a neural map that grows as she learns</li>
-        <li>More talk time, steadier voice speed, and bubbles that can learn what you use</li>
+        <li>She hears you live: your words show up as you talk</li>
+        <li>She knows when you're done, like ChatGPT. Pause mid-thought and she waits; finish and she answers right away</li>
+        <li>Smoother, more natural voice with no robotic gaps, and she starts talking sooner</li>
+      </ul>
+      <p class="wn-tag">Since 2.0</p>
+      <ul>
+        <li>Reminders, calendar, battery, timers and contacts right in the app. Wake her with Back Tap, no Siri</li>
+        <li>Several jobs in one sentence, routines, messages between Friday and Jarvis, nightly recap, spending, habits and translator</li>
+        <li>Settings in pages, widget styles, Full orb and other orb-only layouts, 8 new HD looks, and a neural map that grows</li>
       </ul>
       <p class="hint">Your Shortcut prompt got simpler (no listening step, full contact names). Updating it is optional. Settings → Phone &amp; Shortcut shows what's done in the app now.</p>
       <button class="btn gold" type="button" id="btn-wn-shortcut">Show me</button>

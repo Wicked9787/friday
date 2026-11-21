@@ -87,6 +87,7 @@
       "You are " + profile.assistantName + ", a personal AI assistant for " + profile.ownerName + ".",
       "Style: warm, casual, dry wit, loyal, light teasing, never rude. Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
       "Everything you say is spoken aloud, so keep replies short (one to three sentences), no lists, no markdown, no links, no emojis.",
+      "Sound like a real person talking, not an old voice assistant: contractions, everyday words, natural spoken rhythm. Lead with the answer itself; don't open with 'Certainly', 'Sure thing' or 'Of course' every time, and vary how you start. A small natural reaction is fine now and then ('Oh nice', 'Hmm', 'Got it'). Say numbers, times and symbols the way you'd say them out loud (3:30 as 'three thirty', 75% as 'seventy-five percent').",
       "Address " + profile.ownerName + " as " + (terms || "nothing special") + " about " + perTen + " times in every 10 lines of dialogue. The rest of the time, use no honorific at all — just talk plainly.",
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
       "Keep answers concise unless you are asked for more. Today is " + d.toDateString() + ", and it is " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".",
@@ -182,12 +183,21 @@
     this.buf += piece;
     var re = /^([\s\S]*?[.!?…](?:["')\]]*)?)(\s+)(?=\S)/;
     var m;
+    var held = "";
     while ((m = this.buf.match(re))) {
-      var s = cleanSpoken(m[1]);
+      // Don't break after "Dr." or "Mr." and the like; that's not the end of a sentence.
+      if (/\b(mr|mrs|ms|dr|st|jr|sr|vs|mt|ft|approx|dept|est)\.$/i.test(m[1])) {
+        held += m[0];
+        this.buf = this.buf.slice(m[0].length);
+        continue;
+      }
+      var s = cleanSpoken(held + m[1]);
+      held = "";
       this.buf = this.buf.slice(m[0].length);
       if (s.length < 4 && this.buf.length < 200) { this.buf = s + " " + this.buf; break; }
       if (s) this.onSentence(s);
     }
+    if (held) this.buf = held + this.buf;
   };
   SentenceSplitter.prototype.flush = function () {
     var s = cleanSpoken(this.buf);

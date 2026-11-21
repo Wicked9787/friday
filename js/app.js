@@ -8,7 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.1";
+  var APP_VERSION = "3.1.1";
+  var APP_LABEL = "Live Voice";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -1211,7 +1212,13 @@
     try { fetch(window.FridayBrain.GROQ_BASE + "/models", { headers: { Authorization: "Bearer " + key } }).catch(function () {}); } catch (e) {}
   }
 
+  function showVersion() {
+    var t = "Version " + APP_VERSION + " · " + APP_LABEL;
+    ["app-version", "app-version-about"].forEach(function (id) { var e = document.getElementById(id); if (e) e.textContent = t; });
+  }
+
   function maybeWhatsNew() {
+    showVersion();
     var seen = FridayStorage.get("seenVersion", "");
     if (seen === APP_VERSION) return;
     var box = document.getElementById("whatsnew");
@@ -1255,6 +1262,8 @@
         }
       },
       onSilence: function () { if (voice.listening) endListen(); },
+      // Live listening: your words show up as you talk.
+      onPartial: function (text) { if (voice.listening && text) setCaption("“" + text + "”"); },
       onBargeIn: function () {
         voice.stopSpeak();
         busy = false;
