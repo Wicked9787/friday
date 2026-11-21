@@ -614,7 +614,12 @@
   FridayVoice.prototype._aiVoiceId = function () {
     var uri = this.voiceURI || "";
     if (uri.indexOf("ai:") === 0) return uri.slice(3);
+    // Automatic = the natural AI voice; the iPhone voice steps in when it's out for the day.
+    if (!uri && this.autoAi) return this.autoAi;
     return "";
+  };
+  FridayVoice.autoAiFor = function (profile) {
+    return profile && profile.voiceGender === "female" ? "diana" : "daniel";
   };
 
   FridayVoice.prototype._aiAllowed = function () {

@@ -526,7 +526,7 @@
     var V = root.FridayVoice;
     var playing = null;
     function label(uri) {
-      if (!uri) return "Automatic";
+      if (!uri) return "Automatic (natural AI voice)";
       if (uri.indexOf("ai:") === 0) {
         var a = (V.AI_VOICES || []).filter(function (x) { return x.id === uri; })[0];
         return a ? a.name + " (AI)" : "AI voice";
@@ -604,7 +604,8 @@
       var all = !!(allBox && allBox.checked);
       var cat = self.voice.catalog(all);
       listEl.innerHTML = "";
-      row("", "Automatic", "Best match: " + (self.profile.voiceHint || "this phone"), "");
+      var autoName = V.autoAiFor ? V.autoAiFor(self.profile) : "daniel";
+      row("", "Automatic", "Natural AI voice (" + autoName.charAt(0).toUpperCase() + autoName.slice(1) + "). Uses the best iPhone voice when the free AI voice is out for the day.", "");
       head("AI voices · free, about 100 replies a day");
       var st = document.createElement("div");
       st.id = "ai-voice-status";

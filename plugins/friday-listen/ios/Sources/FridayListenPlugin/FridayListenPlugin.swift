@@ -89,7 +89,11 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let audio = AVAudioSession.sharedInstance()
         do {
-            try audio.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            // Speaker stays loud, AirPods stay in full-quality mode (the iPhone mic listens), music isn't ducked.
+            // The mode is left as is afterwards, so her voice playing next isn't interrupted by a switch.
+            if audio.category != .playAndRecord || !audio.categoryOptions.contains(.defaultToSpeaker) {
+                try audio.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP, .mixWithOthers])
+            }
             try audio.setActive(true, options: [])
         } catch {
             call.reject("audio-session")
@@ -223,8 +227,6 @@ public class FridayListenPlugin: CAPPlugin, CAPBridgedPlugin {
         request?.endAudio()
         task = nil
         request = nil
-        // Back to normal playback so her voice is full quality (AirPods leave call mode).
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
     }
 }
 

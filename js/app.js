@@ -1272,6 +1272,7 @@
       }
     });
     voice.setVoiceURI(settingsData.voiceURI || "");
+    voice.autoAi = FridayVoice.autoAiFor(profile);
 
     chat = new FridayChat({
       profile: profile,
@@ -1376,7 +1377,7 @@
     applyLayout(settings.values.layout || "orbit", true);
     tickStageClock();
     setInterval(tickStageClock, 15000);
-    window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook };
+    window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook, voice: voice };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
 

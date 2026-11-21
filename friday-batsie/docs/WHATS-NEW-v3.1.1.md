@@ -18,8 +18,11 @@ The version number shows in AltStore and in the app (Settings → Backup & About
 - **She hears you live.** Your words show up on screen as you talk. This uses the iPhone's own speech recognition, so it's free and doesn't wait for a recording to upload. The first time, iOS asks to allow Speech Recognition: tap Allow.
 - **She knows when you're done, like ChatGPT.** She listens to *what* you said, not just for silence. "Set a timer for…" or a trailing "and…" makes her wait; "what's the weather" gets an answer right away. Settings → Voice & Talking → **Talk time** sets how patient she is (Short, Normal, Long).
 - **Smoother, more natural voice.** The AI voice clips now play back to back with even, natural pauses instead of robotic gaps. She starts talking sooner on long answers, joins short sentences into smoother phrases, and no longer reads out symbols, links or emojis.
+- **Natural voice by default.** Voice → Automatic now means the natural AI voice (Daniel for Friday, Diana for Jarvis). When the free AI voice is out for the day she switches to the best iPhone voice. Any voice you picked yourself stays picked.
 - **Talks like a person.** She's told to lead with the answer, use everyday words and contractions, and not open every reply with "Certainly".
 - **Speed:** the AI voice changes pitch when sped up, so the speed slider only nudges it a little now. The iPhone voice still follows the slider fully.
+
+With AirPods in, live listening uses the iPhone's mic so her voice stays full quality in your ears.
 
 If live listening ever acts up, turn it off in Settings → Voice & Talking → **Live listening** and she goes back to Groq's Whisper. Whisper also judges when you're done now: during each pause it takes a quick read of your words. **Talk over her** keeps the mic open the whole time, so it always uses Whisper.
 
