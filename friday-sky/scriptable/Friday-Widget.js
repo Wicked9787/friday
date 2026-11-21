@@ -11,6 +11,8 @@ void (async function () {
 //   orb n | orb x1 | orb x2 | orb h2   which HD orb to show (default n)
 //   classic                     use the original drawn orb instead of the HD one
 //   obsidian | clock | upnext | minimal   which design (or set PRESET below)
+//   fractured x7                just a fractured orb, no text (x1 to x12 pick the orb)
+//   standby                     big live time over the orb, made for StandBy (charging on its side)
 // Example: clear medium-top orb x2
 // Tapping opens the app already listening (3.1).
 // No API keys in this script.
@@ -22,7 +24,8 @@ const TERM = "boss"
 const APP_URL = "friday://"
 const SITE_URL = "https://wicked9787.github.io/friday/?u=sky"
 // -----------------
-const PRESET = "obsidian" // obsidian | clock | upnext | minimal | classic
+const PRESET = "obsidian" // obsidian | clock | upnext | minimal | classic | fractured | standby
+const ORB_PICK = "x1" // which fractured orb the fractured and standby designs show (x1 to x12)
 
 const GOLD = "#d9b468", GOLD_HI = "#f3dc9a", SILVER = "#e4e7ec", INK = "#f2efe9"
 const FALLBACK = { lat: 36.6, lon: -83.66 }
@@ -33,9 +36,11 @@ const STYLE = words.find(w => w === "clear" || w === "tinted" || w === "solid") 
 const TINT = Math.min(90, Math.max(0, parseInt(words.find(w => /^\d+$/.test(w)) || "25", 10))) / 100
 const SLOT = words.find(w => /^(small|medium|large)-[a-z]+$/.test(w))
 const TAP_APP = words.includes("app")
-const DESIGN = words.find(w => ["obsidian", "clock", "upnext", "minimal", "classic"].includes(w)) || PRESET
+const DESIGN = words.find(w => ["obsidian", "clock", "upnext", "minimal", "classic", "fractured", "standby"].includes(w)) || PRESET
 const CLASSIC = words.includes("classic") || DESIGN === "classic"
-const ORB_LOOK = (words[words.indexOf("orb") + 1] && words.includes("orb")) ? words[words.indexOf("orb") + 1] : "n"
+const ORB_ONLY = DESIGN === "fractured" || DESIGN === "standby"
+const ORB_LOOK = (words[words.indexOf("orb") + 1] && words.includes("orb")) ? words[words.indexOf("orb") + 1]
+  : (words.find(w => /^(x([1-9]|1[0-2])|n|h2)$/.test(w)) || (ORB_ONLY ? ORB_PICK : "n"))
 const FAMILY = config.widgetFamily || "large"
 
 function talkUrl(text) {
@@ -269,7 +274,7 @@ function loadClear(fam) {
   return null
 }
 
-async function background(fam, size, orbSpot) {
+async function background(fam, size, orbSpot, veilAfter) {
   const w = size.width * S, h = size.height * S
   const ctx = new DrawContext()
   ctx.size = new Size(w, h)
@@ -293,6 +298,7 @@ async function background(fam, size, orbSpot) {
   if (veil) { ctx.setFillColor(col("#0a0907", veil)); ctx.fillRect(new Rect(0, 0, w, h)) }
   dustBand(ctx, w, h, fam.length * 97 + 11, STYLE === "solid" ? 0.8 : 1)
   if (orbSpot) orb(ctx, orbSpot.x * S, orbSpot.y * S, orbSpot.r * S, 7, orbSpot.reach || 1.6)
+  if (veilAfter) { ctx.setFillColor(col("#000000", veilAfter)); ctx.fillRect(new Rect(0, 0, w, h)) }
   roundedClip(ctx, w, h, 22 * S, "#000000", 0)
   return ctx.getImage()
 }
@@ -493,6 +499,26 @@ async function buildMinimal(w, size) {
   return w
 }
 
+// Just the fractured orb, no words. Tap to talk.
+async function buildFractured(w, size) {
+  const W = size.width, H = size.height
+  w.backgroundImage = await background(FAMILY, size, { x: W / 2, y: H / 2, r: Math.min(W, H) * 0.41, reach: 1.2 })
+  return w
+}
+// StandBy (charging on its side): a big live time over the orb, readable from across the room.
+async function buildStandby(w, size) {
+  const W = size.width, H = size.height
+  const dateText = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+  w.backgroundImage = await background(FAMILY, size, { x: W / 2, y: H / 2, r: Math.min(W, H) * 0.42, reach: 1 }, 0.38)
+  w.setPadding(8, 8, 8, 8)
+  w.addSpacer()
+  const top = w.addStack(); top.addSpacer(); liveTime(top, FAMILY === "small" ? 44 : 72, INK); top.addSpacer()
+  const dd = w.addStack(); dd.addSpacer(); label(dd, dateText, FAMILY === "small" ? 12 : 16, GOLD_HI, 0.9, "med"); dd.addSpacer()
+  w.addSpacer()
+  w.refreshAfterDate = new Date(Date.now() + 60 * 60 * 1000)
+  return w
+}
+
 async function build() {
   if (!CLASSIC && DESIGN !== "minimal") HD_IMG = await hdOrb(ORB_LOOK)
   const w = new ListWidget()
@@ -503,6 +529,8 @@ async function build() {
   if (DESIGN === "clock") return await buildClock(w, size)
   if (DESIGN === "upnext") return await buildUpNext(w, size)
   if (DESIGN === "minimal") return await buildMinimal(w, size)
+  if (DESIGN === "fractured") return await buildFractured(w, size)
+  if (DESIGN === "standby") return await buildStandby(w, size)
   const day = new Date().toLocaleDateString("en-US", { weekday: "long" }).toUpperCase()
 
   if (FAMILY === "small") {

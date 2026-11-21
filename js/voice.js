@@ -1120,6 +1120,30 @@
     }
   };
 
+  // Background window: a tone too quiet to hear keeps her audio engine (and so the app) awake
+  // while you're in another app. Turned off again when the window ends or you come back.
+  FridayVoice.prototype.keepAlive = function (on) {
+    try {
+      if (on) {
+        var ctx = this._outCtx();
+        if (ctx.state !== "running" && ctx.resume) ctx.resume();
+        if (!this._keepOsc) {
+          var o = ctx.createOscillator(), g = ctx.createGain();
+          o.frequency.value = 24;
+          g.gain.value = 0.0004;
+          o.connect(g); g.connect(ctx.destination);
+          o.start();
+          this._keepOsc = o; this._keepGain = g;
+        }
+      } else if (this._keepOsc) {
+        try { this._keepOsc.stop(); } catch (e1) {}
+        try { this._keepGain.disconnect(); } catch (e2) {}
+        this._keepOsc = null; this._keepGain = null;
+      }
+    } catch (e) {}
+    return !!this._keepOsc;
+  };
+
   FridayVoice.prototype.releaseMic = function () {
     this.stopSpeak();
     if (this.listening) {

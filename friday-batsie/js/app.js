@@ -8,8 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.1.2";
-  var APP_LABEL = "Live Voice";
+  var APP_VERSION = "3.1.3";
+  var APP_LABEL = "In-App Phone";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -698,8 +698,11 @@
           chat._push("user", text);
           chat._push("assistant", ph.say);
           setCaption(ph.say);
-          emitActivity(ph.tool === "home" ? "home" : ph.tool === "battery" ? "core" : "calendar", ph.say.slice(0, 70));
+          emitActivity(ph.tool === "home" ? "home" : ph.tool === "battery" ? "core" : ph.tool === "music" || ph.tool === "call" ? "voice" : "calendar", ph.say.slice(0, 70));
+          // music is playing now: stop the hands-free conversation so she doesn't listen to the song
+          if (ph.tool === "music" && ph.playing && !opts.part) handsFree = false;
           await voice.speak(ph.say, profile);
+          if (ph.url) goUrl(ph.url, opts);
           return;
         }
       }
@@ -889,6 +892,28 @@
     await voice.speak(body, profile);
   }
 
+  // Texts from inside the app: the message opens filled in and you tap Send (iPhone always asks).
+  // If that can't happen (no add-on, no number, switched off), the Shortcut sends it as before.
+  async function textInApp(ex, text) {
+    var N = window.FridayNative;
+    if (!N || !N.isApp() || !N.kit || !N.kit.available() || !(window.FridayPhone && window.FridayPhone.inAppTexts())) return false;
+    var who = ex.partner ? (ex.partner.contact || ex.partner.to) : ex.textSend.to;
+    var body = ex.partner ? (ex.partner.command.replace(/^text .+? saying /, "")) : ex.textSend.body;
+    var num = await N.contacts.numberFor(who);
+    if (!num) return false;
+    chat._push("user", text);
+    var line = (ex.partner ? "Here's your message to " + ex.partner.to : "Here's your text to " + num.name.replace(/[^\w' -]+/g, "").trim()) + ". Tap Send.";
+    chat._push("assistant", line);
+    setCaption(line);
+    emitActivity("messages", (ex.partner ? "Message for " + ex.partner.to : "Text to " + num.name));
+    await voice.speak(line, profile);
+    var r = await N.kit.text(num.number, body);
+    if (!r.ok) return false;
+    var after = r.result === "sent" ? "Sent." : r.result === "cancelled" ? "Okay, I didn't send it." : "";
+    if (after) { setCaption(after); await voice.speak(after, profile); }
+    return true;
+  }
+
   async function runExtra(ex, text, opts) {
     if (ex.bedside) {
       chat._push("user", text);
@@ -906,6 +931,7 @@
       await voice.speak(cl, profile);
       return;
     }
+    if ((ex.partner || ex.textSend) && !opts.collect && await textInApp(ex, text)) return;
     if (ex.partner) {
       chat._push("user", text);
       var line = "Sending that to " + ex.partner.to + ".";
@@ -1059,6 +1085,40 @@
     var night = s.nightOrb !== false && !!(window.FridayNight && window.FridayNight.isNight());
     orb.setPower({ rest: rest, night: night, saver: !!orb.lowPower });
   }
+  // ---------- background window (3.1.3) ----------
+  // When you switch apps while talking with her, she keeps going for the minutes set in
+  // Settings → Voice & Talking, then goes to sleep. Back Tap or the widget wakes her any time.
+  var bgTimer = 0, bgTick = 0;
+  function bgMinutes() {
+    var s = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {};
+    var m = parseInt(s.bgMinutes, 10);
+    return isNaN(m) ? 3 : Math.max(0, Math.min(10, m));
+  }
+  function keepInBackground() {
+    var mins = bgMinutes();
+    if (!mins || !(voice.listening || voice.speaking || busy || handsFree)) return false;
+    voice.keepAlive(true);
+    var start = Date.now();
+    FridayStorage.set("bgWindow", { start: start, mins: mins, awake: 0 });
+    clearTimeout(bgTimer); clearInterval(bgTick);
+    // a heartbeat, so we can tell afterwards how long iOS really let her stay awake
+    bgTick = setInterval(function () {
+      var w = FridayStorage.get("bgWindow", null);
+      if (w && w.start === start) { w.awake = Date.now() - start; FridayStorage.set("bgWindow", w); }
+    }, 5000);
+    bgTimer = setTimeout(function () { endBackgroundWindow(true); }, mins * 60000);
+    return true;
+  }
+  function endBackgroundWindow(sleep) {
+    clearTimeout(bgTimer); clearInterval(bgTick); bgTimer = 0; bgTick = 0;
+    voice.keepAlive(false);
+    if (sleep) {
+      handsFree = false;
+      try { voice.releaseMic(); } catch (e) {}
+      var d = document.getElementById("listen-dot"); if (d) d.classList.remove("on");
+    }
+  }
+
   function noteActivity() { lastActivity = Date.now(); applyPower(); }
 
   async function beginListen() {
@@ -1632,11 +1692,14 @@
     if (IS_NATIVE) {
       document.addEventListener("visibilitychange", function () {
         if (document.visibilityState !== "visible") {
+          // Mid-conversation: stay awake for a while in the background, then sleep.
+          if (keepInBackground()) return;
           if (voice.listening || voice.speaking) { try { voice.releaseMic(); } catch (e) {} }
           else { try { voice.releaseMic(); } catch (e) {} }
           document.getElementById("listen-dot").classList.remove("on");
           return;
         }
+        endBackgroundWindow(false);
         busy = false;
         if (continueLeaveQueue()) return;
         if (!FridayStorage.hasApiKey() || document.querySelector(".panel.open")) return;

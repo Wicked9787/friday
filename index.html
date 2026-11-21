@@ -165,6 +165,18 @@
         </label>
         <div class="sub">On: she starts listening when you open the app and keeps listening after each answer, so you can just keep talking. Off: tap the orb each time you want to say something.</div>
       </div>
+      <div class="row row-col">
+        <label>Keep talking in the background</label>
+        <div class="seg" role="group" aria-label="Keep talking in the background" id="bg-minutes">
+          <button type="button" data-bg="0">Off</button>
+          <button type="button" data-bg="1">1 min</button>
+          <button type="button" data-bg="3">3 min</button>
+          <button type="button" data-bg="5">5 min</button>
+          <button type="button" data-bg="10">10 min</button>
+        </div>
+        <div class="sub">If you switch apps while you're talking with her, she keeps listening and answering for this long, then goes to sleep. Back Tap or a widget wakes her any time. Uses more battery while it's on. New: the iPhone may still pause her sooner.</div>
+        <div class="sub" id="bg-status"></div>
+      </div>
       </section>
       <section class="spage" id="sp-brain" data-title="Brain &amp; Internet" hidden>
       <details class="accord" id="accord-brain">
@@ -230,10 +242,12 @@
       <section class="spage" id="sp-phone" data-title="Phone &amp; Shortcut" hidden>
       <div class="row row-col">
         <label>Done right in the app</label>
-        <div class="sub" id="phone-status">Reminders, calendar, battery, timers and contacts are handled inside the app when the iPhone allows it. Everything else goes to your Shortcut.</div>
+        <div class="sub" id="phone-status">She tries everything she can right in the app first. Only what the iPhone doesn't let apps do, or anything that doesn't work, goes to your Shortcut.</div>
         <ul class="phone-list" id="phone-list"></ul>
         <button class="btn gold" type="button" id="btn-notify-on">Turn on notifications</button>
-        <div class="sub">So timers, bills and countdowns ring even when the app is closed.</div>
+        <div class="sub" id="notify-sub">So timers, bills and countdowns ring even when the app is closed.</div>
+        <label class="toggle-row" style="margin-top:12px">Texts and calls from the app <input type="checkbox" id="set-texts-inapp"></label>
+        <div class="sub">Texts open already written and you tap Send; calls ask you to confirm. The iPhone requires that tap for apps. Turn off to let your Shortcut send texts on its own.</div>
         <button class="btn" type="button" id="btn-home-check">Check lights in the app</button>
         <div class="sub" id="home-status"></div>
       </div>
@@ -624,7 +638,13 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.1.2</h1>
+      <h1>What's new in 3.1.3</h1>
+      <p class="wn-tag">In-app phone</p>
+      <ul>
+        <li>She tries everything she can in the app first: lights, music on your phone, calls and texts. Your Shortcut is the backup</li>
+        <li>Orb widgets: just a fractured orb, in five colors, plus a StandBy clock for when it charges on its side</li>
+        <li>Switch apps mid-conversation and she keeps going for a few minutes, then sleeps</li>
+      </ul>
       <p class="wn-tag">Live voice</p>
       <ul>
         <li>She hears you live: your words show up as you talk</li>

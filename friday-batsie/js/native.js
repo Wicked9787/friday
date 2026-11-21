@@ -147,6 +147,26 @@
         return { ok: true, count: list.length };
       } catch (e) { return { ok: false, reason: "Couldn't read your contacts just now." }; }
     },
+    // The phone number for a contact, read only when needed (numbers aren't kept by the app).
+    numberFor: async function (who) {
+      var P = plugin("Contacts");
+      if (!P || !who) return null;
+      try {
+        var perm = await P.requestPermissions();
+        if (!granted(perm && (perm.contacts || perm.readContacts))) return null;
+        var res = await P.getContacts({ projection: { name: true, phones: true } });
+        var list = (res && res.contacts) || [];
+        function nameOf(c) { return c && c.name ? String(c.name.display || [c.name.given, c.name.family].filter(Boolean).join(" ")).trim() : ""; }
+        var names = list.map(nameOf).filter(Boolean);
+        var exact = contacts.resolve(who, names);
+        if (!exact) return null;
+        var c = list.filter(function (x) { return nameOf(x) === exact && x.phones && x.phones.length; })[0];
+        if (!c) return null;
+        var ph = c.phones.filter(function (x) { return /mobile|iphone|cell/i.test(String(x.type || "") + " " + String(x.label || "")); })[0] || c.phones[0];
+        var num = String(ph.number || "").replace(/[^\d+]/g, "");
+        return num ? { name: exact, number: num } : null;
+      } catch (e) { return null; }
+    },
     // "daddy" -> "DADDY!!", "mom" -> "Mom", "batsie" -> "Batsie Smith"
     resolve: function (spoken, list) {
       list = list || contacts.names();
@@ -175,31 +195,58 @@
     ready: async function () {
       var P = plugin("FridayHome");
       if (!P) return false;
-      if (home._status && Date.now() - home._status.at < 60000) return home._status.ok;
+      // A "yes" is trusted for a minute; a "no" only for a few seconds, so she keeps trying.
+      if (home._status && Date.now() - home._status.at < (home._status.ok ? 60000 : 8000)) return home._status.ok;
       var ok = false;
       try {
         var r = await P.list();
         ok = !!(r && r.authorization === "authorized" && r.lights && r.lights.length);
-        if (r) S().set("homeInfo", { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], at: Date.now() });
+        if (r) S().set("homeInfo", { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], homes: r.homes, accessories: r.accessories, otherPlugs: r.otherPlugs, authorization: r.authorization, at: Date.now() });
       } catch (e) { ok = false; }
       home._status = { ok: ok, at: Date.now() };
       return ok;
     },
+    _worked: function () { home._status = { ok: true, at: Date.now() }; },
+    // She always tries Home herself first; only if this fails does the Shortcut get the job.
     setLights: async function (opts) {
       var P = plugin("FridayHome");
       if (!P) return { ok: false };
-      try { var r = await P.setLights(opts); return { ok: true, count: r && r.count }; }
+      try { var r = await P.setLights(opts); home._worked(); return { ok: true, count: r && r.count }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
     },
     scene: async function (name) {
       var P = plugin("FridayHome");
       if (!P) return { ok: false };
-      try { var r = await P.runScene({ name: name }); return { ok: true, scene: r && r.scene }; }
+      try { var r = await P.runScene({ name: name }); home._worked(); return { ok: true, scene: r && r.scene }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    }
+  };
+
+  // ---------- music and texts (Friday's own add-on) ----------
+  var kit = {
+    available: function () { return !!plugin("FridayKit"); },
+    music: async function (action) {
+      var P = plugin("FridayKit");
+      if (!P) return { ok: false };
+      try { var r = await P.musicControl({ action: action }); return { ok: true, state: r && r.state, title: (r && r.title) || "" }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    play: async function (query, kind, shuffle) {
+      var P = plugin("FridayKit");
+      if (!P) return { ok: false };
+      try { var r = await P.musicPlay({ query: query || "", kind: kind || "any", shuffle: !!shuffle }); return { ok: true, title: (r && r.title) || "" }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    text: async function (number, body) {
+      var P = plugin("FridayKit");
+      if (!P) return { ok: false };
+      try { var r = await P.composeText({ to: [number], body: body }); return { ok: true, result: (r && r.result) || "" }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
     }
   };
 
   root.FridayNative = {
+    kit: kit,
     isApp: function () { return !!cap(); },
     notify: notify,
     calendar: cal,

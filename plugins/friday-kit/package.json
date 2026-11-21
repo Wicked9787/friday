@@ -1,0 +1,13 @@
+{
+  "name": "friday-kit",
+  "version": "1.0.0",
+  "description": "Friday's phone add-on: music on the iPhone and texts from inside the app.",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift", "FridayKit.podspec"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

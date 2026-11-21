@@ -9,7 +9,8 @@ const name = process.env.FRIDAY_PROFILE === "batsie" ? "Jarvis" : "Friday";
 const keys = {
   NSMicrophoneUsageDescription: `${name} uses the microphone so you can talk to it.`,
   NSSpeechRecognitionUsageDescription: `${name} uses speech recognition to show your words as you talk and know when you are done.`,
-  NSContactsUsageDescription: `${name} reads contact names so texts and calls go to the right person. They stay on this phone.`,
+  NSContactsUsageDescription: `${name} reads contact names and numbers so texts and calls go to the right person. They stay on this phone.`,
+  NSAppleMusicUsageDescription: `${name} plays, pauses and skips music from your library when you ask.`,
   NSCalendarsUsageDescription: `${name} adds events and reads your calendar when you ask.`,
   NSCalendarsFullAccessUsageDescription: `${name} adds events and reads your calendar when you ask.`,
   NSRemindersUsageDescription: `${name} adds reminders when you ask.`,
@@ -25,6 +26,12 @@ const scheme = name.toLowerCase();
 if (!xml.includes("<key>CFBundleURLTypes</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>CFBundleURLTypes</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>CFBundleURLName</key>\n\t\t\t<string>${scheme}</string>\n\t\t\t<key>CFBundleURLSchemes</key>\n\t\t\t<array>\n\t\t\t\t<string>${scheme}</string>\n\t\t\t</array>\n\t\t</dict>\n\t</array>\n` + xml.slice(i);
+}
+// Background audio: lets her keep a conversation going for a few minutes after you switch apps
+// (only while you're talking with her; she goes to sleep after the time set in the app).
+if (!xml.includes("<key>UIBackgroundModes</key>")) {
+  const i = xml.lastIndexOf("</dict>");
+  xml = xml.slice(0, i) + `\t<key>UIBackgroundModes</key>\n\t<array>\n\t\t<string>audio</string>\n\t</array>\n` + xml.slice(i);
 }
 // App version shown in AltStore and Settings (from package.json "appVersion").
 const pkg = require(path.join(__dirname, "..", "package.json"));

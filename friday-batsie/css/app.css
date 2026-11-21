@@ -1155,3 +1155,10 @@ body.bedside-on #caption, body.bedside-on #edit-bar { visibility: hidden; }
 .neural-stats b { font-size: 14px; }
 
 .smenu-version { margin: 14px 4px 2px; font-size: 12px; color: var(--muted); text-align: center; letter-spacing: 0.04em; }
+
+/* 3.1.3 widget previews that show the real orb */
+.wstyle .wp-orb { position: relative; height: 76px; border-radius: 14px; background: radial-gradient(circle at 50% 50%, #1c1810 0%, #050505 75%); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.wstyle .wp-orb img { width: 110px; height: 110px; object-fit: contain; }
+.wstyle .wp-orb.wp-dim img { opacity: 0.55; }
+.wstyle .wp-time { position: absolute; top: 18px; left: 0; right: 0; text-align: center; font-size: 28px; font-weight: 300; color: #efece8; letter-spacing: 0.02em; }
+.wstyle .wp-date { position: absolute; top: 52px; left: 0; right: 0; text-align: center; font-size: 9px; color: #f3dc9a; }

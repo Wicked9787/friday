@@ -31,7 +31,7 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
                 return
             }
             self.pending.append(block)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
                 guard let self = self, !self.isReady else { return }
                 self.isReady = true
                 let waiting = self.pending
@@ -62,11 +62,21 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
         return t.contains(w) || (!t.isEmpty && w.contains(t))
     }
 
+    /// Smart plugs and wall switches count as lights when they're named like one ("Desk lamp", "Porch light")
+    /// or Home lists them as a light, so "turn off the lights" never switches off the coffee maker.
+    private func isLight(_ svc: HMService, _ acc: HMAccessory) -> Bool {
+        if svc.serviceType == HMServiceTypeLightbulb { return true }
+        guard svc.serviceType == HMServiceTypeSwitch || svc.serviceType == HMServiceTypeOutlet else { return false }
+        if acc.category.categoryType == HMAccessoryCategoryTypeLightbulb { return true }
+        let n = (svc.name + " " + acc.name).lowercased()
+        return ["light", "lamp", "bulb", "led", "sconce", "chandelier", "strip", "string"].contains { n.contains($0) }
+    }
+
     private func lights(in home: HMHome, room: String?, name: String?) -> [HMService] {
         var out: [HMService] = []
         for acc in home.accessories {
             if !matches(acc.room?.name ?? "", room) { continue }
-            for svc in acc.services where svc.serviceType == HMServiceTypeLightbulb {
+            for svc in acc.services where isLight(svc, acc) {
                 if let n = name, !n.isEmpty, !(matches(svc.name, n) || matches(acc.name, n)) { continue }
                 out.append(svc)
             }
@@ -85,14 +95,21 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
             var found: [[String: Any]] = []
             var scenes: [String] = []
             var rooms: [String] = []
+            var accessories = 0
+            var plugs = 0
             for home in self.manager?.homes ?? [] {
+                accessories += home.accessories.count
+                for acc in home.accessories {
+                    for svc in acc.services where (svc.serviceType == HMServiceTypeSwitch || svc.serviceType == HMServiceTypeOutlet) && !self.isLight(svc, acc) { plugs += 1 }
+                }
                 for room in home.rooms { rooms.append(room.name) }
                 for svc in self.lights(in: home, room: nil, name: nil) {
                     found.append(["name": svc.accessory?.name ?? svc.name, "room": svc.accessory?.room?.name ?? "", "home": home.name])
                 }
                 for set in home.actionSets { scenes.append(set.name) }
             }
-            call.resolve(["authorization": self.authText(), "lights": found, "scenes": scenes, "rooms": rooms])
+            call.resolve(["authorization": self.authText(), "lights": found, "scenes": scenes, "rooms": rooms,
+                          "homes": self.manager?.homes.count ?? 0, "accessories": accessories, "otherPlugs": plugs])
         }
     }
 

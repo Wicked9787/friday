@@ -47,6 +47,8 @@
       partnerContact: "",
       talkTime: "normal",
       liveListen: true,
+      textsInApp: true,
+      bgMinutes: 3,
       billAlerts: true,
       countdownAlerts: true
     };
@@ -105,7 +107,7 @@
     return location.protocol === "capacitor:";
   }
 
-  var SHORTCUT_PROMPT = "Get the Shortcut Input as text and use it as the request. If it is empty, stop this shortcut. Make a lowercase copy of the request to check against, but when sending a message use the request's original words and capitalization. Check it in this order and only do the first one that matches:\n1. If it contains \"remind me\" or \"reminder\": take what to be reminded about and the date and time from the request, and add it to the Reminders app with an alert at that time (if no time is said, alert in one hour).\n2. If it starts with \"text\" or \"message\" (or \"send a text to\"): the contact name is the words after that up to the word \"saying\" (if there is no \"saying\", it is the next word), and the message body is everything after \"saying\". Send that body, with its original capitalization, to that contact with Send Message, without showing the compose sheet.\n3. If it starts with \"call\", the rest is a contact name; call that contact.\n4. If it contains \"calendar\", \"schedule\", \"appointment\" or \"what's on\": if it says \"add\" or \"schedule a\" or \"schedule an\", take the event name and the date and time from the request and add a calendar event with them (if no time is said, use tomorrow at 9 AM), then show a quiet notification that it was added. Otherwise find calendar events for today (or tomorrow if the request says tomorrow) and show their titles and times as a quiet notification.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\", \"brighten\" or \"brightness\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. Then: if it has a number with a percent sign or the word percent, or says \"to\" followed by a number (like \"50%\", \"50 percent\", \"set the lights to 50\"), turn those lights on and set their brightness to exactly that number. Otherwise if it says \"dim\", set their brightness to 30. Otherwise if it says \"brighten\", \"full\" or \"all the way up\", set their brightness to 100. Otherwise if it says \"off\", turn them off. Otherwise if it says a color (like red, blue, warm white), turn them on and set that color. Otherwise if it says \"on\", turn them on.\n6. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n7. If it contains \"homepod\", \"music\", \"song\", \"playlist\", \"album\", \"pause\", \"resume\", \"skip\", \"next song\", \"previous song\" or \"volume\": if it says \"homepod\", set the playback destination to the HomePod first. Then if it says \"pause\", pause; if it says \"resume\", play; if it says \"skip\" or \"next\", skip forward; if it says \"previous\" or \"back\", skip back; if it says \"volume\" or \"turn it up\" or \"turn it down\" with a number, set the volume to that percent (up means 80, down means 30 if no number is said). Otherwise if it says \"play\" followed by words, search Apple Music for those words and play the first result; otherwise shuffle and play my music library.\n8. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n9. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n10. If it contains \"timer\", find the number of minutes in the request and start a timer in the Clock app for that many minutes.\n11. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n12. If it contains \"do not disturb\", \"don't disturb\" or \"dnd\": if it says \"off\", turn the Do Not Disturb focus off; otherwise turn it on.\n13. If it contains \"battery\", get the battery level and show it as a quiet notification.\n14. If it contains \"cameras\", open the app Roku Smart Home.\n15. If it contains \"camera\", open the app Camera.\n16. Otherwise, do nothing.\nDo not add any Speak Text or Dictate Text step anywhere; the app does all the talking and listening. Do not show alerts or ask questions. Make every notification silent.";
+  var SHORTCUT_PROMPT = "Get the Shortcut Input as text and use it as the request. If it is empty, stop this shortcut. Make a lowercase copy of the request to check against, but when sending a message use the request's original words and capitalization. Check it in this order and only do the first one that matches:\n1. If it contains \"remind me\" or \"reminder\": take what to be reminded about and the date and time from the request, and add it to the Reminders app with an alert at that time (if no time is said, alert in one hour).\n2. If it starts with \"text\" or \"message\" (or \"send a text to\"): the contact name is the words after that up to the word \"saying\" (if there is no \"saying\", it is the next word), and the message body is everything after \"saying\". Send that body, with its original capitalization, to that contact with Send Message, without showing the compose sheet.\n3. If it starts with \"call\", the rest is a contact name; call that contact. If it starts with \"facetime\", the rest is a contact name; FaceTime that contact.\n4. If it contains \"calendar\", \"schedule\", \"appointment\" or \"what's on\": if it says \"add\" or \"schedule a\" or \"schedule an\", take the event name and the date and time from the request and add a calendar event with them (if no time is said, use tomorrow at 9 AM), then show a quiet notification that it was added. Otherwise find calendar events for today (or tomorrow if the request says tomorrow) and show their titles and times as a quiet notification.\n5. If it contains \"light\", \"lights\", \"lamp\", \"dim\", \"brighten\" or \"brightness\", or it is \"turn all on\", \"turn all off\", \"turn everything on\" or \"turn everything off\": find the room name if one is said (like living room, bedroom, kitchen, bathroom, porch); if no room is said, use every light in the home. Then: if it has a number with a percent sign or the word percent, or says \"to\" followed by a number (like \"50%\", \"50 percent\", \"set the lights to 50\"), turn those lights on and set their brightness to exactly that number. Otherwise if it says \"dim\", set their brightness to 30. Otherwise if it says \"brighten\", \"full\" or \"all the way up\", set their brightness to 100. Otherwise if it says \"off\", turn them off. Otherwise if it says a color (like red, blue, warm white), turn them on and set that color. Otherwise if it says \"on\", turn them on.\n6. If it contains \"apple tv\" or \"tv\": if it says \"off\", put the Apple TV to sleep. If it says \"on\", wake the Apple TV. If it says \"play\" or \"pause\", toggle Play/Pause on the Apple TV. If it says \"open\" followed by an app name (like Netflix, YouTube, Hulu, Disney+), open that app on the Apple TV. Otherwise, wake the Apple TV.\n7. If it starts with \"play\" or \"shuffle\", or contains \"homepod\", \"music\", \"song\", \"playlist\", \"album\", \"pause\", \"resume\", \"skip\", \"next song\", \"previous song\" or \"volume\": if it says \"homepod\", set the playback destination to the HomePod first. Then if it says \"pause\", pause; if it says \"resume\", play; if it says \"skip\" or \"next\", skip forward; if it says \"previous\" or \"back\", skip back; if it says \"volume\" or \"turn it up\" or \"turn it down\" with a number, set the volume to that percent (up means 80, down means 30 if no number is said). Otherwise if it says \"play\" followed by words, search Apple Music for those words and play the first result; otherwise shuffle and play my music library.\n8. If it contains \"good night\" or \"goodnight\", run the Home scene \"Good Night\".\n9. If it contains \"scene\", take the words before or after \"scene\" as the scene name (drop words like run, set, turn on, the) and run the Home scene with that name.\n10. If it contains \"timer\", find the number of minutes in the request and start a timer in the Clock app for that many minutes.\n11. If it contains \"alarm\", find the time in the request and create an alarm for that time.\n12. If it contains \"do not disturb\", \"don't disturb\" or \"dnd\": if it says \"off\", turn the Do Not Disturb focus off; otherwise turn it on.\n13. If it contains \"battery\", get the battery level and show it as a quiet notification.\n14. If it contains \"cameras\", open the app Roku Smart Home.\n15. If it contains \"camera\", open the app Camera.\n16. Otherwise, do nothing.\nDo not add any Speak Text or Dictate Text step anywhere; the app does all the talking and listening. Do not show alerts or ask questions. Make every notification silent.";
 
   var AGENT_PRESETS = (root.FridayBrain && root.FridayBrain.PRESETS) || {
     openai: { label: "ChatGPT / OpenAI", name: "ChatGPT", base: "https://api.openai.com/v1", model: "gpt-5-mini" },
@@ -738,17 +740,27 @@
       var app = !!(N && N.isApp());
       var hi = root.FridayStorage.get("homeInfo", null);
       var homeOk = !!(app && N.home.available() && N.home._status && N.home._status.ok);
+      var kitOk = !!(app && N.kit && N.kit.available());
+      var texts = (self.values || {}).textsInApp !== false;
       var rows = [
         ["Timers ring when closed", app && N.notify.available() ? (N.notify.allowed() ? "In the app" : "Turn on notifications") : "Shortcut", app && N.notify.allowed()],
         ["Reminders", app && N.calendar.available() ? "In the app" : "Shortcut", app && N.calendar.available()],
         ["Calendar", app && N.calendar.available() ? "In the app" : "Shortcut", app && N.calendar.available()],
         ["Battery", app ? "In the app" : "Shortcut", app],
         ["Contacts", app && N.contacts.names().length ? N.contacts.names().length + " synced" : "Not synced", app && N.contacts.names().length],
-        ["Lights and scenes", homeOk ? "In the app" + (hi ? " (" + hi.lights + " lights)" : "") : "Shortcut", homeOk],
-        ["Apple TV, HomePod, music", "Shortcut", false],
-        ["Sending texts, calls", "Shortcut", false],
-        ["Alarms, Do Not Disturb, Camera", "Shortcut", false]
+        ["Lights and scenes", homeOk ? "In the app" + (hi ? " (" + hi.lights + " lights)" : "") : (app && N.home.available() ? "App first, then Shortcut" : "Shortcut"), homeOk],
+        ["Opening apps (Music, Spotify…)", app ? "In the app" : "Shortcut", app],
+        ["Music on this iPhone", kitOk ? "App first, then Shortcut" : "Shortcut", kitOk],
+        ["Calls", kitOk && texts && N.contacts.available() ? "In the app (you confirm)" : "Shortcut", kitOk && texts],
+        ["Texts", kitOk && texts ? "In the app (you tap Send)" : "Shortcut", kitOk && texts],
+        ["HomePod, Apple TV, volume", "Shortcut", false],
+        ["Alarms, Do Not Disturb, Camera app", "Shortcut", false]
       ];
+      var nbtn = document.getElementById("btn-notify-on");
+      var nOn = !!(app && N.notify.available() && N.notify.allowed());
+      if (nbtn) nbtn.hidden = nOn;
+      var nsub = document.getElementById("notify-sub");
+      if (nsub) nsub.hidden = nOn;
       list.innerHTML = "";
       rows.forEach(function (r) {
         var li = document.createElement("li");
@@ -769,7 +781,14 @@
       N.home._status = null;
       N.home.ready().then(function (ok) {
         var hi = root.FridayStorage.get("homeInfo", null);
-        setText("home-status", ok ? "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".") : "The app can't reach your Home in this install, so lights keep going through your Shortcut. (If you installed the Lights-test version and allowed Home access, try again.)");
+        var why;
+        if (ok) why = "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".");
+        else if (!hi) why = "She couldn't check your Home just now. Try again in a moment.";
+        else if (hi.authorization && hi.authorization !== "authorized") why = "Home access is off for this app. Turn on Home Information in iPhone Settings → " + ((self.profile && self.profile.assistantName) || "Friday") + ".";
+        else if (!hi.homes) why = "Home access is on, but iOS isn't showing this install any homes. That usually means the Home permission didn't come through when AltStore signed the app. The LightsTest version is the one that carries it.";
+        else if (!hi.lights) why = "She can see your Home (" + (hi.accessories || 0) + " accessories) but none of them are lights" + (hi.otherPlugs ? ". If a lamp is on a smart plug or switch, rename it in the Home app to include \u201clight\u201d or \u201clamp\u201d" : "") + ".";
+        else why = "Something stopped her from reaching your lights. Try again in a moment.";
+        setText("home-status", why + (ok ? "" : " She still tries the app first every time, then hands off to your Shortcut if it doesn't work."));
         refreshPhone();
       });
     };
@@ -805,9 +824,23 @@
       ["clock", "Clock", "Big live time, date and weather."],
       ["upnext", "Up next", "Your next events and reminders."],
       ["minimal", "Minimal", "Greeting and weather. No orb."],
-      ["classic", "Classic", "The original drawn orb."]
+      ["classic", "Classic", "The original drawn orb."],
+      ["fractured:x1", "Fractured · Gold", "Just the orb. No words. Tap to talk."],
+      ["fractured:x6", "Fractured · Ice", "Just the orb, silver and blue."],
+      ["fractured:x12", "Fractured · Ember", "Just the orb, warm copper."],
+      ["fractured:x10", "Fractured · Twin shells", "Just the orb, two shells."],
+      ["fractured:x8", "Fractured · Ring", "Just the orb, with a ring and core."],
+      ["standby:x1", "StandBy clock", "For StandBy: big live time over the orb while it charges on its side."]
     ];
-    function preview(id) {
+    function preview(full) {
+      var parts = String(full).split(":"), id = parts[0], look = parts[1];
+      if (look) {
+        var clock = id === "standby" ? '<div class="wp-time">9:41</div><div class="wp-date">Sat, Nov 21</div>' : "";
+        return '<div class="wp-orb' + (clock ? " wp-dim" : "") + '" aria-hidden="true"><img src="icons/widget/orb-' + look + '.png" alt="" loading="lazy">' + clock + '</div>';
+      }
+      return previewSvg(id);
+    }
+    function previewSvg(id) {
       var orb = '<radialGradient id="wo' + id + '"><stop offset="0" stop-color="#fff3cf"/><stop offset=".35" stop-color="#e8c872"/><stop offset=".7" stop-color="rgba(196,132,42,.4)"/><stop offset="1" stop-color="rgba(196,132,42,0)"/></radialGradient>';
       var bg = '<rect width="160" height="76" rx="14" fill="#0b0a08"/><rect width="160" height="76" rx="14" fill="url(#wb' + id + ')"/>';
       var defs = '<defs>' + orb + '<linearGradient id="wb' + id + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1c1810"/><stop offset="1" stop-color="#050505"/></linearGradient></defs>';
@@ -830,7 +863,10 @@
         b.onclick = function () {
           load().then(function (t) {
             if (!t) { self.onToast("Still loading. Tap again in a second."); return; }
-            copyText(t.replace(/const PRESET = "[a-z]+"/, 'const PRESET = "' + st[0] + '"'), st[1] + " widget copied. Paste it into a new Scriptable script.");
+            var pp = st[0].split(":");
+            var out = t.replace(/const PRESET = "[a-z]+"/, 'const PRESET = "' + pp[0] + '"');
+            if (pp[1]) out = out.replace(/const ORB_PICK = "[a-z0-9]+"/, 'const ORB_PICK = "' + pp[1] + '"');
+            copyText(out, st[1] + " widget copied. Paste it into a new Scriptable script." + (pp[0] === "standby" ? " For StandBy: charge the phone on its side, press and hold the widgets, tap +, pick Scriptable, then this script." : ""));
           });
         };
         c.appendChild(b);
@@ -856,6 +892,21 @@
     bindTog("set-night-orb", "nightOrb");
     bindTog("set-partner-msgs", "partnerMessages");
     bindTog("set-live-listen", "liveListen");
+    bindTog("set-texts-inapp", "textsInApp");
+    var bgSeg = document.getElementById("bg-minutes");
+    if (bgSeg) {
+      var curBg = function () { var m = parseInt(v.bgMinutes, 10); return isNaN(m) ? 3 : m; };
+      var markBg = function () { [].forEach.call(bgSeg.querySelectorAll("button"), function (b) { b.classList.toggle("on", parseInt(b.dataset.bg, 10) === curBg()); b.setAttribute("aria-pressed", parseInt(b.dataset.bg, 10) === curBg() ? "true" : "false"); }); };
+      [].forEach.call(bgSeg.querySelectorAll("button"), function (b) {
+        b.onclick = function () { v.bgMinutes = parseInt(b.dataset.bg, 10); saveSettings(v); markBg(); };
+      });
+      markBg();
+      var bw = root.FridayStorage.get("bgWindow", null);
+      if (bw && bw.start) {
+        var secs = Math.round((bw.awake || 0) / 1000);
+        setText("bg-status", "Last time in the background she stayed awake for " + (secs >= 60 ? Math.floor(secs / 60) + " min " + (secs % 60) + " s" : secs + " s") + " (set to " + bw.mins + " min).");
+      }
+    }
     var lls = document.getElementById("live-listen-status");
     if (lls) {
       var lerr = root.FridayStorage.get("liveListenError", null);

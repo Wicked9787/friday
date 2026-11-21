@@ -1,17 +1,47 @@
-# Friday and Jarvis 3.1.2 · Live Voice
+# Friday and Jarvis 3.1.3 · In-App Phone
 
-Coming from 2.0? This one install has everything from 3.0, 3.1 and 3.1.2. Your memory and settings carry over.
+Coming from 2.0? This one install has everything from 3.0, 3.1, 3.1.2 and 3.1.3. Your memory and settings carry over.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.1.2-LiveVoice.ipa` | **Install this one.** Friday 3.1.2 for Sky. |
-| `Jarvis-v3.1.2-LiveVoice.ipa` | Jarvis 3.1.2 for Batsie. |
+| `Friday-v3.1.3-InAppPhone.ipa` | Friday 3.1.3 for Sky. |
+| `Jarvis-v3.1.3-InAppPhone.ipa` | **Install this one.** Jarvis 3.1.3 for Batsie. |
 | `…-LightsTest.ipa` | The same app plus Apple Home permission, so lights can run straight from the app. Try it first; if AltStore won't take it, use the regular one. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Backup & About).
+
+## In the app first (new in 3.1.3)
+
+She now tries every job she can right in the app, and hands it to your Shortcut only if that doesn't work.
+
+| Job | What happens now |
+|---|---|
+| Lights and scenes | Tried in the app every time (no more relying on the check). "Turn all on" works. Smart plugs and switches named like a light ("Desk lamp", "Porch light") count too. |
+| Music on this iPhone | Play, pause, skip, go back, start over, shuffle, and "play [artist / song / playlist / album]" from your library. If it isn't in your library, the Shortcut searches Apple Music. The first time, iOS asks to allow Media & Apple Music. |
+| Calls and FaceTime | She looks up the number in your contacts. iPhone asks you to confirm the call. |
+| Texts (and Friday ↔ Jarvis messages) | The message opens already written; you tap Send. iPhone never lets an app send a text without that tap. To let your Shortcut send texts on its own again, turn off Settings → Phone & Shortcut → **Texts and calls from the app**. |
+| Opening apps | Already in the app. |
+| HomePod, Apple TV, volume, alarms, Do Not Disturb, the Camera app | Still the Shortcut. iPhone doesn't let apps do these. |
+
+**Check lights in the app** now tells you why, if she can't reach your lights (Home access off, no homes visible to this install, or no lights among your accessories).
+
+The Shortcut prompt (Settings → Phone & Shortcut) also gained backup steps for "turn all on", "play [artist]" and FaceTime. Re-making your Shortcut with it is optional.
+
+## Orb widgets
+
+Settings → Widgets has new styles. Tap **Copy script**, then paste it into a new Scriptable script:
+
+- **Fractured · Gold, Ice, Ember, Twin shells, Ring:** just the orb, rendered by her own HD engine, no words. Tap it to wake her.
+- **StandBy clock:** a big live time over the orb. Charge the phone on its side so StandBy shows. Press and hold the widgets, tap **+**, pick **Scriptable**, then choose this script.
+
+You can also type `fractured x7` (any of x1 to x12) or `standby` into the widget's Parameter.
+
+## Keep talking in the background
+
+Settings → Voice & Talking → **Keep talking in the background**: Off, 1, 3 (default), 5 or 10 minutes. If you switch apps while you're talking with her, she keeps listening and answering for that long, then goes to sleep. Back Tap or a widget wakes her. It only runs during a conversation, uses more battery while it's on, and is new: iPhone may still pause her sooner. Settings shows how long she actually stayed awake last time.
 
 ## Voices
 
@@ -62,7 +92,7 @@ The Shortcut still handles what only it can do: Apple TV, HomePod and music, sen
 
 ### Lights test
 
-`Friday-v3.1.2-LightsTest.ipa` (and `Jarvis-v3.1.2-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
+`Friday-v3.1.3-LightsTest.ipa` (and `Jarvis-v3.1.3-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
 
 - If AltStore installs it and you allow Home access when asked, the lights run straight from the app, to the exact percent.
 - If AltStore refuses it, or Home access doesn't show up, install the regular IPA. Lights keep working through the Shortcut.

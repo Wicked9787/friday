@@ -143,6 +143,8 @@
   var ROOMS = "living room|family room|bedroom|master bedroom|guest room|kids room|kitchen|dining room|bathroom|office|hallway|hall|porch|garage|basement|den|nursery|patio|front door|back yard|backyard|outside|upstairs|downstairs|lamp";
   function parseLights(raw) {
     var t = norm(raw);
+    // "turn all on", "turn everything off", "all on", "everything off" mean the lights
+    if (/^(turn |switch )?(all|everything)( of (them|it))?( the way)? (on|off)$|^(turn |switch )(on|off) (all|everything)$|^(all|everything) (on|off)$/.test(t)) t = t + " lights";
     if (!/\b(lights?|lamps?|brightness|dim|brighten)\b/.test(t)) return null;
     if (/\b(color|colour|red|blue|green|purple|pink|orange|yellow|warm white|cool white)\b/.test(t)) return null; // colors stay with the Shortcut
     var room = (t.match(new RegExp("\\b(" + ROOMS + ")\\b")) || [])[1] || null;
@@ -160,6 +162,47 @@
     if (/^good ?night$/.test(t)) return { name: "Good Night" };
     var m = t.match(/^(?:run|start|set|turn on|activate)(?: the| my)? (.+?) scene$/) || t.match(/^(?:run|start|set|activate)(?: the| my)? scene (.+)$/) || t.match(/^scene (.+)$/);
     return m ? { name: cap(m[1]) } : null;
+  }
+
+  // ---------- music on the iPhone ----------
+  function parseMusic(raw) {
+    var t = norm(raw).replace(/[.,]/g, "");
+    // speakers, TV, other apps and volume stay with the Shortcut
+    if (/\b(home ?pods?|apple tv|tv|speakers?|airplay|spotify|youtube|pandora|volume|louder|quieter|turn (it|the music) (up|down))\b/.test(t)) return null;
+    if (/^(pause|stop)( the| my)?( music| song| track| playing| it)?$/.test(t)) return { action: "pause" };
+    if (/^(resume|unpause|continue)( the| my)?( music| song| playing)?$|^play$|^(play|start)( some| my| the)? music$/.test(t)) return { action: "play" };
+    if (/^(skip|next)( this| the)?( song| track| one)?$|^(play )?(the )?next (song|track)$|^skip it$/.test(t)) return { action: "next" };
+    if (/^(previous|go back|back|last)( a)?( song| track)?$|^(play )?(the )?(previous|last) (song|track)$/.test(t)) return { action: "previous" };
+    if (/^(restart|start over|replay)( (this|the) (song|track))?$/.test(t)) return { action: "restart" };
+    if (/^shuffle( my| all my)?( music| songs| library)?$/.test(t)) return { play: { query: "", kind: "any", shuffle: true } };
+    var m = t.match(/^(play|put on|shuffle)\s+(.+)$/);
+    if (!m) return null;
+    var q = m[2].replace(/\s+(on|from) (apple music|my library|music)$/, "").trim(), kind = "any", mm;
+    if (/^(a |the )?(game|video|movie|show|news|podcast|audiobook|radio|station)\b/.test(q)) return null;
+    if ((mm = q.match(/^(?:my |the )?(.+?) playlist$/)) || (mm = q.match(/^(?:my |the )?playlist (?:called |named )?(.+)$/))) { q = mm[1]; kind = "playlist"; }
+    else if ((mm = q.match(/^(?:the )?album (?:called |named )?(.+)$/)) || (mm = q.match(/^(?:the )?(.+?) album$/))) { q = mm[1]; kind = "album"; }
+    else if ((mm = q.match(/^(?:some |songs by |music by |something by |some songs by |some music by )(.+)$/))) { q = mm[1]; kind = "artist"; }
+    else if ((mm = q.match(/^(.+?) by (.+)$/))) { q = mm[1]; kind = "song"; }
+    else if ((mm = q.match(/^(.+?) music$/))) { q = mm[1]; kind = "artist"; }
+    q = q.replace(/^(the song |song )/, "").trim();
+    if (!q) return null;
+    return { play: { query: q, kind: kind, shuffle: m[1] === "shuffle" } };
+  }
+  var MUSIC_SAY = { pause: "Paused.", play: "Playing.", next: "Skipping.", previous: "Going back.", restart: "From the top." };
+
+  // ---------- calls ----------
+  function parseCall(raw) {
+    var t = norm(raw).replace(/[.,]/g, "");
+    var m = t.match(/^(call|phone|ring|dial|facetime|face time)\s+(.+?)(?: on (?:her|his|their|the) (?:cell|mobile|phone))?$/);
+    if (!m) return null;
+    var who = m[2].replace(/^(my|the)\s+/, "").trim();
+    if (!who || /^(me|it|that|back|an? (uber|lyft|cab|taxi))$/.test(who)) return null;
+    return { who: who, facetime: /face ?time/.test(m[1]) };
+  }
+
+  function inAppTexts() {
+    var st = (root.FridayStorage && root.FridayStorage.get("settings", {})) || {};
+    return st.textsInApp !== false;
   }
 
   /* Try to do a phone job here. Returns { say, tool } or null (use the Shortcut). */
@@ -202,15 +245,34 @@
       return { say: "Added " + ca.title + " to your calendar " + spokenWhen(ca.date) + ".", tool: "calendar" };
     }
 
+    var mu = parseMusic(raw);
+    if (mu && nat.kit && nat.kit.available()) {
+      if (mu.action) {
+        var mr = await nat.kit.music(mu.action);
+        if (!mr.ok) return null;
+        return { say: MUSIC_SAY[mu.action] || "Done.", tool: "music", playing: mu.action !== "pause" };
+      }
+      var pr = await nat.kit.play(mu.play.query, mu.play.kind, mu.play.shuffle);
+      if (!pr.ok) return null;
+      return { say: mu.play.query ? (mu.play.shuffle ? "Shuffling " : "Playing ") + (pr.title || mu.play.query) + "." : "Shuffling your music.", tool: "music", playing: true };
+    }
+
+    var cl = parseCall(raw);
+    if (cl && inAppTexts() && nat.contacts && nat.contacts.available()) {
+      var num = await nat.contacts.numberFor(cl.who);
+      if (!num) return null;
+      return { say: (cl.facetime ? "FaceTiming " : "Calling ") + num.name + ".", tool: "call", url: (cl.facetime ? "facetime://" : "tel://") + num.number };
+    }
+
     var sc = parseScene(raw);
-    if (sc && nat.home.available() && await nat.home.ready()) {
+    if (sc && nat.home.available()) {
       var s2 = await nat.home.scene(sc.name);
       if (s2.ok) return { say: (/good night/i.test(sc.name) ? "Good night." : "Running " + (s2.scene || sc.name) + "."), tool: "home" };
       return null;
     }
 
     var li = parseLights(raw);
-    if (li && nat.home.available() && await nat.home.ready()) {
+    if (li && nat.home.available()) {
       var res = await nat.home.setLights(li);
       if (!res.ok) return null;
       var where = li.room ? "The " + li.room + " lights" : "The lights";
@@ -228,6 +290,9 @@
     parseCalendarAdd: parseCalendarAdd,
     parseLights: parseLights,
     parseScene: parseScene,
+    parseMusic: parseMusic,
+    parseCall: parseCall,
+    inAppTexts: inAppTexts,
     spokenWhen: spokenWhen
   };
 })(window);
