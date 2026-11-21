@@ -205,6 +205,21 @@
           <div class="sub">Checks her key, brains, voices, vision, microphone, Shortcut name and storage. You can also say “run diagnostics”.</div>
         </div>
       </details>
+      <div class="row row-col" id="paste-key-row">
+        <label for="paste-key">Paste a key <span class="wn-tag">free brains</span></label>
+        <input type="password" id="paste-key" placeholder="Paste any AI key here" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button class="btn gold" type="button" id="btn-paste-key">Add it</button>
+        <div class="sub" id="paste-key-status">One step: she works out whose key it is (Gemini, OpenRouter, Groq, Cerebras, Mistral, GitHub…), picks a free model, tests it, and turns it on as a backup brain for when Groq is busy. Keys stay on this phone.</div>
+        <div class="sub">Get a free key:</div>
+        <div class="key-links">
+          <button class="btn mini" type="button" data-keyurl="https://aistudio.google.com/apikey">Gemini</button>
+          <button class="btn mini" type="button" data-keyurl="https://openrouter.ai/keys">OpenRouter</button>
+          <button class="btn mini" type="button" data-keyurl="https://cloud.cerebras.ai">Cerebras</button>
+          <button class="btn mini" type="button" data-keyurl="https://console.groq.com/keys">Groq</button>
+          <button class="btn mini" type="button" data-keyurl="https://console.mistral.ai/api-keys">Mistral</button>
+        </div>
+        <div class="sub">Sign in on the page that opens, make a key, copy it, come back and paste it here.</div>
+      </div>
       <details class="accord" id="accord-connections">
         <summary>Connections <span class="accord-current" id="connections-current">None</span></summary>
         <div class="accord-body">
@@ -255,6 +270,31 @@
         <button class="btn" type="button" id="btn-home-check">Check lights in the app</button>
         <div class="sub" id="home-status"></div>
       </div>
+      <details class="accord" open id="accord-aidot">
+        <summary>AiDot lights <span class="accord-current" id="aidot-current">Off</span></summary>
+        <div class="accord-body">
+          <p class="hint">Sign in with your AiDot account once and <span class="sc-assistant">Friday</span> switches your AiDot lights herself over your home Wi-Fi: on, off, exact brightness, warm or cool white, and colors. No Shortcut, no VPN. Away from home, Apple Home or your Shortcut takes over. Your password is locked in this iPhone's Keychain and never leaves it except to sign in to AiDot.</p>
+          <div id="aidot-signin">
+            <select id="aidot-country" aria-label="AiDot country"></select>
+            <input type="email" id="aidot-user" placeholder="AiDot email" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="margin-top:8px">
+            <input type="password" id="aidot-pass" placeholder="AiDot password" autocomplete="off" style="margin-top:8px">
+            <button class="btn gold" type="button" id="btn-aidot-signin">Sign in to AiDot</button>
+            <div class="sub">Use the same email and password as the AiDot app. If you made your AiDot account with Apple or Google, set a password in the AiDot app first.</div>
+          </div>
+          <div class="sub" id="aidot-status"></div>
+          <ul class="phone-list aidot-list" id="aidot-list"></ul>
+          <div id="aidot-actions" hidden>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn" type="button" id="btn-aidot-allon">All on</button>
+              <button class="btn" type="button" id="btn-aidot-alloff">All off</button>
+              <button class="btn" type="button" id="btn-aidot-refresh">Update light list</button>
+              <button class="btn" type="button" id="btn-aidot-find">Find lights on Wi-Fi</button>
+            </div>
+            <div class="sub">The first time, iPhone asks to let <span class="sc-assistant">Friday</span> find devices on your local network. Tap Allow. Added a light in AiDot? Tap Update light list.</div>
+            <button class="btn danger" type="button" id="btn-aidot-signout">Sign out of AiDot</button>
+          </div>
+        </div>
+      </details>
       <details class="accord" id="accord-backtap">
         <summary>Wake with Back Tap</summary>
         <div class="accord-body">
@@ -642,25 +682,22 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.1.4</h1>
-      <p class="wn-tag">Voice fix</p>
+      <h1>What's new in 3.2</h1>
+      <p class="wn-tag">Direct lights</p>
       <ul>
-        <li>Her voice plays even when the phone is on silent, and comes back on its own if iOS cuts it off</li>
-        <li>Batsie stays Batsie (no more "Patsy"), and she starts listening again by herself when you come back from another app</li>
-        <li>Settings → Voice &amp; Talking → Test her voice tells you exactly how it went</li>
+        <li>Sign in to AiDot once (Settings → Phone &amp; Shortcut) and she switches your lights herself over home Wi-Fi. No Shortcut, no VPN</li>
+        <li>Exact brightness, warm or cool white, and colors: “turn the bedroom lamp blue”, “lights to 40 percent”, “are the lights on?”</li>
+        <li>Away from home, Apple Home or your Shortcut takes over on its own</li>
       </ul>
-      <p class="wn-tag">In-app phone</p>
+      <p class="wn-tag">Free brains</p>
       <ul>
-        <li>She tries everything she can in the app first: lights, music on your phone, calls and texts. Your Shortcut is the backup</li>
-        <li>Orb widgets: just a fractured orb, in five colors, plus a StandBy clock for when it charges on its side</li>
-        <li>Switch apps mid-conversation and she keeps going for a few minutes, then sleeps</li>
+        <li>Paste a key (Settings → Brain &amp; Internet): she works out if it's Gemini, OpenRouter, Groq, Cerebras or Mistral, picks a free model, tests it and makes it a backup brain</li>
       </ul>
-      <p class="wn-tag">Live voice</p>
+      <p class="wn-tag">3.1</p>
       <ul>
-        <li>She hears you live: your words show up as you talk</li>
-        <li>She knows when you're done, like ChatGPT. Pause mid-thought and she waits; finish and she answers right away</li>
-        <li>Smoother, more natural voice with no robotic gaps. Friday sounds like a woman, Jarvis like a man</li>
-        <li>Neural map: everything she learns becomes a bubble connected to what it's about. Drag to turn it any way</li>
+        <li>She hears you live and knows when you're done, like ChatGPT. Smoother, natural voice: Friday sounds like a woman, Jarvis like a man</li>
+        <li>Music on your phone, calls and texts right in the app; your Shortcut is the backup and jumps straight back to her</li>
+        <li>Orb and StandBy widgets, a few minutes of talking in the background, and a neural map where everything she learns becomes a connected bubble</li>
       </ul>
       <p class="wn-tag">Since 2.0</p>
       <ul>
@@ -668,7 +705,7 @@
         <li>Several jobs in one sentence, routines, messages between Friday and Jarvis, nightly recap, spending, habits and translator</li>
         <li>Settings in pages, widget styles, Full orb and other orb-only layouts, 8 new HD looks, and a neural map that grows</li>
       </ul>
-      <p class="hint">Your Shortcut prompt got simpler (no listening step, full contact names). Updating it is optional. Settings → Phone &amp; Shortcut shows what's done in the app now.</p>
+      <p class="hint">To turn on direct lights, sign in to AiDot in Settings → Phone &amp; Shortcut. The first time, iPhone asks to let her find devices on your local network: tap Allow.</p>
       <button class="btn gold" type="button" id="btn-wn-shortcut">Show me</button>
       <button class="btn" type="button" id="btn-wn-close">Later</button>
     </div>

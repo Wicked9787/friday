@@ -423,7 +423,111 @@
     return out;
   }
 
+  // ---------- "Paste a key": figure out whose key it is, pick a free model, test it, add it ----------
+  var KEY_SHAPES = [
+    [/^AIza[0-9A-Za-z_\-]{20,}$/, ["gemini"]],
+    [/^sk-or-/, ["openrouter"]],
+    [/^gsk_/, ["groq"]],
+    [/^csk-/, ["cerebras"]],
+    [/^sk-ant-/, ["anthropic"]],
+    [/^xai-/, ["xai"]],
+    [/^(github_pat_|ghp_|gho_)/, ["github"]],
+    [/^sk-(proj|svcacct|admin)-/, ["openai"]],
+    [/^sk-[a-f0-9]{32}$/, ["deepseek", "openai"]],
+    [/^sk-/, ["openai", "deepseek"]],
+    [/^[A-Za-z0-9]{32}$/, ["mistral", "cerebras", "openrouter"]]
+  ];
+  function guessProviders(key) {
+    key = String(key || "").trim();
+    for (var i = 0; i < KEY_SHAPES.length; i++) if (KEY_SHAPES[i][0].test(key)) return KEY_SHAPES[i][1].slice();
+    return ["mistral", "openrouter", "cerebras", "gemini"];
+  }
+  // Best free models first, matched against what the provider actually lists today.
+  var FREE_PICKS = {
+    gemini: [/^gemini-flash-latest$/, /^gemini-2\.5-flash$/, /^gemini-[\d.]+-flash$/, /^gemini-[\d.]+-flash(?!.*(image|tts|live|audio|thinking|exp))/, /^gemini-flash-lite-latest$/],
+    openrouter: [/gpt-oss-120b:free$/, /gpt-oss-20b:free$/, /llama-3\.3-70b.*:free$/, /deepseek.*:free$/, /qwen.*:free$/, /gemma.*:free$/, /mistral.*:free$/, /:free$/],
+    cerebras: [/^gpt-oss-120b$/, /llama-3\.3-70b/, /qwen-3/, /llama/],
+    groq: [/^openai\/gpt-oss-120b$/, /^openai\/gpt-oss-20b$/, /^llama-3\.3-70b-versatile$/],
+    mistral: [/^mistral-small-latest$/, /^mistral-medium-latest$/, /^open-mistral-nemo/, /^mistral-small/],
+    github: [/gpt-4\.1-mini$/, /gpt-4o-mini$/]
+  };
+  function pickModels(provider, ids) {
+    var out = [], pr = PRESETS[provider] || {};
+    (FREE_PICKS[provider] || []).forEach(function (re) {
+      ids.forEach(function (id) { if (re.test(id) && out.indexOf(id) < 0) out.push(id); });
+    });
+    if (provider === "openrouter") out = out.filter(function (id) { return /:free$/.test(id); });
+    if (!out.length && pr.model) out.push(pr.model);
+    return out.slice(0, 3);
+  }
+  function uniqueName(base, list) {
+    var names = list.map(function (c) { return String(c.name || "").toLowerCase(); });
+    if (names.indexOf(base.toLowerCase()) < 0) return base;
+    for (var n = 2; n < 20; n++) if (names.indexOf((base + " " + n).toLowerCase()) < 0) return base + " " + n;
+    return base + " " + Date.now() % 1000;
+  }
+  async function addKey(rawKey, onStep) {
+    var key = String(rawKey || "").trim().replace(/^Bearer\s+/i, "").replace(/\s+/g, "");
+    if (key.length < 16) return { ok: false, reason: "short" };
+    var st = store();
+    var step = typeof onStep === "function" ? onStep : function () {};
+    var all = st.get("connections", []) || [];
+    var same = all.filter(function (c) { return c && c.type === "agent" && st.getAgentKey(c.id) === key; })[0];
+    if (same) {
+      same.backup = true;
+      st.set("connections", all);
+      return { ok: true, already: true, provider: same.provider, name: same.name, model: same.model };
+    }
+    if (key === groqKey()) return { ok: true, already: true, provider: "groq", name: "Groq", main: true };
+    var cands = guessProviders(key), lastReason = "";
+    for (var i = 0; i < cands.length; i++) {
+      var pid = cands[i], pr = PRESETS[pid];
+      if (!pr) continue;
+      step("Checking " + pr.name + "…");
+      var ids = null;
+      try { ids = await listModels(pr.style, pr.base, key); }
+      catch (e) {
+        if (/HTTP (401|403)/.test(String(e && e.message || e))) { lastReason = "auth"; continue; }
+        ids = null; // this provider doesn't list models from here; test its usual model
+      }
+      var models = ids && ids.length ? pickModels(pid, ids) : [pr.model];
+      // A Groq key with no main key yet becomes the main key.
+      if (pid === "groq" && !groqKey()) {
+        st.setApiKey(key);
+        return { ok: true, provider: "groq", name: "Groq", main: true, model: models[0] || pr.model };
+      }
+      for (var j = 0; j < models.length; j++) {
+        var agent = { id: "a" + Math.random().toString(36).slice(2, 9), name: pr.name, type: "agent", provider: pid, style: pr.style, baseUrl: pr.base, model: models[j], kind: "chat" };
+        st.setAgentKey(agent.id, key);
+        step("Testing " + pr.name + " (" + models[j] + ")…");
+        var works = false, limited = false;
+        try {
+          var out = await callAgent(agent, [{ role: "user", content: "Reply with the single word: ready" }], { max_tokens: 20, temperature: 0 });
+          works = !!String(out || "").trim();
+        } catch (e) {
+          lastReason = (e && e.kind) || "other";
+          if (lastReason === "busy" || lastReason === "daily") { works = true; limited = true; }
+        }
+        if (works) {
+          all = st.get("connections", []) || [];
+          agent.name = uniqueName(pr.name, all);
+          agent.backup = true;
+          all.push(agent);
+          st.set("connections", all);
+          return { ok: true, provider: pid, name: agent.name, model: agent.model, paid: !pr.free, limited: limited };
+        }
+        st.setAgentKey(agent.id, "");
+        if (lastReason === "auth" || lastReason === "offline") break;
+      }
+      if (lastReason === "offline") break;
+    }
+    return { ok: false, reason: lastReason || "unknown" };
+  }
+
   root.FridayBrain = {
+    addKey: addKey,
+    guessProviders: guessProviders,
+    pickModels: pickModels,
     noteUse: noteUse,
     activity: activity,
     ask: ask,

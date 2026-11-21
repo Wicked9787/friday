@@ -26,7 +26,7 @@
     { re: /\b(set|make|create|change|cancel|turn off|delete)\b.*\balarm/i, name: "alarm" },
     { re: /\balarm\b.*\b(for|at|to)\b/i, name: "alarm" },
     { re: /\b(wake me|alarm)\b/i, name: "alarm" },
-    { re: /\blights?\b/i, name: "lights" },
+    { re: /\b(lights?|lamps?|bulbs?)\b/i, name: "lights" },
     { re: /\b(brightness|dim|brighten)\b/i, name: "lights" },
     { re: /\b(apple tv|tv|television)\b/i, name: "tv" },
     { re: /\bscenes?\b/i, name: "scene" },

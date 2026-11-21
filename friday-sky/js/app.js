@@ -8,8 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.1.4";
-  var APP_LABEL = "Voice Fix";
+  var APP_VERSION = "3.2.0";
+  var APP_LABEL = "Direct Lights";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -1299,7 +1299,8 @@
     document.getElementById("btn-wn-shortcut").onclick = function () {
       done();
       openPanel("settings");
-      if (window.__fridaySettingsShow) window.__fridaySettingsShow("phone-status");
+      if (window.__fridaySettingsShow) window.__fridaySettingsShow("aidot-status");
+      setTimeout(function () { var el = document.getElementById("accord-aidot"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
     };
   }
 

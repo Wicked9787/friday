@@ -1162,3 +1162,13 @@ body.bedside-on #caption, body.bedside-on #edit-bar { visibility: hidden; }
 .wstyle .wp-orb.wp-dim img { opacity: 0.55; }
 .wstyle .wp-time { position: absolute; top: 18px; left: 0; right: 0; text-align: center; font-size: 28px; font-weight: 300; color: #efece8; letter-spacing: 0.02em; }
 .wstyle .wp-date { position: absolute; top: 52px; left: 0; right: 0; text-align: center; font-size: 9px; color: #f3dc9a; }
+
+/* AiDot lights list (3.2) */
+.aidot-list li { align-items: center; gap: 8px; }
+.aidot-list li span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.aidot-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.aidot-btns .btn.mini { margin: 0; padding: 5px 12px; font-size: 13px; min-height: 0; width: auto; }
+#aidot-signin select, #aidot-signin input { width: 100%; }
+.key-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.key-links .btn.mini { margin: 0; padding: 6px 12px; font-size: 13px; width: auto; min-height: 0; }
+#paste-key-row .wn-tag { margin-left: 8px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); opacity: 0.85; }

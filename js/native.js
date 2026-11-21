@@ -5,7 +5,8 @@
      reminders and calendar: add reminders, add events, read today's events
      battery: level and charging
      contacts: names only, kept on this phone, so texts and calls find the right person
-     home: lights to an exact brightness, on/off, scenes (works only if iOS allows it) */
+     home: lights to an exact brightness, on/off, scenes (works only if iOS allows it)
+     aidot: AiDot lights over home Wi-Fi (on/off, brightness, warm/cool white, colors) */
 (function (root) {
   "use strict";
 
@@ -252,7 +253,83 @@
     }
   };
 
+  // ---------- AiDot lights (Friday's own add-on, straight over home Wi-Fi) ----------
+  // The AiDot password and light keys live only in the iPhone's Keychain (native side).
+  // The app keeps just the light names here so she can match "the bedroom lamp".
+  function timeout(p, ms) {
+    return Promise.race([p, new Promise(function (_, rej) { setTimeout(function () { rej(new Error("timeout")); }, ms); })]);
+  }
+  function errText(e) { return String((e && (e.message || e.code || e.errorMessage)) || e || ""); }
+  var aidot = {
+    available: function () { return !!plugin("FridayAidot"); },
+    info: function () { return S().get("aidotInfo", null); },
+    lights: function () { var i = aidot.info(); return ((i && i.devices) || []).filter(function (d) { return d && d.lan !== false; }); },
+    ready: function () { var i = aidot.info(); return !!(aidot.available() && i && i.signedIn && aidot.lights().length); },
+    _save: function (r) {
+      if (r) S().set("aidotInfo", { signedIn: !!r.signedIn, user: r.user || "", country: r.country || "", devices: r.devices || [], at: r.at || Date.now(), homeNet: !!r.homeNet });
+      return r;
+    },
+    status: async function () {
+      var P = plugin("FridayAidot");
+      if (!P) return aidot.info();
+      try { return aidot._save(await P.status()); } catch (e) { return aidot.info(); }
+    },
+    signIn: async function (country, region, username, password) {
+      var P = plugin("FridayAidot");
+      if (!P) return { ok: false, reason: "app" };
+      try {
+        var r = aidot._save(await timeout(P.signIn({ country: country, region: region, username: username, password: password }), 40000));
+        fire("friday:aidot", { signedIn: true });
+        return { ok: true, status: r };
+      } catch (e) { return { ok: false, reason: errText(e) }; }
+    },
+    signOut: async function () {
+      var P = plugin("FridayAidot");
+      S().set("aidotInfo", { signedIn: false, devices: [] });
+      if (P) { try { await P.signOut(); } catch (e) {} }
+      fire("friday:aidot", { signedIn: false });
+    },
+    refresh: async function () {
+      var P = plugin("FridayAidot");
+      if (!P) return { ok: false, reason: "app" };
+      try { var r = aidot._save(await timeout(P.refresh(), 40000)); return { ok: true, status: r }; }
+      catch (e) { return { ok: false, reason: errText(e) }; }
+    },
+    find: async function () {
+      var P = plugin("FridayAidot");
+      if (!P) return { ok: false, reason: "app" };
+      try { var r = await timeout(P.find(), 15000); await aidot.status(); return { ok: true, found: r.found || 0, total: r.total || 0, reason: r.reason || "" }; }
+      catch (e) { return { ok: false, reason: errText(e) }; }
+    },
+    // opts: { on, brightness (0-100), cct (kelvin), rgb: [r,g,b] }. ids [] = every light.
+    control: async function (ids, opts) {
+      var P = plugin("FridayAidot");
+      if (!P) return { ok: false, reason: "app", done: [], failed: [] };
+      opts = opts || {};
+      var args = { ids: ids || [] };
+      if (opts.on != null) args.on = !!opts.on;
+      if (opts.brightness != null) args.brightness = Math.round(opts.brightness);
+      if (opts.cct != null) args.cct = Math.round(opts.cct);
+      if (opts.rgb) args.rgb = opts.rgb;
+      try {
+        var r = await timeout(P.control(args), 10000);
+        var done = (r && r.done) || [], failed = (r && r.failed) || [];
+        return { ok: done.length > 0, done: done, failed: failed, away: !!(r && r.away), reason: failed[0] ? failed[0].reason : "" };
+      } catch (e) { return { ok: false, done: [], failed: [], reason: errText(e) }; }
+    },
+    state: async function (ids) {
+      var P = plugin("FridayAidot");
+      if (!P) return { ok: false, done: [], failed: [] };
+      try {
+        var r = await timeout(P.state({ ids: ids || [] }), 10000);
+        var done = (r && r.done) || [];
+        return { ok: done.length > 0, done: done, failed: (r && r.failed) || [], away: !!(r && r.away) };
+      } catch (e) { return { ok: false, done: [], failed: [], reason: errText(e) }; }
+    }
+  };
+
   root.FridayNative = {
+    aidot: aidot,
     kit: kit,
     isApp: function () { return !!cap(); },
     notify: notify,

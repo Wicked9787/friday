@@ -19,10 +19,11 @@
     "@ebarooni/capacitor-calendar": "^8.0.0",
     "friday-home": "file:./plugins/friday-home",
     "friday-listen": "file:./plugins/friday-listen",
-    "friday-kit": "file:./plugins/friday-kit"
+    "friday-kit": "file:./plugins/friday-kit",
+    "friday-aidot": "file:./plugins/friday-aidot"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0"
   },
-  "appVersion": "3.1.4"
+  "appVersion": "3.2.0"
 }

@@ -1,19 +1,63 @@
-# Friday and Jarvis 3.1.4 · Voice Fix
+# Friday and Jarvis 3.2.0 · Direct Lights
 
-Coming from 2.0? This one install has everything from 3.0 through 3.1.4. Your memory and settings carry over.
+Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.2.0. Your memory and settings carry over. Install it over the old one in AltStore.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.1.4-VoiceFix.ipa` | Friday 3.1.4 for Sky. |
-| `Jarvis-v3.1.4-VoiceFix.ipa` | **Install this one.** Jarvis 3.1.4 for Batsie. |
-| `…-LightsTest.ipa` | The same app plus Apple Home permission, so lights can run straight from the app. Try it first; if AltStore won't take it, use the regular one. |
+| `Friday-v3.2.0-DirectLights.ipa` | Friday 3.2.0 for Sky. |
+| `Jarvis-v3.2.0-DirectLights.ipa` | **Install this one.** Jarvis 3.2.0 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Backup & About).
 
-## Voice fix (new in 3.1.4)
+## Direct lights with AiDot (new in 3.2)
+
+Your AiDot (Leedarson) lights can now be switched straight from the app over your home Wi-Fi. No Shortcut, no Apple Home permission, no VPN.
+
+**Set it up once:**
+
+1. Make sure your lights are in the **AiDot app** and work there.
+2. In the app: Settings → **Phone & Shortcut** → **AiDot lights**. Pick your country, type your AiDot email and password, tap **Sign in to AiDot**.
+3. Your lights show up in a list. Tap a light's **On** button. The first time, iPhone asks to let the app find devices on your local network: tap **Allow**.
+
+**Then just say:**
+
+| Say | What happens |
+|---|---|
+| "Turn on the lights" / "Turn all off" | Every AiDot light |
+| "Turn off the bedroom lamp" | Just the light whose name or room matches |
+| "Lights to 40 percent" / "Dim the desk lamp" | Exact brightness |
+| "Turn the bedroom lamp blue" | Colors on color bulbs (red, orange, yellow, green, teal, blue, purple, pink and more) |
+| "Make the lights warm white" / "daylight" / "2700 kelvin" | White shades |
+| "Are the lights on?" / "Is the bedroom lamp on?" | She checks the lights and tells you |
+
+**Good to know:**
+
+- **Your password stays locked** in the iPhone's Keychain. The app's own storage, backups and chat never see it. Sign out removes it.
+- **At home only.** She talks to the lights over your home Wi-Fi. Away from home (or on another Wi-Fi), she hands the job to Apple Home or your Shortcut right away, like before.
+- **A light she doesn't know** (for example a light that's only in Apple Home) still goes to Apple Home or your Shortcut.
+- **If a light doesn't answer** (switched off at the wall), she says which one. **Find lights on Wi-Fi** looks for lights that got a new address. Added a light in AiDot? Tap **Update light list**.
+- Use the same email and password as the AiDot app. If you made the AiDot account with Apple or Google sign-in, set a password in the AiDot app first.
+- Your lights can stay in Apple Home too. AiDot and Apple Home both keep working.
+
+## Paste a key: free backup brains (new in 3.2)
+
+Settings → **Brain & Internet** → **Paste a key**. Paste any AI key and tap **Add it**. She works out whose key it is, picks a free model that service offers today, tests it, and turns it on as a **backup brain**: when Groq hits its free limit, she switches to it by herself.
+
+| Key starts with | Service | Free? |
+|---|---|---|
+| `AIza…` | Google Gemini | Free tier |
+| `sk-or-…` | OpenRouter | Free models |
+| `gsk_…` | Groq (becomes your main key if you don't have one) | Free |
+| `csk-…` | Cerebras | Free tier |
+| 32 letters and numbers | Mistral | Free tier |
+| `github_pat_…` | GitHub Models | Free |
+
+The buttons under the box open each service's key page: sign in, make a key, copy it, come back and paste it. Paid keys (ChatGPT, Claude, Grok, DeepSeek) work too, but she asks first because they can cost money. You can also say "ask Gemini …" once it's added. Keys stay on this phone.
+
+## Voice fix (3.1.4)
 
 - **Her voice plays even on silent.** The AI voice is now marked as playback (like music or Siri), so silent mode doesn't mute her. While she talks, other music pauses and then carries on.
 - **If iOS cuts her sound off** (after the mic, a call or another app), she notices within a moment, rebuilds her audio and keeps going. If that doesn't work, she finishes the sentence with the iPhone voice instead of going silent.
@@ -102,7 +146,7 @@ These used to go through the Shortcut. Now the app does them itself, using built
 
 The Shortcut still handles what only it can do: Apple TV, HomePod and music, sending texts, calls, alarms, Do Not Disturb and opening the Camera. Settings → Phone & Shortcut shows a live list of what's done where.
 
-### Lights test
+### Lights test (3.1)
 
 `Friday-v3.1.4-LightsTest.ipa` (and `Jarvis-v3.1.4-LightsTest.ipa`) is the same app, plus permission for Apple Home. Install it with AltStore:
 

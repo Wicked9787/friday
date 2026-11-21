@@ -1,0 +1,13 @@
+{
+  "name": "friday-aidot",
+  "version": "1.0.0",
+  "description": "Friday's AiDot lights add-on: signs in to AiDot once, then controls your AiDot (Leedarson) lights straight over home Wi-Fi.",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift", "FridayAidot.podspec"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

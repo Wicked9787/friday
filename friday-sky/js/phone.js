@@ -141,21 +141,99 @@
 
   // ---------- lights and scenes ----------
   var ROOMS = "living room|family room|bedroom|master bedroom|guest room|kids room|kitchen|dining room|bathroom|office|hallway|hall|porch|garage|basement|den|nursery|patio|front door|back yard|backyard|outside|upstairs|downstairs|lamp";
+  // Colors she can set on AiDot lights. White shades are color temperature (kelvin).
+  var COLORS = {
+    red: [255, 0, 0], orange: [255, 110, 0], yellow: [255, 200, 0], gold: [255, 170, 20], green: [0, 255, 40],
+    lime: [150, 255, 0], teal: [0, 200, 170], cyan: [0, 220, 255], aqua: [0, 220, 255], blue: [0, 60, 255],
+    "light blue": [90, 170, 255], "sky blue": [90, 170, 255], navy: [0, 20, 160], purple: [150, 0, 255],
+    violet: [130, 40, 255], lavender: [180, 140, 255], magenta: [255, 0, 200], pink: [255, 70, 160],
+    "hot pink": [255, 20, 140], rose: [255, 60, 110], peach: [255, 150, 90], coral: [255, 100, 70], amber: [255, 140, 0]
+  };
+  var WHITES = { "warm white": 2700, "soft white": 2700, "warm": 2700, "candle": 2200, "candlelight": 2200, "neutral white": 4000, "white": 4000, "natural white": 4000, "cool white": 5500, "cool": 5500, "bright white": 5000, "daylight": 6500, "day light": 6500 };
+  function colorIn(t) {
+    var names = Object.keys(COLORS).sort(function (a, b) { return b.length - a.length; });
+    for (var i = 0; i < names.length; i++) if (new RegExp("\\b" + names[i] + "\\b").test(t)) return { name: names[i], rgb: COLORS[names[i]].slice() };
+    var whites = Object.keys(WHITES).sort(function (a, b) { return b.length - a.length; });
+    for (var j = 0; j < whites.length; j++) if (new RegExp("\\b" + whites[j] + "\\b").test(t)) return { name: whites[j] === "warm" ? "warm white" : whites[j] === "cool" ? "cool white" : whites[j], cct: WHITES[whites[j]] };
+    var k = t.match(/\b(\d{4})\s*k(?:elvin)?\b/);
+    if (k) return { name: k[1] + " kelvin", cct: parseInt(k[1], 10) };
+    return null;
+  }
   function parseLights(raw) {
     var t = norm(raw);
     // "turn all on", "turn everything off", "all on", "everything off" mean the lights
     if (/^(turn |switch )?(all|everything)( of (them|it))?( the way)? (on|off)$|^(turn |switch )(on|off) (all|everything)$|^(all|everything) (on|off)$/.test(t)) t = t + " lights";
-    if (!/\b(lights?|lamps?|brightness|dim|brighten)\b/.test(t)) return null;
-    if (/\b(color|colour|red|blue|green|purple|pink|orange|yellow|warm white|cool white)\b/.test(t)) return null; // colors stay with the Shortcut
+    if (!/\b(lights?|lamps?|bulbs?|brightness|dim|brighten)\b/.test(t)) return null;
+    if (/^(are|is|were)\b|\?$/.test(t)) return null; // questions are handled by parseLightQuestion
     var room = (t.match(new RegExp("\\b(" + ROOMS + ")\\b")) || [])[1] || null;
-    var pct = t.match(/(\d{1,3})\s*(?:%|percent)/) || t.match(/\bto (\d{1,3})\b/);
+    var out = { room: room, words: t };
+    var color = colorIn(t.replace(/\bwarm(er)? up\b/, ""));
+    if (color) out.color = color;
+    var pct = t.match(/(\d{1,3})\s*(?:%|percent)/) || t.match(/\bto (\d{1,3})\b(?!\s*k\b)/);
     var b = pct ? Math.max(0, Math.min(100, parseInt(pct[1], 10))) : null;
-    if (b != null) return { room: room, brightness: b };
-    if (/\b(off)\b/.test(t)) return { room: room, on: false };
-    if (/\bdim\b/.test(t)) return { room: room, brightness: 30 };
-    if (/\b(brighten|full|all the way up|max)\b/.test(t)) return { room: room, brightness: 100 };
-    if (/\bon\b/.test(t)) return { room: room, on: true };
+    if (b != null) { out.brightness = b; return out; }
+    if (/\b(off)\b/.test(t)) { out.on = false; delete out.color; return out; }
+    if (/\bdim\b/.test(t)) { out.brightness = 30; return out; }
+    if (/\b(brighten|full|all the way up|max)\b/.test(t)) { out.brightness = 100; return out; }
+    if (/\bon\b/.test(t) || color) { out.on = true; return out; }
     return null;
+  }
+  // "are the lights on?", "is the bedroom lamp on"
+  function parseLightQuestion(raw) {
+    var t = norm(raw);
+    if (!/^(are|is)\b/.test(t) || !/\b(lights?|lamps?|bulbs?)\b/.test(t) || !/\b(on|off)\b/.test(t)) return null;
+    return { words: t };
+  }
+
+  // Which AiDot lights the words mean. Returns { ids, list, all } or null (not one of hers).
+  var LIGHT_STOP = "turn switch set make put get the my a an on off light lights please to at percent all everything of in up down dim dimmer brighten brighter brightness bright full max way color colour and them it its can you could would hey friday jarvis now for me again back too also just quick little bit some more less lower higher half is are were k kelvin white warm cool soft neutral natural daylight day candle candlelight bulb bulbs".split(" ");
+  function lightWords(s) {
+    return String(s || "").toLowerCase().replace(/[’']s\b/g, "").replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(Boolean).map(function (w) {
+      return w.length > 3 && /s$/.test(w) && !/ss$/.test(w) ? w.slice(0, -1) : w;
+    });
+  }
+  function pickAidot(words, lights) {
+    lights = lights || [];
+    if (!lights.length) return null;
+    var colorWords = Object.keys(COLORS).join(" ").split(" ");
+    var asked = lightWords(words).filter(function (w) { return LIGHT_STOP.indexOf(w) < 0 && colorWords.indexOf(w) < 0 && !/^\d+k?$/.test(w); });
+    if (!asked.length) return { ids: [], list: lights, all: true };
+    var best = 0, scored = lights.map(function (d) {
+      var own = lightWords((d.name || "") + " " + (d.room || ""));
+      var s = 0;
+      asked.forEach(function (w) { if (own.indexOf(w) >= 0) s++; });
+      var nm = lightWords(d.name).join(" ");
+      if (nm && (" " + lightWords(words).join(" ") + " ").indexOf(" " + nm + " ") >= 0) s += 5;
+      if (s > best) best = s;
+      return { d: d, s: s };
+    });
+    if (!best) return null;
+    var list = scored.filter(function (x) { return x.s === best; }).map(function (x) { return x.d; });
+    return { ids: list.map(function (d) { return d.id; }), list: list, all: list.length === lights.length && lights.length > 1 };
+  }
+  function lightLabel(pick, li) {
+    if (pick.all || !pick.list.length) return { text: li && li.room ? "The " + li.room + " lights" : "The lights", many: true };
+    if (pick.list.length === 1) return { text: pick.list[0].name || "The light", many: false };
+    var rm = li && li.room ? lightWords(li.room).join(" ") : "";
+    var allInRoom = rm && pick.list.every(function (d) { return (" " + lightWords((d.name || "") + " " + (d.room || "")).join(" ") + " ").indexOf(" " + rm + " ") >= 0; });
+    if (allInRoom) return { text: "The " + li.room + " lights", many: true };
+    if (pick.list.length > 3) return { text: pick.list.length + " lights", many: true };
+    return { text: join(pick.list.map(function (d) { return d.name; })), many: true };
+  }
+  function lightLine(label, li) {
+    var be = label.many ? " are " : " is ";
+    if (li.color && li.brightness != null && li.brightness > 0) return label.text + be + li.color.name + " at " + li.brightness + " percent.";
+    if (li.color) return label.text + be + "now " + li.color.name + ".";
+    if (li.brightness != null) return li.brightness === 0 ? label.text + be + "off." : label.text + be + "at " + li.brightness + " percent.";
+    return label.text + be + (li.on ? "on." : "off.");
+  }
+  function aidotOpts(li) {
+    var o = {};
+    if (li.on != null) o.on = li.on;
+    if (li.brightness != null) o.brightness = li.brightness;
+    if (li.color && li.color.rgb) o.rgb = li.color.rgb;
+    if (li.color && li.color.cct) o.cct = li.color.cct;
+    return o;
   }
   function parseScene(raw) {
     var t = norm(raw);
@@ -271,13 +349,49 @@
       return null;
     }
 
+    // AiDot lights first (straight over home Wi-Fi), then Apple Home in the app, then the Shortcut.
+    var ad = nat.aidot && nat.aidot.ready() ? nat.aidot : null;
+    var lq = parseLightQuestion(raw);
+    if (lq && ad) {
+      var qp = pickAidot(lq.words, ad.lights());
+      if (qp) {
+        var st = await ad.state(qp.ids);
+        if (st.ok) {
+          var known = st.done.filter(function (d) { return d.on != null; });
+          if (known.length === 1 && qp.list.length === 1) {
+            var k1 = known[0];
+            return { say: (k1.name || "The light") + (k1.on ? " is on" + (k1.brightness != null ? " at " + k1.brightness + " percent." : ".") : " is off."), tool: "home", via: "aidot" };
+          }
+          if (known.length) {
+            var onList = known.filter(function (d) { return d.on; });
+            var say = !onList.length ? (known.length > 1 ? "All " + known.length + " lights are off." : "It's off.")
+              : onList.length === known.length ? (known.length > 1 ? "All " + known.length + " lights are on." : (onList[0].name || "It") + " is on.")
+              : onList.length + " of " + known.length + " lights are on: " + join(onList.slice(0, 4).map(function (d) { return d.name; })) + ".";
+            return { say: say, tool: "home", via: "aidot" };
+          }
+        }
+      }
+    }
+
     var li = parseLights(raw);
-    if (li && nat.home.available()) {
-      var res = await nat.home.setLights(li);
+    if (li && ad) {
+      var pick = pickAidot(li.words, ad.lights());
+      if (pick) {
+        var ar = await ad.control(pick.ids, aidotOpts(li));
+        if (ar.ok) {
+          var line = lightLine(lightLabel(pick, li), li);
+          var missed = ar.failed.map(function (f) { return f.name; }).filter(Boolean);
+          if (missed.length) line = line.replace(/\.$/, "") + ", except " + join(missed.slice(0, 3)) + ", which didn't answer.";
+          return { say: line, tool: "home", via: "aidot" };
+        }
+      }
+    }
+    if (li && !li.color && nat.home.available()) {
+      var res = await nat.home.setLights({ room: li.room, on: li.on, brightness: li.brightness });
       if (!res.ok) return null;
       var where = li.room ? "The " + li.room + " lights" : "The lights";
-      var line = li.brightness != null ? (li.brightness === 0 ? where + " are off." : where + " are at " + li.brightness + " percent.") : (li.on ? where + " are on." : where + " are off.");
-      return { say: line, tool: "home" };
+      var line2 = li.brightness != null ? (li.brightness === 0 ? where + " are off." : where + " are at " + li.brightness + " percent.") : (li.on ? where + " are on." : where + " are off.");
+      return { say: line2, tool: "home" };
     }
     return null;
   }
@@ -289,6 +403,10 @@
     parseCalendarQuery: parseCalendarQuery,
     parseCalendarAdd: parseCalendarAdd,
     parseLights: parseLights,
+    parseLightQuestion: parseLightQuestion,
+    pickAidot: pickAidot,
+    lightLine: lightLine,
+    lightLabel: lightLabel,
     parseScene: parseScene,
     parseMusic: parseMusic,
     parseCall: parseCall,

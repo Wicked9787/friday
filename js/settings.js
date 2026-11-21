@@ -427,8 +427,12 @@
     var key = document.getElementById("set-key");
     var mask = document.getElementById("key-mask");
     function keyPh() { key.placeholder = root.FridayStorage.hasApiKey() ? "Key saved. Paste a new one to replace it." : "Paste your Groq key"; }
-    keyPh();
-    mask.textContent = root.FridayStorage.hasApiKey() ? "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
+    function syncKey() {
+      keyPh();
+      mask.textContent = root.FridayStorage.hasApiKey() ? "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
+    }
+    this._syncKey = syncKey;
+    syncKey();
     document.getElementById("btn-key-save").onclick = function () {
       if (!key.value.trim()) { self.onToast("Paste a new key first."); return; }
       root.FridayStorage.setApiKey(key.value);
@@ -746,6 +750,7 @@
       var hi = root.FridayStorage.get("homeInfo", null);
       var homeOk = !!(app && N.home.available() && N.home._status && N.home._status.ok);
       var kitOk = !!(app && N.kit && N.kit.available());
+      var aidotOk = !!(app && N.aidot && N.aidot.ready());
       var texts = (self.values || {}).textsInApp !== false;
       var rows = [
         ["Timers ring when closed", app && N.notify.available() ? (N.notify.allowed() ? "In the app" : "Turn on notifications") : "Shortcut", app && N.notify.allowed()],
@@ -753,7 +758,8 @@
         ["Calendar", app && N.calendar.available() ? "In the app" : "Shortcut", app && N.calendar.available()],
         ["Battery", app ? "In the app" : "Shortcut", app],
         ["Contacts", app && N.contacts.names().length ? N.contacts.names().length + " synced" : "Not synced", app && N.contacts.names().length],
-        ["Lights and scenes", homeOk ? "In the app" + (hi ? " (" + hi.lights + " lights)" : "") : (app && N.home.available() ? "App first, then Shortcut" : "Shortcut"), homeOk],
+        ["AiDot lights", aidotOk ? "In the app (" + N.aidot.lights().length + " lights, home Wi-Fi)" : (app && N.aidot && N.aidot.available() ? "Sign in below" : "Shortcut"), aidotOk],
+        ["Apple Home lights and scenes", homeOk ? "In the app" + (hi ? " (" + hi.lights + " lights)" : "") : (app && N.home.available() ? "App first, then Shortcut" : "Shortcut"), homeOk],
         ["Opening apps (Music, Spotify…)", app ? "In the app" : "Shortcut", app],
         ["Music on this iPhone", kitOk ? "App first, then Shortcut" : "Shortcut", kitOk],
         ["Calls", kitOk && texts && N.contacts.available() ? "In the app (you confirm)" : "Shortcut", kitOk && texts],
@@ -797,6 +803,128 @@
         refreshPhone();
       });
     };
+
+    // AiDot lights: sign in once, then she controls them over home Wi-Fi
+    var AIDOT_COUNTRIES = [["Afghanistan","jp"],["Albania","eu"],["Anguilla","us"],["Antigua and Barbuda","us"],["Argentina","us"],["Armenia","jp"],["Australia","jp"],["Austria","eu"],["Azerbaijan","jp"],["Bahamas","us"],["Bahrain","jp"],["Bangladesh","jp"],["Barbados","us"],["Belgium","eu"],["Belize","us"],["Bermuda","us"],["Bhutan","jp"],["Bolivia","us"],["Brazil","us"],["Brunei","jp"],["Bulgaria","eu"],["Cambodia","jp"],["Canada","us"],["Cayman Islands","us"],["Chile","us"],["Colombia","us"],["Costa Rica","us"],["Croatia","eu"],["Cuba","us"],["Cyprus","jp"],["Czech Republic","eu"],["Denmark","eu"],["Dominican Republic","us"],["Ecuador","us"],["El Salvador","us"],["Estonia","eu"],["Finland","eu"],["France","eu"],["French Guiana","us"],["Georgia","jp"],["Germany","eu"],["Greece","eu"],["Grenada","us"],["Guatemala","us"],["Guyana","us"],["Haiti","us"],["Honduras","us"],["Hungary","eu"],["Iceland","eu"],["India","jp"],["Indonesia","jp"],["Iran","jp"],["Iraq","jp"],["Ireland","eu"],["Israel","eu"],["Italy","eu"],["Jamaica","us"],["Japan","jp"],["Jordan","jp"],["Kazakhstan","jp"],["Korea","jp"],["Kuwait","jp"],["Kyrgyzstan","jp"],["Laos","jp"],["Latvia","eu"],["Lebanon","jp"],["Liechtenstein","eu"],["Lithuania","eu"],["Luxembourg","eu"],["Malaysia","jp"],["Maldives","jp"],["Malta","eu"],["Mexico","us"],["Moldova","eu"],["Monaco","eu"],["Mongolia","jp"],["Montenegro","eu"],["Montserrat","us"],["Myanmar","jp"],["Nepal","jp"],["Netherlands","eu"],["New Zealand","jp"],["Nicaragua","us"],["North Korea","jp"],["North Macedonia","eu"],["Norway","eu"],["Oman","jp"],["Pakistan","jp"],["Palestine","jp"],["Panama","us"],["Paraguay","us"],["Peru","us"],["Philippines","jp"],["Poland","eu"],["Portugal","eu"],["Qatar","jp"],["Romania","eu"],["Russia","eu"],["San Marino","eu"],["Saudi Arabia","jp"],["Serbia","eu"],["Singapore","jp"],["Slovakia","eu"],["Slovenia","eu"],["Spain","eu"],["Sri Lanka","jp"],["St.Kitts and Nevis","us"],["St.Lucia","us"],["St.Vincent and the Grenadines","us"],["Suriname","us"],["Sweden","eu"],["Switzerland","eu"],["Syria","jp"],["Tajikistan","jp"],["Thailand","jp"],["Togo","jp"],["Trinidad and Tobago","us"],["Turkey","eu"],["Turkmenistan","jp"],["Turks & Caicos","us"],["Ukraine","eu"],["United Arab Emirates","jp"],["United Kingdom","eu"],["United States","us"],["Uruguay","us"],["Uzbekistan","jp"],["Venezuela","us"],["Vietnam","jp"],["Virgin Islands","us"],["Yemen","jp"]];
+    function aidotReason(r) {
+      r = String(r || "");
+      if (/wrong-password|560080/.test(r)) return "AiDot says that email or password isn't right.";
+      if (/network|offline|URLError/i.test(r)) return "Couldn't reach AiDot. Check your internet and try again.";
+      if (/^missing/.test(r)) return "Type your AiDot email and password.";
+      if (/^app$/.test(r)) return "AiDot lights work in the installed app.";
+      if (/no-wifi/.test(r)) return "You're not on Wi-Fi. Lights are switched over your home Wi-Fi.";
+      if (/away/.test(r)) return "You're on a different Wi-Fi than home, so Apple Home or your Shortcut handles lights here.";
+      if (/unreachable|timeout|not-found/.test(r)) return "The light didn't answer on this Wi-Fi. If iPhone asked about Local Network, tap Allow (or turn it on in iPhone Settings → " + ((self.profile && self.profile.assistantName) || "Friday") + " → Local Network), then try again. Make sure you're on your home Wi-Fi.";
+      if (/login-/.test(r)) return "The light said no to the sign-in. Tap Update light list, then try again.";
+      if (/signed-out/.test(r)) return "Sign in to AiDot first.";
+      return "Something went wrong (" + r.slice(0, 80) + ").";
+    }
+    function syncAidot() {
+      var A = N && N.aidot;
+      var info = A ? A.info() : null;
+      var signed = !!(info && info.signedIn);
+      var lights = A ? A.lights() : [];
+      var cur = document.getElementById("aidot-current");
+      if (cur) cur.textContent = !A || !A.available() ? "In the app" : signed ? lights.length + (lights.length === 1 ? " light" : " lights") : "Off";
+      var si = document.getElementById("aidot-signin");
+      if (si) si.hidden = signed;
+      var act = document.getElementById("aidot-actions");
+      if (act) act.hidden = !signed;
+      if (signed) setText("aidot-status", "Signed in as " + (info.user || "you") + (info.country ? " (" + info.country + ")" : "") + ". " + (lights.length ? "Say things like “turn the " + (lights[0].room || lights[0].name || "bedroom").toLowerCase() + " light blue” or “lights to 40 percent”." : "No lights in this AiDot account yet. Add them in the AiDot app, then tap Update light list."));
+      else if (!A || !A.available()) setText("aidot-status", "AiDot lights work in the installed app.");
+      var ul = document.getElementById("aidot-list");
+      if (!ul) return;
+      ul.innerHTML = "";
+      if (!signed) return;
+      lights.forEach(function (d) {
+        var li = document.createElement("li");
+        li.className = "inapp";
+        var a = document.createElement("span");
+        a.textContent = d.name + (d.room ? " · " + d.room : "") + (d.rgb ? " · color" : d.cct ? " · white shades" : "");
+        var b = document.createElement("span");
+        b.className = "aidot-btns";
+        [["On", { on: true }], ["Off", { on: false }]].forEach(function (x) {
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn mini";
+          btn.textContent = x[0];
+          btn.onclick = function () {
+            setText("aidot-status", "Switching " + d.name + "…");
+            A.control([d.id], x[1]).then(function (r) {
+              setText("aidot-status", r.ok ? d.name + " is " + (x[1].on ? "on." : "off.") : aidotReason(r.reason));
+            });
+          };
+          b.appendChild(btn);
+        });
+        li.appendChild(a); li.appendChild(b); ul.appendChild(li);
+      });
+    }
+    var ac = document.getElementById("aidot-country");
+    if (ac && !ac.options.length) {
+      AIDOT_COUNTRIES.forEach(function (c) {
+        var o = document.createElement("option");
+        o.value = c[0]; o.textContent = c[0]; o.setAttribute("data-region", c[1]);
+        ac.appendChild(o);
+      });
+      ac.value = (N && N.aidot && N.aidot.info() && N.aidot.info().country) || "United States";
+    }
+    var asb = document.getElementById("btn-aidot-signin");
+    if (asb) asb.onclick = function () {
+      var A = N && N.aidot;
+      if (!A || !A.available()) { setText("aidot-status", aidotReason("app")); return; }
+      var u = String((document.getElementById("aidot-user") || {}).value || "").trim();
+      var pe = document.getElementById("aidot-pass");
+      var pw = String((pe || {}).value || "");
+      if (!u || !pw) { setText("aidot-status", aidotReason("missing")); return; }
+      var opt = ac && ac.options[ac.selectedIndex];
+      var country = opt ? opt.value : "United States", region = opt ? opt.getAttribute("data-region") : "us";
+      asb.disabled = true;
+      setText("aidot-status", "Signing in to AiDot…");
+      A.signIn(country, region, u, pw).then(function (r) {
+        asb.disabled = false;
+        if (pe) pe.value = "";
+        if (!r.ok) { setText("aidot-status", aidotReason(r.reason)); return; }
+        var ue = document.getElementById("aidot-user"); if (ue) ue.value = "";
+        syncAidot();
+        refreshPhone();
+        self.onToast("AiDot connected: " + A.lights().length + " lights.");
+      });
+    };
+    function aidotAll(on) {
+      var A = N && N.aidot;
+      if (!A) return;
+      setText("aidot-status", on ? "Turning all on…" : "Turning all off…");
+      A.control([], { on: on }).then(function (r) {
+        if (!r.ok) { setText("aidot-status", aidotReason(r.reason)); return; }
+        var miss = r.failed.map(function (f) { return f.name; }).filter(Boolean);
+        setText("aidot-status", r.done.length + " light" + (r.done.length === 1 ? "" : "s") + (on ? " on." : " off.") + (miss.length ? " Didn't answer: " + miss.join(", ") + "." : ""));
+      });
+    }
+    var aon = document.getElementById("btn-aidot-allon"); if (aon) aon.onclick = function () { aidotAll(true); };
+    var aoff = document.getElementById("btn-aidot-alloff"); if (aoff) aoff.onclick = function () { aidotAll(false); };
+    var arf = document.getElementById("btn-aidot-refresh");
+    if (arf) arf.onclick = function () {
+      setText("aidot-status", "Updating your lights from AiDot…");
+      N.aidot.refresh().then(function (r) { syncAidot(); refreshPhone(); if (!r.ok) setText("aidot-status", aidotReason(r.reason)); });
+    };
+    var afd = document.getElementById("btn-aidot-find");
+    if (afd) afd.onclick = function () {
+      setText("aidot-status", "Looking for your lights on this Wi-Fi…");
+      N.aidot.find().then(function (r) {
+        syncAidot();
+        if (!r.ok) setText("aidot-status", aidotReason(r.reason));
+        else if (r.reason) setText("aidot-status", aidotReason(r.reason));
+        else setText("aidot-status", "Found " + r.found + " of " + r.total + " lights on this Wi-Fi." + (r.found < r.total ? " Lights that are switched off at the wall can't answer." : ""));
+      });
+    };
+    var aso = document.getElementById("btn-aidot-signout");
+    if (aso) aso.onclick = function () {
+      if (!confirm("Sign out of AiDot on this phone? Lights go back to Apple Home and your Shortcut.")) return;
+      N.aidot.signOut().then(function () { syncAidot(); refreshPhone(); setText("aidot-status", "Signed out. Your AiDot password was removed from this phone."); });
+    };
+    root.addEventListener("friday:aidot", function () { syncAidot(); refreshPhone(); });
+    syncAidot();
+    if (N && N.aidot && N.aidot.available()) N.aidot.status().then(function () { syncAidot(); refreshPhone(); });
 
     // contacts
     function syncContactsUi() {
@@ -1356,6 +1484,43 @@
         }
       };
     }
+    // "Paste a key": one box, she does the rest
+    var pkBtn = document.getElementById("btn-paste-key");
+    var pkIn = document.getElementById("paste-key");
+    function pkSay(t) { var e = document.getElementById("paste-key-status"); if (e) e.textContent = t; }
+    var PAID = { anthropic: 1, openai: 1, xai: 1, deepseek: 1 };
+    if (pkBtn && pkIn) pkBtn.onclick = function () {
+      var B = root.FridayBrain;
+      var key = String(pkIn.value || "").trim();
+      if (!B || !B.addKey) return;
+      if (key.length < 16) { pkSay("That doesn't look like a whole key. Copy the full key and paste it again."); return; }
+      var first = B.guessProviders(key)[0];
+      if (PAID[first] && !confirm("This looks like a paid " + ((B.PRESETS[first] || {}).name || "AI") + " key, so using it can cost money. Add it anyway?")) return;
+      pkBtn.disabled = true;
+      pkSay("Working out whose key this is…");
+      B.addKey(key, pkSay).then(function (r) {
+        pkBtn.disabled = false;
+        if (r.ok) {
+          pkIn.value = "";
+          renderList();
+          if (self._syncBrain) self._syncBrain();
+          if (self._syncKey) self._syncKey();
+          var msg = r.main ? "That's a Groq key. It's now her main key."
+            : r.already ? (r.name + " is already added. It's on as a backup brain.")
+            : r.name + " is added and on as a backup brain (model " + r.model + ")." + (r.limited ? " It's at its limit right now, so it starts helping once that resets." : "") + (r.paid ? " This one is paid." : "") + " You can also say “ask " + r.name + " …”.";
+          pkSay(msg);
+          self.onToast(r.main ? "Groq key saved." : (r.name + " added as a backup brain."));
+        } else {
+          pkSay(r.reason === "auth" ? "No AI service accepted that key. Check you copied all of it, or make a new key."
+            : r.reason === "offline" ? "Couldn't reach the internet. Try again when you're online."
+            : r.reason === "short" ? "That doesn't look like a whole key."
+            : "That key didn't work with any free service she knows (" + r.reason + "). You can still add it by hand under Connections.");
+        }
+      });
+    };
+    document.querySelectorAll("[data-keyurl]").forEach(function (b) {
+      b.onclick = function () { try { window.open(b.getAttribute("data-keyurl"), "_blank"); } catch (e) { location.href = b.getAttribute("data-keyurl"); } };
+    });
     renderIcons();
     renderList();
   };
