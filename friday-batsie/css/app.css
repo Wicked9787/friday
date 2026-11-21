@@ -964,6 +964,7 @@ details.accord[open] > summary::after { transform: rotate(-90deg); }
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #141416; border-radius: 14px; padding: 4px; margin: 4px 0 10px; }
 .seg button { border: 0; border-radius: 11px; min-height: 40px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); background: transparent; }
 .seg button.on { background: var(--gold); color: #14110a; }
+.seg.seg3 { grid-template-columns: 1fr 1fr 1fr; }
 .life-tabs, .mood-row, .life-quick { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .life-quick { margin-top: 12px; align-items: center; }
 .life-quick .sub { width: 100%; margin: 0 0 2px; }
