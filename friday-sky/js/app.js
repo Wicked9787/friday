@@ -8,8 +8,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.2.0";
-  var APP_LABEL = "Direct Lights";
+  var APP_VERSION = "3.2.1";
+  var APP_LABEL = "Gemini Fix";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }

@@ -32,7 +32,7 @@
 
   var PRESETS = {
     groq:       { label: "Groq (free)", name: "Groq", base: GROQ_BASE, model: "openai/gpt-oss-120b", style: "openai", keyUrl: "https://console.groq.com/keys", free: true },
-    gemini:     { label: "Google Gemini (free tier)", name: "Gemini", base: "https://generativelanguage.googleapis.com/v1beta/openai", model: "gemini-flash-latest", style: "openai", keyUrl: "https://aistudio.google.com/apikey", free: true },
+    gemini:     { label: "Google Gemini (free tier)", name: "Gemini", base: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-flash-latest", style: "gemini", keyUrl: "https://aistudio.google.com/apikey", free: true },
     openrouter: { label: "OpenRouter (free models)", name: "OpenRouter", base: "https://openrouter.ai/api/v1", model: "openai/gpt-oss-20b:free", style: "openai", keyUrl: "https://openrouter.ai/keys", free: true },
     cerebras:   { label: "Cerebras (free tier)", name: "Cerebras", base: "https://api.cerebras.ai/v1", model: "gpt-oss-120b", style: "openai", keyUrl: "https://cloud.cerebras.ai", free: true },
     mistral:    { label: "Mistral (free tier)", name: "Mistral", base: "https://api.mistral.ai/v1", model: "mistral-small-latest", style: "openai", keyUrl: "https://console.mistral.ai/api-keys", free: true },
@@ -80,6 +80,8 @@
   }
 
   function styleOf(agent) {
+    // Google's new Gemini keys (AQ.…) only work on Google's own endpoint, not the OpenAI-style one.
+    if (agent.provider === "gemini" && /^AQ\./.test(keyFor(agent) || "")) return "gemini";
     if (agent.style) return agent.style;
     if (agent.provider === "anthropic" || /anthropic\.com/i.test(agent.baseUrl || "")) return "anthropic";
     return "openai";
@@ -240,6 +242,66 @@
     return text;
   }
 
+  // Google's own Gemini API (works with both the old AIza… keys and the new AQ.… keys).
+  function geminiBase(base) {
+    base = String(base || "").trim().replace(/\/+$/, "").replace(/\/openai$/, "");
+    return /generativelanguage\.googleapis\.com/.test(base) ? base : "https://generativelanguage.googleapis.com/v1beta";
+  }
+  function geminiParts(content) {
+    if (typeof content === "string") return [{ text: content }];
+    if (!Array.isArray(content)) return [{ text: String(content || "") }];
+    var out = [];
+    content.forEach(function (p) {
+      if (!p) return;
+      if (p.type === "image_url" && p.image_url && /^data:/.test(p.image_url.url)) {
+        var m = p.image_url.url.match(/^data:([^;]+);base64,(.*)$/);
+        if (m) out.push({ inline_data: { mime_type: m[1], data: m[2] } });
+      } else if (p.text || p.content) out.push({ text: p.text || p.content });
+    });
+    return out.length ? out : [{ text: "" }];
+  }
+  async function callGemini(base, key, model, messages, opts) {
+    base = geminiBase(base);
+    model = String(model || "gemini-flash-latest").replace(/^models\//, "");
+    var system = [], contents = [];
+    messages.forEach(function (m) {
+      if (m.role === "system") { system.push(typeof m.content === "string" ? m.content : geminiParts(m.content).map(function (p) { return p.text || ""; }).join("\n")); return; }
+      var role = m.role === "assistant" ? "model" : "user";
+      var parts = geminiParts(m.content);
+      var last = contents[contents.length - 1];
+      if (last && last.role === role) last.parts = last.parts.concat(parts);
+      else contents.push({ role: role, parts: parts });
+    });
+    if (!contents.length) contents.push({ role: "user", parts: [{ text: "Hello" }] });
+    var body = { contents: contents };
+    if (system.length) body.systemInstruction = { parts: [{ text: system.join("\n\n") }] };
+    var gc = {};
+    if (opts.temperature != null) gc.temperature = opts.temperature;
+    // Newer Gemini models think first, and thinking counts toward the limit, so small limits are left off.
+    if (opts.max_tokens && opts.max_tokens >= 512) gc.maxOutputTokens = opts.max_tokens;
+    if (Object.keys(gc).length) body.generationConfig = gc;
+    var url = base + "/models/" + encodeURIComponent(model) + ":generateContent";
+    async function send(useBearer) {
+      var headers = { "Content-Type": "application/json" };
+      if (useBearer) headers.Authorization = "Bearer " + key; else headers["x-goog-api-key"] = key;
+      try { return await fetch(url, { method: "POST", headers: headers, body: JSON.stringify(body), signal: opts.signal }); }
+      catch (e) { if (e && e.name === "AbortError") throw e; throw BrainError("network", "offline"); }
+    }
+    var res = await send(false);
+    if (res.status === 401 && /^AQ\./.test(key)) res = await send(true);
+    if (!res.ok) {
+      var errText = "";
+      try { errText = await res.text(); } catch (e2) {}
+      throw BrainError(errText.slice(0, 200) || ("HTTP " + res.status), classifyError(res.status, errText));
+    }
+    var data = await res.json();
+    var cand = (data.candidates || [])[0] || {};
+    var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join("").trim();
+    if (!text && data.promptFeedback && data.promptFeedback.blockReason) text = "I can't help with that one.";
+    if (opts.onDelta && text) opts.onDelta(text);
+    return text;
+  }
+
   async function callAnthropic(base, key, model, messages, opts) {
     base = String(base || "https://api.anthropic.com/v1").trim().replace(/\/+$/, "");
     var system = [];
@@ -293,6 +355,7 @@
     var key = keyFor(agent);
     if (!key) return Promise.reject(BrainError("no key for " + agent.name, "auth"));
     if (styleOf(agent) === "anthropic") return callAnthropic(agent.baseUrl, key, agent.model, messages, opts);
+    if (styleOf(agent) === "gemini") return callGemini(agent.baseUrl, key, agent.model, messages, opts);
     return callOpenAI(agent.baseUrl, key, agent.model, messages, opts);
   }
 
@@ -405,6 +468,15 @@
     var res;
     if (style === "anthropic") {
       res = await fetch(base + "/models", { headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" } });
+    } else if (style === "gemini" || (/generativelanguage\.googleapis\.com/.test(base) && /^AQ\./.test(key || ""))) {
+      res = await fetch(geminiBase(base) + "/models?pageSize=200", { headers: { "x-goog-api-key": key } });
+      if (res.status === 401 && /^AQ\./.test(key || "")) res = await fetch(geminiBase(base) + "/models?pageSize=200", { headers: { Authorization: "Bearer " + key } });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      var gd = await res.json();
+      return (gd.models || []).filter(function (m) { return !m.supportedGenerationMethods || m.supportedGenerationMethods.indexOf("generateContent") >= 0; })
+        .map(function (m) { return String(m.name || "").replace(/^models\//, ""); }).filter(Boolean)
+        .filter(function (id) { return !/embed|tts|image|aqa|imagen|veo|live|audio|robotics|computer-use/i.test(id); })
+        .sort();
     } else {
       res = await fetch(base + "/models", { headers: key ? { Authorization: "Bearer " + key } : {} });
     }
@@ -426,6 +498,7 @@
   // ---------- "Paste a key": figure out whose key it is, pick a free model, test it, add it ----------
   var KEY_SHAPES = [
     [/^AIza[0-9A-Za-z_\-]{20,}$/, ["gemini"]],
+    [/^AQ\.[0-9A-Za-z_\-.]{10,}$/, ["gemini"]],
     [/^sk-or-/, ["openrouter"]],
     [/^gsk_/, ["groq"]],
     [/^csk-/, ["cerebras"]],

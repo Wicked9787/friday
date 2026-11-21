@@ -1,16 +1,22 @@
-# Friday and Jarvis 3.2.0 · Direct Lights
+# Friday and Jarvis 3.2.1 · Gemini Fix
 
-Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.2.0. Your memory and settings carry over. Install it over the old one in AltStore.
+Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.2.1. Your memory and settings carry over. Install it over the old one in AltStore.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.2.0-DirectLights.ipa` | Friday 3.2.0 for Sky. |
-| `Jarvis-v3.2.0-DirectLights.ipa` | **Install this one.** Jarvis 3.2.0 for Batsie. |
+| `Friday-v3.2.1-GeminiFix.ipa` | **Install this one.** Friday 3.2.1 for Sky. |
+| `Jarvis-v3.2.1-GeminiFix.ipa` | Jarvis 3.2.1 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Backup & About).
+
+## Fixes in 3.2.1 · Gemini Fix
+
+- **Google's new Gemini keys work.** Since mid-2026, new keys from Google AI Studio start with `AQ.` instead of `AIza`, and they only work through Google's own Gemini connection. Friday now uses that connection for every Gemini key, old or new. Paste it in Settings → Brain & Internet → Paste a key.
+- **Music on your phone always stays in the app.** If a song, artist or playlist isn't in your library, she says so instead of handing it to the Shortcut or opening the Music app. HomePod, speakers and volume still go to your Shortcut, because iPhone doesn't let apps do those.
+- The Shortcut prompt's music step now only covers the HomePod, speakers and volume. Updating your Shortcut is optional; the app simply stops sending phone music to it.
 
 ## Direct lights with AiDot (new in 3.2)
 
@@ -48,7 +54,7 @@ Settings → **Brain & Internet** → **Paste a key**. Paste any AI key and tap 
 
 | Key starts with | Service | Free? |
 |---|---|---|
-| `AIza…` | Google Gemini | Free tier |
+| `AQ.…` or `AIza…` | Google Gemini | Free tier |
 | `sk-or-…` | OpenRouter | Free models |
 | `gsk_…` | Groq (becomes your main key if you don't have one) | Free |
 | `csk-…` | Cerebras | Free tier |
