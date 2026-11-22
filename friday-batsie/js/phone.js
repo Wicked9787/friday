@@ -353,6 +353,53 @@
       return { say: (cl.facetime ? "FaceTiming " : "Calling ") + num.name + ".", tool: "call", url: (cl.facetime ? "facetime://" : "tel://") + num.number };
     }
 
+    // 3.4: climate and the rest of the home in Apple Home (never locks)
+    var hc = parseHomeDevice(raw, nat.home.knownDevices ? nat.home.knownDevices() : []);
+    if (hc && nat.home.available() && nat.home.control) {
+      if (!nat.home.knownDevices().length) await nat.home.devices();
+      if (hc.read) {
+        var rd = await nat.home.read({ kind: hc.read, room: hc.room });
+        if (!rd.ok || !rd.readings.length) return null;
+        var withT = rd.readings.filter(function (x) { return x.current != null; });
+        if (hc.read === "humidity") {
+          var hs = rd.readings.filter(function (x) { return x.humidity != null; });
+          if (!hs.length) return null;
+          return { say: "It's " + Math.round(hs[0].humidity) + " percent humidity" + (hc.room ? " in the " + hc.room : " inside") + ".", tool: "home" };
+        }
+        if (!withT.length) return null;
+        var temps = withT.map(function (x) { return cToF(x.current); });
+        var lo = Math.min.apply(null, temps), hi = Math.max.apply(null, temps);
+        var th = rd.readings.filter(function (x) { return x.target != null && (x.kind === "thermostat" || x.kind === "ac"); })[0];
+        var say1 = "It's " + (lo === hi ? lo : lo + " to " + hi) + " degrees" + (hc.room ? " in the " + hc.room : " inside") + ".";
+        if (th) say1 += " The thermostat is set to " + cToF(th.target) + ".";
+        return { say: say1, tool: "home" };
+      }
+      var opts = { kind: hc.kind || "", name: hc.name || "", room: hc.room || "" };
+      if (hc.on != null) opts.on = hc.on;
+      if (hc.level != null) opts.level = hc.level;
+      if (hc.mode) opts.mode = hc.mode;
+      if (hc.tempF != null || hc.delta) {
+        var baseF = hc.tempF;
+        if (hc.delta) {
+          var cur = await nat.home.read({ kind: "temperature" });
+          var tt = cur.ok ? cur.readings.filter(function (x) { return x.target != null; })[0] : null;
+          if (!tt) return null;
+          baseF = cToF(tt.target) + hc.delta;
+        }
+        opts.temperature = Math.round((baseF - 32) * 5 / 9 * 10) / 10;
+        hc.tempF = baseF;
+      }
+      var cr = await nat.home.control(opts);
+      if (!cr.ok) return null;
+      var who = hc.label || (cr.names && cr.names.length === 1 ? cr.names[0] : "The " + (hc.kind === "climate" ? "thermostat" : hc.kind || "device"));
+      who = who.charAt(0).toUpperCase() + who.slice(1);
+      var said = hc.tempF != null ? who + " is set to " + hc.tempF + " degrees." :
+        hc.mode ? (hc.mode === "off" ? who + " is off." : who + " is set to " + hc.mode + ".") :
+        hc.level != null ? (hc.kind === "blinds" ? who + " " + (hc.level === 0 ? "closed." : hc.level === 100 ? "open." : "at " + hc.level + " percent.") : who + " is at " + hc.level + " percent.") :
+        who + (hc.on ? " is on." : " is off.");
+      return { say: said, tool: "home" };
+    }
+
     var sc = parseScene(raw);
     if (sc && nat.home.available()) {
       var s2 = await nat.home.scene(sc.name);
@@ -407,6 +454,54 @@
     return null;
   }
 
+  // ---------- 3.4: the rest of the home (climate, fans, plugs, blinds, TV power) ----------
+  function cToF(c) { return Math.round(c * 9 / 5 + 32); }
+  var ROOMS_RE = /\b(?:in|on) (?:the |my )?(bedroom|living room|kitchen|bathroom|office|den|basement|garage|hallway|dining room|nursery|guest room)\b/;
+  function parseHomeDevice(raw, known) {
+    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
+    if (/\b(lock|unlock|garage|alarm system|security)\b/.test(t)) return null;
+    var rm = t.match(ROOMS_RE), room = rm ? rm[1] : "";
+    var m;
+    // what's it like inside
+    if (/^(?:what(?:'s| is) the (?:temperature|temp)|how (?:hot|warm|cold|cool) is it|what(?:'s| is) it like)\b.*\b(?:inside|in here|indoors|in the house|at home|in (?:the |my )?(?:bedroom|living room|kitchen|bathroom|office))\b/.test(t) ||
+        /^what(?:'s| is) the (?:thermostat|ac|air) (?:set to|at|on)\b/.test(t) || /^(?:what(?:'s| is) the )?(?:indoor|inside|room) temp(?:erature)?\b/.test(t)) return { read: "temperature", room: room };
+    if (/^(?:what(?:'s| is) the |how(?:'s| is) the )?humidity\b.*\b(?:inside|in here|indoors|in the house|at home|bedroom|living room)?/.test(t) && /humidity/.test(t) && !/outside|weather/.test(t)) return { read: "humidity", room: room };
+    // thermostat / AC / heat
+    if ((m = t.match(/^(?:set|put|turn|change|make) (?:the |my )?(?:temperature|temp|thermostat|heat|heater|ac|a\.c\.?|air|air conditioning|air conditioner|climate)(?: down| up)? (?:to |at )?(\d{2})(?: degrees)?$/))) {
+      var mode0 = /\b(heat|heater)\b/.test(t) ? "heat" : /\b(ac|a\.c|air)\b/.test(t) ? "cool" : "";
+      return { kind: "climate", tempF: +m[1], mode: mode0 || undefined, room: room, label: "The thermostat" };
+    }
+    if ((m = t.match(/^(?:set|put|make) it (?:to )?(\d{2})(?: degrees)?$/))) return { kind: "climate", tempF: +m[1], room: room, label: "The thermostat" };
+    if (/^(?:make it|turn it) (?:a (?:little |bit )?)?(warmer|hotter|up)(?: in here)?$/.test(t) || /^i'?m (?:cold|freezing)$/.test(t)) return { kind: "climate", delta: 2, room: room, label: "The thermostat" };
+    if (/^(?:make it|turn it) (?:a (?:little |bit )?)?(cooler|colder|down)(?: in here)?$/.test(t) || /^i'?m (?:hot|burning up)$/.test(t)) return { kind: "climate", delta: -2, room: room, label: "The thermostat" };
+    if ((m = t.match(/^turn (on|off) (?:the |my )?(heat|heater|ac|a\.c\.?|air|air conditioning|air conditioner|thermostat)(?: on| off)?$/)) || (m = t.match(/^turn (?:the |my )?(heat|heater|ac|a\.c\.?|air|air conditioning|air conditioner|thermostat) (on|off)$/))) {
+      var onoff = m[1] === "on" || m[1] === "off" ? m[1] : m[2], what = m[1] === "on" || m[1] === "off" ? m[2] : m[1];
+      var md = onoff === "off" ? "off" : /heat/.test(what) ? "heat" : /thermostat/.test(what) ? "auto" : "cool";
+      return { kind: "climate", mode: md, room: room, label: /heat/.test(what) ? "The heat" : /thermostat/.test(what) ? "The thermostat" : "The AC" };
+    }
+    // fans and blinds
+    if ((m = t.match(/^(?:turn |set )?(?:the |my )?(?:(\w+(?: \w+)?) )?fan (?:to |at )(\d{1,3})(?: ?%| percent)?$/))) return { kind: "fan", level: Math.min(100, +m[2]), room: room };
+    if ((m = t.match(/^turn (on|off) (?:the |my )?(?:(\w+(?: \w+)?) )?fans?$/)) || (m = t.match(/^turn (?:the |my )?(?:(\w+(?: \w+)?) )?fans? (on|off)$/))) {
+      var fo = m[1] === "on" || m[1] === "off" ? m[1] : m[2];
+      return { kind: "fan", on: fo === "on", room: room };
+    }
+    if ((m = t.match(/^(open|close|raise|lower) (?:the |my )?(blinds|shades|curtains|drapes)$/))) return { kind: "blinds", level: /open|raise/.test(m[1]) ? 100 : 0, room: room, label: "The " + m[2] };
+    if ((m = t.match(/^(?:set |put )?(?:the |my )?(blinds|shades|curtains) (?:to |at )(\d{1,3})(?: ?%| percent)?$/))) return { kind: "blinds", level: Math.min(100, +m[2]), room: room, label: "The " + m[1] };
+    // TV power through Apple Home (only works if the TV shows up there; otherwise the Shortcut does it)
+    if ((m = t.match(/^turn (on|off) (?:the |my )?(tv|television)$/)) || (m = t.match(/^turn (?:the |my )?(tv|television) (on|off)$/))) {
+      var to = m[1] === "on" || m[1] === "off" ? m[1] : m[2];
+      return { kind: "tv", on: to === "on", label: "The TV" };
+    }
+    // anything else in Apple Home by its name: "turn on the coffee maker"
+    if ((m = t.match(/^turn (on|off) (?:the |my )?(.+)$/)) || (m = t.match(/^turn (?:the |my )?(.+?) (on|off)$/))) {
+      var o2 = m[1] === "on" || m[1] === "off" ? m[1] : m[2], nm = (m[1] === "on" || m[1] === "off" ? m[2] : m[1]).trim();
+      if (/\b(lights?|lamps?|bulbs?|all|everything|music|it|that)\b/.test(nm)) return null;
+      var hit = (known || []).filter(function (d) { return d.kind !== "light" && d.kind !== "temp" && d.kind !== "humidity" && d.name && (d.name.toLowerCase() === nm || d.name.toLowerCase().indexOf(nm) >= 0 || nm.indexOf(d.name.toLowerCase()) >= 0); })[0];
+      if (hit) return { name: hit.name, on: o2 === "on", label: hit.name };
+    }
+    return null;
+  }
+
   root.FridayPhone = {
     handle: handle,
     parseWhen: parseWhen,
@@ -415,6 +510,7 @@
     parseCalendarAdd: parseCalendarAdd,
     parseLights: parseLights,
     parseLightQuestion: parseLightQuestion,
+    parseHomeDevice: parseHomeDevice,
     pickAidot: pickAidot,
     lightLine: lightLine,
     lightLabel: lightLabel,

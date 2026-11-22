@@ -1,4 +1,4 @@
-# Friday and Jarvis 3.4 · Private Line
+# Friday and Jarvis 3.4.1 · Whole Home
 
 Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.4. Your memory, settings and keys carry over. Install it over the old one in AltStore.
 
@@ -6,11 +6,26 @@ Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.4
 
 | File | What it is |
 |---|---|
-| `Friday-v3.4.0-PrivateLine.ipa` | Friday 3.4 for Sky. |
-| `Jarvis-v3.4.0-PrivateLine.ipa` | **Install this one.** Jarvis 3.4 for Batsie. |
+| `Friday-v3.4.1-WholeHome.ipa` | Friday 3.4 for Sky. |
+| `Jarvis-v3.4.1-WholeHome.ipa` | **Install this one.** Jarvis 3.4 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Help → Backup & About).
+
+## Whole home in Apple Home (new in 3.4.1)
+
+Turn on **HomeKit** in AltLoad's Entitlements when you install, then allow Home access the first time. Settings → Home → Lights → **Check lights in the app** confirms it.
+
+| Say | What happens |
+|---|---|
+| "What's the temperature inside?" | Reads your Home's temperature sensors and thermostat |
+| "Set the thermostat to 72" / "Turn on the AC" / "Make it cooler" | Thermostat or AC in the app |
+| "Turn on the fan" / "Fan to 50 percent" | Fans |
+| "Open the blinds" / "Blinds to 30 percent" | Blinds and shades |
+| "Turn on the coffee maker" | Anything else in Apple Home by its name |
+| "Turn on the TV" | TV power, if your TV shows up in Apple Home (otherwise your Shortcut does it) |
+
+Door locks, garage doors and alarms are never touched. HomePod and Apple TV playback and volume still go to your Shortcut, because iPhone doesn't let apps do those.
 
 ## Private line (new in 3.4)
 

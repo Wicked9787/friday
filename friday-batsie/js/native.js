@@ -240,6 +240,26 @@
       if (!P) return { ok: false };
       try { var r = await P.runScene({ name: name }); home._worked(); return { ok: true, scene: r && r.scene }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    // 3.4: the whole home. Names are kept so she can match "the fan" or "the bedroom heater".
+    devices: async function () {
+      var P = plugin("FridayHome");
+      if (!P || !P.devices) return [];
+      try { var r = await P.devices(); var d = (r && r.devices) || []; S().set("homeDevices", d.map(function (x) { return { name: x.name, room: x.room, kind: x.kind }; })); return d; }
+      catch (e) { return []; }
+    },
+    knownDevices: function () { return S().get("homeDevices", []) || []; },
+    control: async function (opts) {
+      var P = plugin("FridayHome");
+      if (!P || !P.control) return { ok: false };
+      try { var r = await P.control(opts); home._worked(); return { ok: true, names: (r && r.names) || [], count: r && r.count }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    read: async function (opts) {
+      var P = plugin("FridayHome");
+      if (!P || !P.read) return { ok: false };
+      try { var r = await P.read(opts || {}); return { ok: true, readings: (r && r.readings) || [] }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
     }
   };
 

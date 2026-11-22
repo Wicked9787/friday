@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.4.0";
-  var APP_LABEL = "Private Line";
+  var APP_VERSION = "3.4.1";
+  var APP_LABEL = "Whole Home";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -715,7 +715,7 @@
         await runBriefing();
         return;
       }
-      if (/\b(weather|forecast|temperature outside|how (hot|cold) is it|is it (going to )?(rain|snow)|will it (rain|snow)|do i need (a |an )?(umbrella|jacket|coat))\b/.test(low) && !/\b(in|for) (?!the morning|tomorrow|today|tonight)[a-z]+/.test(low.replace(/^.*?(weather|forecast)/, "$1"))) {
+      if (/\b(weather|forecast|temperature outside|how (hot|cold) is it|is it (going to )?(rain|snow)|will it (rain|snow)|do i need (a |an )?(umbrella|jacket|coat))\b/.test(low) && !/\b(inside|indoors|in here|in the house|thermostat)\b/.test(low) && !/\b(in|for) (?!the morning|tomorrow|today|tonight)[a-z]+/.test(low.replace(/^.*?(weather|forecast)/, "$1"))) {
         chat._push("user", text);
         setCaption("Checking the weather…");
         emitActivity("weather", /\btomorrow\b/.test(low) ? "Checked tomorrow's weather" : "Checked the weather");
@@ -2267,6 +2267,7 @@
         if (orb && orb.setThermal) orb.setThermal(st);
       });
       FridayRefresh.scheme();
+      if (FridayNative.home && FridayNative.home.devices && FridayNative.home.available()) setTimeout(function () { FridayNative.home.devices(); }, 3000);
     }
     // keep contact names fresh (no prompt if already allowed)
     if (window.FridayNative && window.FridayNative.contacts.available() && window.FridayNative.contacts.syncedAt() && Date.now() - window.FridayNative.contacts.syncedAt() > 3 * 864e5) {
