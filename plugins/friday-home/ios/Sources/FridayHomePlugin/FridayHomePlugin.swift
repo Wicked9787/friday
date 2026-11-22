@@ -184,6 +184,7 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
 
     // ---------- 3.4: the whole home (not just lights). Door locks, garage doors and alarms are never touched. ----------
     private static let fanV2 = "000000B7-0000-1000-8000-0026BB765291"
+    private static let television = "000000D8-0000-1000-8000-0026BB765291"
 
     private func kindOf(_ svc: HMService, _ acc: HMAccessory) -> String? {
         let t = svc.serviceType
@@ -196,7 +197,7 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
         if t == HMServiceTypeWindowCovering { return "blinds" }
         if t == HMServiceTypeAirPurifier { return "purifier" }
         if t == HMServiceTypeHumidifierDehumidifier { return "humidifier" }
-        if t == HMServiceTypeTelevision { return "tv" }
+        if t == FridayHomePlugin.television { return "tv" }
         if t == HMServiceTypeSwitch || t == HMServiceTypeOutlet { return isLight(svc, acc) ? "light" : (t == HMServiceTypeOutlet ? "outlet" : "switch") }
         return nil
     }
