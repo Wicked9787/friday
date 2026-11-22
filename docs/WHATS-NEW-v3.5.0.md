@@ -1,16 +1,29 @@
-# Friday and Jarvis 3.4.1 · Whole Home
+# Friday and Jarvis 3.5 · All In
 
-Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.4. Your memory, settings and keys carry over. Install it over the old one in AltStore.
+Coming from 2.0 or any 3.x? This one install has everything from 3.0 through 3.5. Your memory, settings and keys carry over. Install it over the old one in AltStore.
 
 ## Which file is which
 
 | File | What it is |
 |---|---|
-| `Friday-v3.4.1-WholeHome.ipa` | **Install this one.** Friday 3.4 for Sky. |
-| `Jarvis-v3.4.1-WholeHome.ipa` | Jarvis 3.4 for Batsie. |
+| `Friday-v3.5.0-AllIn.ipa` | **Install this one.** Friday 3.5 for Sky. |
+| `Jarvis-v3.5.0-AllIn.ipa` | Jarvis 3.5 for Batsie. |
 | `…-Backup.zip` | Everything to rebuild or reinstall later: the app, Shortcut prompt, setup notes, widgets, full source. |
 
 The version number shows in AltStore and in the app (Settings → Help → Backup & About).
+
+## New in 3.5
+
+**Entitlements to turn on in AltLoad when you install:** HomeKit (Apple Home), HealthKit (steps and sleep), Access Wi-Fi Information (home Wi-Fi). Optional: Increased Memory Limit. Leave SiriKit and the rest off. If an install fails, turn the newest one back off.
+
+| What | How |
+|---|---|
+| **30 Gemini voices** | Settings → Her → Voice & Talking → Gemini voices. Uses the Gemini key you added in Brains, with its own free daily allowance. Your other AI voices stay. |
+| **Real alarms** | "Set an alarm for 7am", "Wake me up at 6:30 tomorrow". They ring like the Clock app, even on silent (iOS 26 and newer). Allow Alarms the first time. Older iOS: your Shortcut still does alarms. |
+| **Steps and sleep** | "How many steps have I taken?", "How did I sleep?". Turn on Settings → Your stuff → Briefing & Recap → **Steps and sleep in the briefing**. Read only. |
+| **Personal Voice** | Settings → Her → Voice & Talking → **Use my Personal Voice**, then pick it in the list (make one first in iPhone Settings → Accessibility → Personal Voice). |
+| **Home Wi-Fi** | Settings → Home → Lights → **Use this Wi-Fi as home** (allow location once). On another network she skips AiDot and goes straight to Apple Home. "What Wi-Fi am I on?" works too. |
+| **NFC stickers** | Settings → Home → Routines shows the steps: Shortcuts → Automation → NFC → scan the sticker → Open URLs `friday://do?text=movie time`. Tap the sticker, she runs the routine. |
 
 ## Whole home in Apple Home (new in 3.4.1)
 

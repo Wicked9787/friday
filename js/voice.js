@@ -649,6 +649,38 @@
     { id: "ai:diana", name: "Diana", gender: "female", blurb: "AI voice · smooth, poised" },
     { id: "ai:autumn", name: "Autumn", gender: "female", blurb: "AI voice · soft, warm" }
   ];
+  // 3.4.1: Google's Gemini voices, using the Gemini key you added (its own free daily allowance).
+  var GEMINI_VOICES = [
+    ["Kore", "female", "firm"], ["Aoede", "female", "breezy"], ["Leda", "female", "youthful"], ["Zephyr", "female", "bright"],
+    ["Callirrhoe", "female", "easy-going"], ["Autonoe", "female", "bright"], ["Despina", "female", "smooth"], ["Erinome", "female", "clear"],
+    ["Laomedeia", "female", "upbeat"], ["Achernar", "female", "soft"], ["Gacrux", "female", "mature"], ["Pulcherrima", "female", "forward"],
+    ["Vindemiatrix", "female", "gentle"], ["Sulafat", "female", "warm"],
+    ["Puck", "male", "upbeat"], ["Charon", "male", "informative"], ["Fenrir", "male", "excitable"], ["Orus", "male", "firm"],
+    ["Enceladus", "male", "breathy"], ["Iapetus", "male", "clear"], ["Umbriel", "male", "easy-going"], ["Algieba", "male", "smooth"],
+    ["Algenib", "male", "gravelly"], ["Rasalgethi", "male", "informative"], ["Alnilam", "male", "firm"], ["Schedar", "male", "even"],
+    ["Achird", "male", "friendly"], ["Zubenelgenubi", "male", "casual"], ["Sadachbia", "male", "lively"], ["Sadaltager", "male", "knowledgeable"]
+  ];
+  GEMINI_VOICES.forEach(function (g) { AI_VOICES.push({ id: "ai:gem-" + g[0].toLowerCase(), name: g[0], gender: g[1], blurb: "Gemini voice · " + g[2], gemini: g[0] }); });
+  var GEM_BASE = "https://generativelanguage.googleapis.com/v1beta";
+  var GEM_TTS_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+  function geminiKey() {
+    var S = root.FridayStorage, list = S.get("connections", []) || [];
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i];
+      if (c && c.type === "agent" && (c.provider === "gemini" || /generativelanguage/.test(c.baseUrl || ""))) { var k = S.getAgentKey(c.id); if (k) return k; }
+    }
+    return "";
+  }
+  FridayVoice.geminiKey = geminiKey;
+  function wavFromPcm(pcm, rate) {
+    var buf = new ArrayBuffer(44 + pcm.length), v = new DataView(buf), o = 0;
+    function str(x) { for (var i = 0; i < x.length; i++) v.setUint8(o++, x.charCodeAt(i)); }
+    str("RIFF"); v.setUint32(o, 36 + pcm.length, true); o += 4; str("WAVE"); str("fmt "); v.setUint32(o, 16, true); o += 4;
+    v.setUint16(o, 1, true); o += 2; v.setUint16(o, 1, true); o += 2; v.setUint32(o, rate, true); o += 4; v.setUint32(o, rate * 2, true); o += 4;
+    v.setUint16(o, 2, true); o += 2; v.setUint16(o, 16, true); o += 2; str("data"); v.setUint32(o, pcm.length, true); o += 4;
+    new Uint8Array(buf, 44).set(pcm);
+    return buf;
+  }
   var TTS_URL = "https://api.groq.com/openai/v1/audio/speech";
   var TTS_MODEL = "canopylabs/orpheus-v1-english";
   var MOOD_VOICE = {
@@ -723,7 +755,9 @@
   };
 
   FridayVoice.prototype._aiAllowed = function () {
-    if (!this._aiVoiceId()) return false;
+    var vid = this._aiVoiceId();
+    if (!vid) return false;
+    if (vid.indexOf("gem-") === 0) return !!geminiKey() && Date.now() > (root.FridayStorage.get("gemVoicePauseUntil", 0) || 0);
     if (!root.FridayStorage.hasApiKey()) return false;
     var until = root.FridayStorage.get("aiVoicePauseUntil", 0) || 0;
     return Date.now() > until;
@@ -790,7 +824,44 @@
   }
   FridayVoice.aiRate = aiRate;
 
+  FridayVoice.prototype._fetchGemini = async function (text, voiceId, tag) {
+    var S = root.FridayStorage, key = geminiKey();
+    if (!key) throw new Error("tts no-gemini-key");
+    var g = AI_VOICES.filter(function (x) { return x.id === "ai:" + voiceId; })[0];
+    var style = tag === "[cheerful]" ? "Say cheerfully: " : tag === "[calm]" ? "Say calmly: " : tag === "[whisper]" ? "Say softly: " : "";
+    var body = JSON.stringify({ contents: [{ parts: [{ text: style + text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: g ? g.gemini : "Kore" } } } } });
+    var http = root.FridayBrain && root.FridayBrain.http ? root.FridayBrain.http : function (u, i) { return fetch(u, i); };
+    var known = S.get("gemTtsModel", ""), models = known ? [known].concat(GEM_TTS_MODELS.filter(function (m) { return m !== known; })) : GEM_TTS_MODELS;
+    var lastErr = "";
+    for (var i = 0; i < models.length; i++) {
+      var url = GEM_BASE + "/models/" + models[i] + ":generateContent";
+      var res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: body });
+      if (res.status === 401 && /^AQ\./.test(key)) res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: body });
+      if (res.status === 404) { lastErr = "404"; continue; }
+      if (!res.ok) {
+        var t = ""; try { t = await res.text(); } catch (e) {}
+        S.set("aiVoiceError", { status: res.status, msg: ("Gemini voice: " + t).slice(0, 400), at: Date.now() });
+        var pause = /per day|daily|quota/i.test(t) ? 3 * 3600 * 1000 : (res.status === 429 ? 10 * 60 * 1000 : 30 * 60 * 1000);
+        S.set("gemVoicePauseUntil", Date.now() + pause);
+        throw new Error("tts " + res.status);
+      }
+      var data = await res.json();
+      var parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+      var part = parts.filter(function (p) { return p.inlineData && p.inlineData.data; })[0];
+      if (!part) throw new Error("tts empty");
+      var mime = part.inlineData.mimeType || "", rm = mime.match(/rate=(\d+)/), rate = rm ? +rm[1] : 24000;
+      var bin = atob(part.inlineData.data), pcm = new Uint8Array(bin.length);
+      for (var j = 0; j < bin.length; j++) pcm[j] = bin.charCodeAt(j);
+      S.set("gemTtsModel", models[i]);
+      S.set("aiVoiceError", null);
+      if (root.FridayBrain && root.FridayBrain.noteUse) root.FridayBrain.noteUse("Gemini", "tts");
+      return /wav/i.test(mime) ? pcm.buffer : wavFromPcm(pcm, rate);
+    }
+    throw new Error("tts " + (lastErr || "no-model"));
+  };
+
   FridayVoice.prototype._fetchClip = async function (text, voiceId, tag) {
+    if (String(voiceId || "").indexOf("gem-") === 0) return this._fetchGemini(text, voiceId, tag);
     var key = root.FridayStorage.getApiKey();
     var input = (tag ? tag + " " : "") + text;
     var res = await fetch(TTS_URL, {

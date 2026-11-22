@@ -60,6 +60,8 @@
       refreshHour: 10,
       privateVoiceURI: "",
       onDeviceListen: true,
+      healthBrief: false,
+      homeWifi: "",
       billAlerts: true,
       countdownAlerts: true
     };
@@ -402,6 +404,7 @@
     this._bind31();
     this._bind33();
     this._bind34();
+    this._bind35();
     this._bindNav();
     this._syncHeaders();
 
@@ -661,7 +664,10 @@
       listEl.appendChild(tb);
       var why = V.aiVoiceReason ? V.aiVoiceReason() : "";
       if (why) aiStatus(why, false);
-      (V.AI_VOICES || []).forEach(function (a) { row(a.id, a.name, a.blurb.replace(/^AI voice · /, "") + " · " + a.gender, "AI"); });
+      (V.AI_VOICES || []).filter(function (a) { return !a.gemini; }).forEach(function (a) { row(a.id, a.name, a.blurb.replace(/^AI voice · /, "") + " · " + a.gender, "AI"); });
+      var gemOn = V.geminiKey && V.geminiKey();
+      head("Gemini voices" + (gemOn ? "" : " · add a Gemini key in Brains to use these"));
+      (V.AI_VOICES || []).filter(function (a) { return a.gemini; }).forEach(function (a) { row(a.id, a.name, a.blurb.replace(/^Gemini voice · /, "") + " · " + a.gender, "Gemini"); });
       ["Premium", "Enhanced", "Siri", "Standard", "Fun"].forEach(function (q) {
         var items = cat.filter(function (c) { return c.quality === q; });
         if (!items.length) return;
@@ -901,6 +907,44 @@
         }
       });
     };
+  };
+
+  // ---------- 3.5: Personal Voice, steps and sleep, home Wi-Fi, NFC stickers ----------
+  FridaySettings.prototype._bind35 = function () {
+    var self = this, v = this.values, prof = this.profile || {};
+    function el(id) { return document.getElementById(id); }
+    function N() { return root.FridayNative; }
+    var pv = el("btn-personal-voice");
+    if (pv) pv.onclick = function () {
+      if (!N() || !N().kit.personalVoice) { self.onToast("Personal Voice works in the installed app."); return; }
+      N().kit.personalVoice().then(function (r) {
+        var st = el("pv-status");
+        var msg = r.status === "authorized" ? (r.voices && r.voices.length ? "Allowed. Pick “" + r.voices[0].name + "” in the voice list below." : "Allowed, but there's no Personal Voice on this iPhone yet. Make one in iPhone Settings → Accessibility → Personal Voice.")
+          : r.status === "denied" ? "Not allowed. Turn it on in iPhone Settings → Accessibility → Personal Voice → Allow Apps to Request to Use." : "Personal Voice isn't available on this iPhone.";
+        if (st) st.textContent = msg;
+        if (self._renderVoices) try { self._renderVoices(); } catch (e) {}
+      });
+    };
+    var hb = el("set-health-brief");
+    if (hb) {
+      hb.checked = v.healthBrief === true;
+      hb.onchange = function () {
+        v.healthBrief = hb.checked; saveSettings(v);
+        if (hb.checked && N() && N().kit.health) N().kit.health().then(function (r) { if (!r.ok) self.onToast("Health isn't available. Turn on HealthKit in AltLoad's entitlements and reinstall."); });
+      };
+    }
+    var hw = el("btn-home-wifi"), hws = el("homewifi-status");
+    function syncWifi() { if (hws && v.homeWifi) hws.textContent = "Home Wi-Fi: " + v.homeWifi + ". On another network, Apple Home or your Shortcut takes over straight away."; }
+    if (hw) hw.onclick = function () {
+      if (!N() || !N().kit.wifiName) { self.onToast("This works in the installed app."); return; }
+      N().kit.wifiName(true).then(function (ss) {
+        if (!ss) { self.onToast("I can't see the Wi-Fi name. Turn on Access Wi-Fi Information in AltLoad, reinstall, and allow location."); return; }
+        v.homeWifi = ss; saveSettings(v); syncWifi(); self.onToast("Home Wi-Fi saved: " + ss);
+      });
+    };
+    syncWifi();
+    var nh = el("nfc-hint");
+    if (nh) { var sc = (prof.assistantName || "Friday").toLowerCase(); nh.innerHTML = nh.innerHTML.replace(/friday:\/\//g, sc + "://"); }
   };
 
   // ---------- 3.4: private line ----------

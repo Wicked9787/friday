@@ -353,6 +353,33 @@
       return { say: (cl.facetime ? "FaceTiming " : "Calling ") + num.name + ".", tool: "call", url: (cl.facetime ? "facetime://" : "tel://") + num.number };
     }
 
+    // 3.5: real alarms in the app (AlarmKit), steps and sleep, Wi-Fi name
+    var al = parseAlarm(raw);
+    if (al && nat.kit && nat.kit.alarm) {
+      var ar0 = await nat.kit.alarm(al.at, al.label || "Alarm");
+      if (ar0.ok) {
+        var alarms = root.FridayStorage.get("alarms", []) || [];
+        alarms.push({ id: ar0.id, at: +al.at, label: al.label || "" }); root.FridayStorage.set("alarms", alarms.slice(-30));
+        return { say: "Alarm set for " + timeWord(al.at) + (dayWord(al.at) === "today" ? "" : " " + dayWord(al.at)) + ".", tool: "alarm" };
+      }
+      if (/denied/.test(ar0.error || "")) return { say: "I need permission to set alarms. Turn it on in iPhone Settings, " + appTitle(profile) + ", Alarms.", tool: "alarm" };
+    }
+    if (/^(?:how many steps|how many steps have i (?:taken|done|walked)|what(?:'s| are) my steps|step count)\b/.test(t) && nat.kit && nat.kit.health) {
+      var hs0 = await nat.kit.health();
+      if (!hs0.ok) return { say: "I can't read Health yet. Turn on HealthKit in AltLoad's entitlements when you install me, then allow Health when I ask.", tool: "health" };
+      return { say: "You've taken " + hs0.steps.toLocaleString() + " steps today.", tool: "health" };
+    }
+    if (/^(?:how (?:did|long did|much did) i sleep|how was my sleep|how much sleep did i get)\b/.test(t) && nat.kit && nat.kit.health) {
+      var hs1 = await nat.kit.health();
+      if (!hs1.ok) return { say: "I can't read Health yet. Turn on HealthKit in AltLoad's entitlements when you install me, then allow Health when I ask.", tool: "health" };
+      if (!hs1.sleepMinutes) return { say: "I don't see any sleep for last night in Health.", tool: "health" };
+      return { say: "You slept " + sleepWords(hs1.sleepMinutes) + " last night.", tool: "health" };
+    }
+    if (/^what (?:wi-?fi|wifi network|network) am i (?:on|connected to)$/.test(t) && nat.kit && nat.kit.wifiName) {
+      var ss = await nat.kit.wifiName(true);
+      return { say: ss ? "You're on " + ss + "." : "I can't see the Wi-Fi name. Turn on Access Wi-Fi Information in AltLoad when you install me, and allow location when I ask.", tool: "wifi" };
+    }
+
     // 3.4: climate and the rest of the home in Apple Home (never locks)
     var hc = parseHomeDevice(raw, nat.home.knownDevices ? nat.home.knownDevices() : []);
     if (hc && nat.home.available() && nat.home.control) {
@@ -409,6 +436,9 @@
 
     // AiDot lights first (straight over home Wi-Fi), then Apple Home in the app, then the Shortcut.
     var ad = nat.aidot && nat.aidot.ready() ? nat.aidot : null;
+    // 3.5: if you saved your home Wi-Fi and you're on another network, skip AiDot and go straight to Apple Home
+    var homeWifi = ((root.FridayStorage.get("settings", {}) || {}).homeWifi) || "";
+    if (ad && homeWifi && nat.kit && nat.kit.wifiName) { var curWifi = await nat.kit.wifiName(false); if (curWifi && curWifi !== homeWifi) ad = null; }
     var lq = parseLightQuestion(raw);
     if (lq && ad) {
       var qp = pickAidot(lq.words, ad.lights());
@@ -452,6 +482,22 @@
       return { say: line2, tool: "home" };
     }
     return null;
+  }
+
+  // ---------- 3.5: alarms, sleep words ----------
+  function sleepWords(min) { var h = Math.floor(min / 60), m = min % 60; return (h ? h + " hour" + (h === 1 ? "" : "s") : "") + (h && m ? " and " : "") + (m || !h ? m + " minute" + (m === 1 ? "" : "s") : ""); }
+  function timeWord(d) { d = new Date(d); var h = d.getHours(), m = d.getMinutes(); return (h % 12 || 12) + (m ? ":" + String(m).padStart(2, "0") : "") + (h < 12 ? " AM" : " PM"); }
+  function dayWord(d) { var a = new Date(d); a.setHours(0, 0, 0, 0); var b = new Date(); b.setHours(0, 0, 0, 0); var n = Math.round((a - b) / 86400000); return n === 0 ? "today" : n === 1 ? "tomorrow" : a.toLocaleDateString([], { weekday: "long" }); }
+  function parseAlarm(raw) {
+    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
+    if (!/^(?:set|make|create|add|put) (?:an |a |my )?alarm\b|^wake me(?: up)?\b|^alarm (?:for|at)\b/.test(t)) return null;
+    var lbl = (t.match(/\b(?:called|named|labeled|for (?:my |the )?(work|gym|school|meds|medicine|pills))\b\s*(.*)$/) || [])[0] || "";
+    var w = parseWhen(t.replace(/\b(?:alarm|wake me(?: up)?)\b/g, " "));
+    if (!w || !w.date) return null;
+    var at = new Date(w.date);
+    if (at <= new Date()) at.setDate(at.getDate() + 1);
+    if (at - new Date() > 7 * 86400000) return null;
+    return { at: at, label: lbl ? lbl.replace(/^(?:called|named|labeled) /, "").replace(/^for /, "") : "" };
   }
 
   // ---------- 3.4: the rest of the home (climate, fans, plugs, blinds, TV power) ----------
@@ -511,6 +557,7 @@
     parseLights: parseLights,
     parseLightQuestion: parseLightQuestion,
     parseHomeDevice: parseHomeDevice,
+    parseAlarm: parseAlarm,
     pickAidot: pickAidot,
     lightLine: lightLine,
     lightLabel: lightLabel,

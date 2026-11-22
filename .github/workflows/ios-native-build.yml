@@ -18,6 +18,7 @@ on:
       - "package.json"
       - "capacitor.config.js"
       - "scripts/**"
+      - "plugins/**"
       - ".github/workflows/ios-native-build.yml"
 
 permissions:
@@ -66,6 +67,12 @@ jobs:
         run: |
           set -o pipefail
           npx cap sync ios 2>&1 | tee build/sync.log
+
+      - name: Use the newest Xcode on the runner
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XC" ]; then sudo xcode-select -s "$XC"; fi
+          xcodebuild -version
 
       - name: Build unsigned iPhone app
         run: |

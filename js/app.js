@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.4.1";
-  var APP_LABEL = "Whole Home";
+  var APP_VERSION = "3.5.0";
+  var APP_LABEL = "All In";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
   function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
@@ -510,6 +510,7 @@
   }
 
   function runBriefing() {
+    var opts0 = {};
     var now = new Date();
     var h = now.getHours();
     var part = h < 12 ? "Good morning" : (h < 17 ? "Good afternoon" : "Good evening");
@@ -520,6 +521,18 @@
       weatherSentence().then(function (wx) {
         var body = hello + " " + wx + " " + todayNotesAndTimers();
         var st = (settings && settings.values) || {};
+        if (st.healthBrief && window.FridayNative && FridayNative.kit.health && !opts0.healthDone) {
+          opts0.healthDone = true;
+          FridayNative.kit.health().then(function (hr) {
+            if (hr.ok && (hr.sleepMinutes || hr.steps)) {
+              var hh = Math.floor(hr.sleepMinutes / 60), mm = hr.sleepMinutes % 60;
+              body += (hr.sleepMinutes ? " You slept " + (hh ? hh + " hour" + (hh === 1 ? "" : "s") : "") + (hh && mm ? " and " : "") + (mm ? mm + " minutes" : "") + "." : "") + (hr.steps ? " " + hr.steps.toLocaleString() + " steps so far." : "");
+            }
+          }).then(cont, cont);
+          return;
+        }
+        cont();
+        function cont() {
         if (st.briefingNews === false || !FridayStorage.hasApiKey()) { setCaption(body); done(voice.speak(body, profile)); return; }
         var news = window.FridayBrain.ask([
           { role: "system", content: "Search the web for the top two news headlines in the United States today. Reply with one short spoken sentence for each, no links, no lists, no citations." },
@@ -531,6 +544,7 @@
           var full = body + (n ? " In the news: " + n : "");
           setCaption(full); done(voice.speak(full, profile));
         }, function () { setCaption(body); done(voice.speak(body, profile)); });
+        }
       });
     });
   }

@@ -16,6 +16,9 @@ const keys = {
   NSRemindersUsageDescription: `${name} adds reminders when you ask.`,
   NSRemindersFullAccessUsageDescription: `${name} adds reminders when you ask.`,
   NSHomeKitUsageDescription: `${name} sees and controls your Home lights, accessories and scenes when you ask, at home or away.`,
+  NSHealthShareUsageDescription: `${name} reads your steps and last night's sleep for your morning briefing when you ask. It never writes to Health.`,
+  NSLocationWhenInUseUsageDescription: `${name} checks your Wi-Fi name to know when you're home, so your lights switch the fastest way. Your location isn't saved or sent anywhere.`,
+  NSAlarmKitUsageDescription: `${name} sets real alarms that ring like the Clock app, even on silent, when you ask.`,
   NSLocalNetworkUsageDescription: `${name} switches your AiDot lights and talks to other devices on your home Wi-Fi directly when you ask, so it works without a VPN or a Shortcut.`
 };
 for (const [k, v] of Object.entries(keys)) {

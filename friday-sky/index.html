@@ -198,6 +198,10 @@
       <details class="accord" open id="accord-voice">
         <summary>Voice <span class="accord-current" id="voice-current">Automatic</span></summary>
         <div class="accord-body">
+          <div class="row row-col" id="pv-row" style="margin-bottom:10px">
+            <button class="btn" type="button" id="btn-personal-voice">Use my Personal Voice</button>
+            <div class="sub" id="pv-status">If you made a Personal Voice (iPhone Settings → Accessibility → Personal Voice), she can talk in it. Allow it when asked, then pick it in the list below.</div>
+          </div>
           <div class="field-label">Speaking voice</div>
           <div class="sub" id="voice-hint"></div>
           <div id="voice-list" class="voice-list" role="radiogroup" aria-label="Speaking voice"></div>
@@ -372,6 +376,10 @@
       <details class="accord" open id="accord-aidot">
         <summary>AiDot lights <span class="accord-current" id="aidot-current">Off</span></summary>
         <div class="accord-body">
+          <div class="row row-col" id="homewifi-row" style="margin-bottom:10px">
+            <button class="btn" type="button" id="btn-home-wifi">Use this Wi-Fi as home</button>
+            <div class="sub" id="homewifi-status">Lets her know for sure when you're home, so AiDot lights switch straight over Wi-Fi and Apple Home takes over when you're out. Needs Access Wi-Fi Information turned on in AltLoad.</div>
+          </div>
           <p class="hint">Sign in with your AiDot account once and <span class="sc-assistant">Friday</span> switches your AiDot lights herself over your home Wi-Fi: on, off, exact brightness, warm or cool white, and colors. No Shortcut, no VPN. Away from home, Apple Home or your Shortcut takes over. Your password is locked in this iPhone's Keychain and never leaves it except to sign in to AiDot.</p>
           <div id="aidot-signin">
             <select id="aidot-country" aria-label="AiDot country"></select>
@@ -406,6 +414,7 @@
       <details class="accord" open id="accord-routines">
         <summary>Routines <span class="accord-current" id="routines-current"></span></summary>
         <div class="accord-body">
+          <div class="sub" id="nfc-hint" style="margin-bottom:10px"><b>Tap a sticker to run a routine:</b> get any NFC sticker, then in the Shortcuts app go to Automation → + → NFC → scan the sticker → Run Immediately → add <b>Open URLs</b> with <code>friday://do?text=movie%20time</code> (use your routine's phrase). Tap the sticker with your iPhone and she runs it.</div>
           <p class="hint">Say the phrase and she does every step, in order. Steps are ordinary commands, one per line. You can also say several things at once anytime, like “lights to 40%, add milk and set a timer for 10 minutes”.</p>
           <div id="routines-box"></div>
         </div>
@@ -642,6 +651,10 @@
         <label class="toggle-row">Headlines in the briefing <input type="checkbox" id="set-news"></label>
           <div class="sub">She looks up a couple of top stories for the morning briefing.</div>
       </div>
+      <div class="row row-col">
+        <label class="toggle-row">Steps and sleep in the briefing <input type="checkbox" id="set-health-brief"></label>
+          <div class="sub">She reads last night's sleep and today's steps from Apple Health. Needs HealthKit turned on in AltLoad. Read only.</div>
+      </div>
       </section>
       <section class="spage" id="sp-backup" data-title="Backup &amp; About" hidden>
       
@@ -852,7 +865,14 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.4</h1>
+      <h1>What's new in 3.5</h1>
+      <p class="wn-tag">All in</p>
+      <ul>
+        <li>30 more AI voices from Google Gemini, using the Gemini key you added (their own free daily allowance). Your other AI voices stay</li>
+        <li>Real alarms right in the app: “set an alarm for 7am” rings like the Clock app, even on silent (iOS 26 and newer)</li>
+        <li>“How many steps have I taken?”, “How did I sleep?”, and steps and sleep in your morning briefing (turn on HealthKit in AltLoad)</li>
+        <li>Your Personal Voice, a home Wi-Fi so she always knows when you're home, and NFC stickers that run a routine (Settings → Home → Routines)</li>
+      </ul>
       <p class="wn-tag">3.4.1 · Whole home</p>
       <ul>
         <li>With HomeKit on in AltLoad, she runs your whole Apple Home in the app: “what's the temperature inside”, “set the thermostat to 72”, “make it cooler”, “turn on the fan”, “open the blinds”, or anything by its name. Door locks are never touched</li>

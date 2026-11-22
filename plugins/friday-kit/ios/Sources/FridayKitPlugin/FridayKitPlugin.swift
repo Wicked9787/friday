@@ -3,6 +3,14 @@ import Capacitor
 import MediaPlayer
 import MessageUI
 import UIKit
+#if canImport(AlarmKit)
+import AlarmKit
+import SwiftUI
+#endif
+import NetworkExtension
+import CoreLocation
+import HealthKit
+import AVFoundation
 import Security
 import ObjectiveC
 
@@ -25,7 +33,12 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "thermal", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "secretGet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "secretSet", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "secretDelete", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "secretDelete", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "personalVoice", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "health", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "wifiName", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "alarmSet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "alarmCancel", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
@@ -100,6 +113,120 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         guard let key = call.getString("key"), !key.isEmpty else { call.reject("no-key"); return }
         SecItemDelete(FridayKitPlugin.secretQuery(key) as CFDictionary)
         call.resolve(["ok": true])
+    }
+
+    // ---------- 3.5: Personal Voice (your own voice made on this iPhone) ----------
+    @objc func personalVoice(_ call: CAPPluginCall) {
+        if #available(iOS 17.0, *) {
+            AVSpeechSynthesizer.requestPersonalVoiceAuthorization { st in
+                let voices = AVSpeechSynthesisVoice.speechVoices().filter { $0.voiceTraits.contains(.isPersonalVoice) }.map { ["name": $0.name, "id": $0.identifier] }
+                let name: String
+                switch st {
+                case .authorized: name = "authorized"
+                case .denied: name = "denied"
+                case .unsupported: name = "unsupported"
+                default: name = "notDetermined"
+                }
+                call.resolve(["status": name, "voices": voices])
+            }
+        } else {
+            call.resolve(["status": "unsupported", "voices": []])
+        }
+    }
+
+    // ---------- 3.5: steps and sleep (Apple Health, read only) ----------
+    private let healthStore = HKHealthStore()
+    @objc func health(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let steps = HKObjectType.quantityType(forIdentifier: .stepCount),
+              let sleep = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { call.reject("unavailable"); return }
+        healthStore.requestAuthorization(toShare: nil, read: [steps, sleep]) { _, err in
+            if err != nil { call.reject("no-health"); return }
+            let cal = Calendar.current, now = Date(), start = cal.startOfDay(for: now)
+            let group = DispatchGroup()
+            var stepCount = 0.0, sleptSec = 0.0
+            group.enter()
+            let q1 = HKStatisticsQuery(quantityType: steps, quantitySamplePredicate: HKQuery.predicateForSamples(withStart: start, end: now), options: .cumulativeSum) { _, r, _ in
+                stepCount = r?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                group.leave()
+            }
+            self.healthStore.execute(q1)
+            group.enter()
+            let from = cal.date(byAdding: .hour, value: -18, to: start) ?? start
+            let q2 = HKSampleQuery(sampleType: sleep, predicate: HKQuery.predicateForSamples(withStart: from, end: now), limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                var spans: [(Date, Date)] = []
+                for s in (samples as? [HKCategorySample]) ?? [] {
+                    let v = s.value
+                    if v != HKCategoryValueSleepAnalysis.inBed.rawValue && v != HKCategoryValueSleepAnalysis.awake.rawValue { spans.append((s.startDate, s.endDate)) }
+                }
+                spans.sort { $0.0 < $1.0 }
+                var curS: Date? = nil, curE: Date? = nil
+                for sp in spans {
+                    if let e = curE, sp.0 <= e { if sp.1 > e { curE = sp.1 } }
+                    else { if let a = curS, let b = curE { sleptSec += b.timeIntervalSince(a) }; curS = sp.0; curE = sp.1 }
+                }
+                if let a = curS, let b = curE { sleptSec += b.timeIntervalSince(a) }
+                group.leave()
+            }
+            self.healthStore.execute(q2)
+            group.notify(queue: .main) { call.resolve(["steps": Int(stepCount), "sleepMinutes": Int(sleptSec / 60)]) }
+        }
+    }
+
+    // ---------- 3.5: the Wi-Fi name (so she knows for sure when you're home) ----------
+    private var locMgr: CLLocationManager?
+    @objc func wifiName(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            if #available(iOS 14.0, *) {
+                if self.locMgr == nil { self.locMgr = CLLocationManager() }
+                if self.locMgr?.authorizationStatus == .notDetermined && call.getBool("ask") == true { self.locMgr?.requestWhenInUseAuthorization() }
+                NEHotspotNetwork.fetchCurrent { net in
+                    call.resolve(["ssid": net?.ssid ?? NSNull()])
+                }
+            } else {
+                call.resolve(["ssid": NSNull()])
+            }
+        }
+    }
+
+    // ---------- 3.5: real alarms (AlarmKit, iOS 26+): they ring like the Clock app, even on silent ----------
+    @objc func alarmSet(_ call: CAPPluginCall) {
+        let at = call.getDouble("at") ?? 0
+        let title = call.getString("title") ?? "Alarm"
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *) {
+            Task { @MainActor in
+                do {
+                    let mgr = AlarmManager.shared
+                    if mgr.authorizationState != .authorized {
+                        let st = try await mgr.requestAuthorization()
+                        if st != .authorized { call.reject("alarm-denied"); return }
+                    }
+                    let alert = AlarmPresentation.Alert(title: LocalizedStringResource(stringLiteral: title), stopButton: AlarmButton(text: "Stop", textColor: Color.white, systemImageName: "stop.circle"))
+                    let attrs = AlarmAttributes<FridayAlarmMeta>(presentation: AlarmPresentation(alert: alert), metadata: FridayAlarmMeta(), tintColor: Color.orange)
+                    let id = UUID()
+                    let cfg = AlarmManager.AlarmConfiguration<FridayAlarmMeta>(schedule: .fixed(Date(timeIntervalSince1970: at / 1000)), attributes: attrs)
+                    _ = try await mgr.schedule(id: id, configuration: cfg)
+                    call.resolve(["id": id.uuidString])
+                } catch {
+                    call.reject("alarm-failed")
+                }
+            }
+            return
+        }
+        #endif
+        call.reject("unsupported")
+    }
+
+    @objc func alarmCancel(_ call: CAPPluginCall) {
+        #if canImport(AlarmKit)
+        if #available(iOS 26.0, *), let s = call.getString("id"), let id = UUID(uuidString: s) {
+            try? AlarmManager.shared.cancel(id: id)
+            call.resolve(["ok": true])
+            return
+        }
+        #endif
+        call.resolve(["ok": false])
     }
 
     // ---------- keyboard ----------
@@ -309,3 +436,8 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         textCall = nil
     }
 }
+
+#if canImport(AlarmKit)
+@available(iOS 26.0, *)
+struct FridayAlarmMeta: AlarmMetadata {}
+#endif

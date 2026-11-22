@@ -298,6 +298,28 @@
       P.thermal().then(function (r) { if (r && r.state) fn(r.state); }, function () {});
       if (P.addListener) { try { P.addListener("thermal", function (e) { if (e && e.state) fn(e.state); }); } catch (e) {} }
     },
+    personalVoice: async function () {
+      var P = plugin("FridayKit");
+      if (!P || !P.personalVoice) return { status: "unsupported", voices: [] };
+      try { return await P.personalVoice(); } catch (e) { return { status: "error", voices: [] }; }
+    },
+    health: async function () {
+      var P = plugin("FridayKit");
+      if (!P || !P.health) return { ok: false };
+      try { var r = await P.health(); return { ok: true, steps: r.steps || 0, sleepMinutes: r.sleepMinutes || 0 }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    wifiName: async function (ask) {
+      var P = plugin("FridayKit");
+      if (!P || !P.wifiName) return null;
+      try { var r = await P.wifiName({ ask: !!ask }); return (r && r.ssid) || null; } catch (e) { return null; }
+    },
+    alarm: async function (at, title) {
+      var P = plugin("FridayKit");
+      if (!P || !P.alarmSet) return { ok: false };
+      try { var r = await P.alarmSet({ at: +at, title: title || "Alarm" }); return { ok: true, id: r && r.id }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
     darkKeyboard: async function () {
       var P = plugin("FridayKit");
       if (!P || !P.darkKeyboard) return false;
