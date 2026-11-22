@@ -36,7 +36,7 @@
     { id: "calendar", label: "Calendar", ring: 3, kind: "life", tip: "Reminders and calendar events, added right in the app when the iPhone allows it." },
     { id: "shortcut", label: "Shortcut", ring: 4, kind: "phone", tip: "Jobs only your Shortcut can do: Apple TV, HomePod, texts, calls, alarms, Do Not Disturb." },
     { id: "home", label: "Home", ring: 4, kind: "phone", tip: "Lights and scenes. Right in the app if iOS allows it, otherwise through your Shortcut." },
-    { id: "partner", label: "Partner", ring: 4, kind: "phone", tip: "Messages between Friday and Jarvis, read out loud." },
+    { id: "partner", label: "Partner", ring: 4, kind: "phone", tip: "Messages between Friday and Reed, read out loud." },
     { id: "contacts", label: "Contacts", ring: 4, kind: "phone", tip: "Contact names synced on this phone, so texts and calls find the right person." }
   ];
   var LINKS = [

@@ -19,7 +19,8 @@
     focus: { name: "Focus", line: "Mood: focus mode. Be brief and efficient. No small talk, no follow-up questions unless needed. One or two sentences." },
     hype: { name: "Hype", line: "Mood: hype mode. Be upbeat, energetic, encouraging, and playful. Celebrate wins." },
     calm: { name: "Calm", line: "Mood: calm mode. Be gentle, slow, reassuring, and soft-spoken. Short sentences." },
-    bedtime: { name: "Bedtime", line: "Mood: bedtime mode. Speak softly and briefly like it's late at night. Wind things down, no excitement." }
+    bedtime: { name: "Bedtime", line: "Mood: bedtime mode. Speak softly and briefly like it's late at night. Wind things down, no excitement." },
+    headache: { name: "Headache", line: "Mood: headache mode. They have a headache. Speak very gently and as briefly as you can, usually one short sentence. No jokes, no excitement, no follow-up questions unless needed. Be caring without fussing." }
   };
 
   var PHONE_PATTERNS = [
@@ -36,9 +37,9 @@
     { re: /\bhome ?pod\b/i, name: "music" },
     { re: /\b(pause|resume|skip|next song|previous song|turn (it |the music )?(up|down)|volume)\b/i, name: "music" },
     { re: /\b(play|put on|shuffle)\b.*\b(music|song|songs|playlist|album|radio|station|by|some)\b|\b(music|spotify|apple music)\b/i, name: "music" },
-    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis)[, ]+)?(?:please |can you |could you )?(?:turn |switch )?(?:all|everything) (?:on|off)$|^(?:turn |switch )(?:on|off) (?:all|everything)$/i, name: "lights" },
-    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis)[, ]+)?(?:please |can you |could you )?(?:call|facetime|face time|dial|phone|ring) (?!me\b|it\b|that\b|back\b)\S/i, name: "call" },
-    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis)[, ]+)?(?:please |can you |could you )?(?:play|shuffle|put on) (?!(?:a |the )?(?:game|trivia|joke|video|movie|show)\b|with me\b|along\b)\S/i, name: "music" },
+    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+)?(?:please |can you |could you )?(?:turn |switch )?(?:all|everything) (?:on|off)$|^(?:turn |switch )(?:on|off) (?:all|everything)$/i, name: "lights" },
+    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+)?(?:please |can you |could you )?(?:call|facetime|face time|dial|phone|ring) (?!me\b|it\b|that\b|back\b)\S/i, name: "call" },
+    { re: /^(?:(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+)?(?:please |can you |could you )?(?:play|shuffle|put on) (?!(?:a |the )?(?:game|trivia|joke|video|movie|show)\b|with me\b|along\b)\S/i, name: "music" },
     { re: /\bgood ?night\b/i, name: "good night" },
     { re: /\bbattery\b/i, name: "battery" },
     { re: /\bremind me\b|\bset (a |an )?reminder\b/i, name: "remind" },
@@ -91,6 +92,7 @@
       "Style: warm, casual, dry wit, loyal, light teasing, never rude. Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
       "Everything you say is spoken aloud, so keep replies short (one to three sentences), no lists, no markdown, no links, no emojis.",
       "Sound like a real person talking, not an old voice assistant: contractions, everyday words, natural spoken rhythm. Lead with the answer itself; don't open with 'Certainly', 'Sure thing' or 'Of course' every time, and vary how you start. A small natural reaction is fine now and then ('Oh nice', 'Hmm', 'Got it'). Say numbers, times and symbols the way you'd say them out loud (3:30 as 'three thirty', 75% as 'seventy-five percent').",
+      "Manners: polished and respectful like a trusted personal assistant, but relaxed and natural, never stiff or overly formal.",
       "Address " + profile.ownerName + " as " + (terms || "nothing special") + " about " + perTen + " times in every 10 lines of dialogue. The rest of the time, use no honorific at all — just talk plainly.",
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
       "Keep answers concise unless you are asked for more. Today is " + d.toDateString() + ", and it is " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".",
@@ -161,7 +163,7 @@
 
   // Free facts from Wikipedia (works from the phone, no key).
   async function wikiFacts(q) {
-    q = String(q || "").replace(/^(hey |ok )?(friday|jarvis)[, ]+/i, "").replace(/^(who|what|when|where|why|how)( is| are| was| were| did| does| do)?\s+/i, "").replace(/[?.!]+$/, "").trim();
+    q = String(q || "").replace(/^(hey |ok )?(friday|jarvis|reed)[, ]+/i, "").replace(/^(who|what|when|where|why|how)( is| are| was| were| did| does| do)?\s+/i, "").replace(/[?.!]+$/, "").trim();
     if (q.length < 3) return "";
     try {
       var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;

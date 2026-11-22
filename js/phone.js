@@ -8,7 +8,7 @@
   function cap(t) { t = String(t || "").trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
   function norm(t) {
     return String(t || "").toLowerCase().replace(/[’]/g, "'").replace(/[!?]+$/g, "").replace(/\.$/, "")
-      .replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/, "").replace(/^(please |can you |could you |would you )/, "").replace(/\s+/g, " ").trim();
+      .replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/, "").replace(/^(please |can you |could you |would you )/, "").replace(/\s+/g, " ").trim();
   }
   var NUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, "forty five": 45, fifty: 50, sixty: 60, ninety: 90 };
   // Use the words as they were said (keeps "Batsie" capitalized).
@@ -489,7 +489,7 @@
   function timeWord(d) { d = new Date(d); var h = d.getHours(), m = d.getMinutes(); return (h % 12 || 12) + (m ? ":" + String(m).padStart(2, "0") : "") + (h < 12 ? " AM" : " PM"); }
   function dayWord(d) { var a = new Date(d); a.setHours(0, 0, 0, 0); var b = new Date(); b.setHours(0, 0, 0, 0); var n = Math.round((a - b) / 86400000); return n === 0 ? "today" : n === 1 ? "tomorrow" : a.toLocaleDateString([], { weekday: "long" }); }
   function parseAlarm(raw) {
-    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
+    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
     if (!/^(?:set|make|create|add|put) (?:an |a |my )?alarm\b|^wake me(?: up)?\b|^alarm (?:for|at)\b/.test(t)) return null;
     var lbl = (t.match(/\b(?:called|named|labeled|for (?:my |the )?(work|gym|school|meds|medicine|pills))\b\s*(.*)$/) || [])[0] || "";
     var w = parseWhen(t.replace(/\b(?:alarm|wake me(?: up)?)\b/g, " "));
@@ -504,7 +504,7 @@
   function cToF(c) { return Math.round(c * 9 / 5 + 32); }
   var ROOMS_RE = /\b(?:in|on) (?:the |my )?(bedroom|living room|kitchen|bathroom|office|den|basement|garage|hallway|dining room|nursery|guest room)\b/;
   function parseHomeDevice(raw, known) {
-    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
+    var t = String(raw || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/, "").replace(/^(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+/, "").replace(/^(?:please |can you |could you )/, "").trim();
     if (/\b(lock|unlock|garage|alarm system|security)\b/.test(t)) return null;
     var rm = t.match(ROOMS_RE), room = rm ? rm[1] : "";
     var m;

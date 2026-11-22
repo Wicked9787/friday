@@ -45,6 +45,7 @@
     var e = root.FridayStorage.get("aiVoiceError", null);
     if (!e) return "";
     var m = String(e.msg || "");
+    if (e.provider === "gemini") return geminiReason(e, m);
     if (e.status === 0) return "Couldn't reach Groq for the AI voice. Check the internet and try again.";
     if (e.status === 401) return "Groq didn't accept your key. Check it in Settings, under Groq API key.";
     if (/terms/i.test(m)) return "Groq needs a one-time OK before AI voices work. Open console.groq.com/playground?model=canopylabs/orpheus-v1-english, sign in, and accept the terms. Then tap Test again.";
@@ -53,6 +54,22 @@
     if (e.status === 404 || /model/i.test(m) && /not|exist|decommission/i.test(m)) return "Groq doesn't offer that AI voice right now.";
     if (e.status === "audio") return "The phone didn't let the AI voice play. Tap the play button again.";
     return "Groq said no to the AI voice" + (m ? ": " + m.slice(0, 140) : ".");
+  }
+  // 3.5.1: Gemini voice problems get their own plain-words reasons (they used to be blamed on Groq).
+  function geminiReason(e, m) {
+    var raw = m.replace(/^Gemini voice:\s*/, "");
+    try { var j = JSON.parse(raw); raw = (j.error && (j.error.message || j.error.status)) || raw; } catch (x) {}
+    raw = String(raw).replace(/\s+/g, " ").slice(0, 260);
+    if (e.status === "nokey") return "Gemini voices need a Gemini key. Add one in Settings → Brains (Paste a key), then tap Test again.";
+    if (e.status === 0) return "Couldn't reach Google for the Gemini voice. Check the internet and try again." + (raw ? " (" + raw + ")" : "");
+    if (e.status === 401 || e.status === 403) {
+      if (/not been used|disabled|enable/i.test(raw)) return "Your Gemini key works, but its Google project has the Gemini API turned off. Make a new key at aistudio.google.com/apikey and paste it in Settings → Brains. (" + raw + ")";
+      return "Google didn't accept the Gemini key for voices. Make a fresh key at aistudio.google.com/apikey and paste it in Settings → Brains. (" + raw + ")";
+    }
+    if (e.status === 429) return "Gemini voices are out of free uses for now. They'll come back on their own; until then the other voice is used. (" + raw + ")";
+    if (e.status === 404) return "Google didn't offer any of the Gemini voice models to this key. (" + raw + ")";
+    if (e.status === 400) return "Google turned down the Gemini voice request: " + raw;
+    return "Gemini voice error " + e.status + (raw ? ": " + raw : ".");
   }
   FridayVoice.aiVoiceReason = aiVoiceReason;
 
@@ -72,7 +89,7 @@
     /^(what|what's|whats|how|who|where|when|why|which|can you|could you|will you|would you|do you|is there|are there|tell me|show me|let me|i want|i need|i want to|i need to|i was|i think|wait|hold on|actually)$/,
     /^(turn|switch)( on| off)?( the)?$/,
     /^(set|dim|change)( the)?( \S+)?( lights?)?( to)?$/,
-    /^(hey |hi |ok |okay |yo )?(friday|jarvis)$/
+    /^(hey |hi |ok |okay |yo )?(friday|jarvis|reed)$/
   ];
   function turnWords(text) {
     return String(text || "").toLowerCase().replace(/[’]/g, "'").replace(/[^a-z0-9' %]+/g, " ").replace(/\s+/g, " ").trim();
@@ -158,7 +175,7 @@
         var pc = root.FridayExtras.partnerCfg(prof);
         (pc.names || []).forEach(add); add(pc.contact);
       }
-      ["Friday", "Jarvis"].forEach(add);
+      ["Friday", "Jarvis", "Reed"].forEach(add);
     } catch (e) {}
     if (!core) { try { if (root.FridayNative) root.FridayNative.contacts.names().slice(0, 80).forEach(add); } catch (e2) {} }
     return out;
@@ -662,7 +679,9 @@
   ];
   GEMINI_VOICES.forEach(function (g) { AI_VOICES.push({ id: "ai:gem-" + g[0].toLowerCase(), name: g[0], gender: g[1], blurb: "Gemini voice · " + g[2], gemini: g[0] }); });
   var GEM_BASE = "https://generativelanguage.googleapis.com/v1beta";
-  var GEM_TTS_MODELS = ["gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+  // 3.5.1: Google's current voice models first; the older previews stay as a fallback.
+  var GEM_TTS_MODELS = ["gemini-3.8-flash-lite-tts", "gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"];
+  function gemNewSchema(model) { return /^gemini-3\.[8-9]|^gemini-[4-9]/.test(model); }
   function geminiKey() {
     var S = root.FridayStorage, list = S.get("connections", []) || [];
     for (var i = 0; i < list.length; i++) {
@@ -688,7 +707,8 @@
     focus: { rate: 1.04, pitch: 1.0, tag: "" },
     hype: { rate: 1.06, pitch: 1.05, tag: "[cheerful]" },
     calm: { rate: 0.97, pitch: 0.99, tag: "[calm]" },
-    bedtime: { rate: 0.94, pitch: 0.97, tag: "[whisper]" }
+    bedtime: { rate: 0.94, pitch: 0.97, tag: "[whisper]" },
+    headache: { rate: 0.9, pitch: 0.97, tag: "[calm]" }
   };
 
   FridayVoice.AI_VOICES = AI_VOICES;
@@ -724,7 +744,7 @@
     var mv = Object.assign({}, MOOD_VOICE[m] || MOOD_VOICE.normal);
     var sp = parseFloat(s.voiceSpeed);
     if (sp > 0.5 && sp < 2) mv.rate *= sp;
-    mv.volume = night ? 0.65 : 1;
+    mv.volume = m === "headache" ? 0.45 : (night ? 0.65 : 1);
     return mv;
   };
 
@@ -826,38 +846,71 @@
 
   FridayVoice.prototype._fetchGemini = async function (text, voiceId, tag) {
     var S = root.FridayStorage, key = geminiKey();
-    if (!key) throw new Error("tts no-gemini-key");
+    function fail(status, msg) {
+      S.set("aiVoiceError", { provider: "gemini", status: status, msg: ("Gemini voice: " + (msg || "")).slice(0, 400), at: Date.now() });
+    }
+    if (!key) { fail("nokey", ""); throw new Error("tts no-gemini-key"); }
     var g = AI_VOICES.filter(function (x) { return x.id === "ai:" + voiceId; })[0];
-    var style = tag === "[cheerful]" ? "Say cheerfully: " : tag === "[calm]" ? "Say calmly: " : tag === "[whisper]" ? "Say softly: " : "";
-    var body = JSON.stringify({ contents: [{ parts: [{ text: style + text }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: g ? g.gemini : "Kore" } } } } });
+    var styleWord = tag === "[cheerful]" ? "cheerful" : tag === "[calm]" ? "calm and gentle" : tag === "[whisper]" ? "soft and quiet" : "";
+    var speech = { voiceConfig: { prebuiltVoiceConfig: { voiceName: g ? g.gemini : "Kore" } } };
+    function bodyFor(model, withMeta) {
+      var part;
+      if (gemNewSchema(model)) {
+        // Newer models read the text word for word, so the style goes in speech_metadata.
+        part = { text: text };
+        if (withMeta && styleWord) part.speech_metadata = { style: styleWord };
+      } else {
+        part = { text: (styleWord ? "Say in a " + styleWord + " way: " : "") + text };
+      }
+      return JSON.stringify({ contents: [{ parts: [part] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: speech } });
+    }
     var http = root.FridayBrain && root.FridayBrain.http ? root.FridayBrain.http : function (u, i) { return fetch(u, i); };
-    var known = S.get("gemTtsModel", ""), models = known ? [known].concat(GEM_TTS_MODELS.filter(function (m) { return m !== known; })) : GEM_TTS_MODELS;
-    var lastErr = "";
+    var known = S.get("gemTtsModel", ""), models = known && GEM_TTS_MODELS.indexOf(known) >= 0 ? [known].concat(GEM_TTS_MODELS.filter(function (m) { return m !== known; })) : GEM_TTS_MODELS;
+    var notFound = [];
     for (var i = 0; i < models.length; i++) {
-      var url = GEM_BASE + "/models/" + models[i] + ":generateContent";
-      var res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: body });
-      if (res.status === 401 && /^AQ\./.test(key)) res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: body });
-      if (res.status === 404) { lastErr = "404"; continue; }
+      var model = models[i], url = GEM_BASE + "/models/" + model + ":generateContent";
+      async function send(withMeta) {
+        var init = { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: bodyFor(model, withMeta) };
+        var r;
+        try { r = await http(url, init); }
+        catch (netErr) { fail(0, String((netErr && netErr.message) || "")); throw new Error("tts net"); }
+        if ((r.status === 401 || r.status === 403) && /^AQ\./.test(key)) {
+          r = await http(url, { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + key }, body: init.body });
+        }
+        return r;
+      }
+      var res = await send(true);
+      var t = "";
+      if (res.status === 400 && gemNewSchema(model)) {
+        try { t = await res.text(); } catch (e) {}
+        // If this model doesn't know speech_metadata, try once without it.
+        if (/speech_metadata|unknown name|invalid json payload/i.test(t)) { res = await send(false); t = ""; }
+        else { fail(400, t); throw new Error("tts 400"); }
+      }
+      if (res.status === 404) { notFound.push(model); continue; }
       if (!res.ok) {
-        var t = ""; try { t = await res.text(); } catch (e) {}
-        S.set("aiVoiceError", { status: res.status, msg: ("Gemini voice: " + t).slice(0, 400), at: Date.now() });
-        var pause = /per day|daily|quota/i.test(t) ? 3 * 3600 * 1000 : (res.status === 429 ? 10 * 60 * 1000 : 30 * 60 * 1000);
-        S.set("gemVoicePauseUntil", Date.now() + pause);
+        try { t = t || await res.text(); } catch (e) {}
+        fail(res.status, t);
+        var pause = /per day|daily|quota/i.test(t) ? 3 * 3600 * 1000 : (res.status === 429 ? 10 * 60 * 1000 : (res.status === 400 ? 0 : 30 * 60 * 1000));
+        if (pause) S.set("gemVoicePauseUntil", Date.now() + pause);
         throw new Error("tts " + res.status);
       }
       var data = await res.json();
       var parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
       var part = parts.filter(function (p) { return p.inlineData && p.inlineData.data; })[0];
-      if (!part) throw new Error("tts empty");
+      if (!part) { fail("empty", "Google sent back no audio."); throw new Error("tts empty"); }
       var mime = part.inlineData.mimeType || "", rm = mime.match(/rate=(\d+)/), rate = rm ? +rm[1] : 24000;
       var bin = atob(part.inlineData.data), pcm = new Uint8Array(bin.length);
       for (var j = 0; j < bin.length; j++) pcm[j] = bin.charCodeAt(j);
-      S.set("gemTtsModel", models[i]);
+      S.set("gemTtsModel", model);
       S.set("aiVoiceError", null);
       if (root.FridayBrain && root.FridayBrain.noteUse) root.FridayBrain.noteUse("Gemini", "tts");
-      return /wav/i.test(mime) ? pcm.buffer : wavFromPcm(pcm, rate);
+      // Newer models send a finished WAV file; older ones send raw sound that needs a WAV header.
+      var isWav = /wav/i.test(mime) || (pcm.length > 12 && pcm[0] === 82 && pcm[1] === 73 && pcm[2] === 70 && pcm[3] === 70);
+      return isWav ? pcm.buffer : wavFromPcm(pcm, rate);
     }
-    throw new Error("tts " + (lastErr || "no-model"));
+    fail(404, "None of these voice models are available to this key: " + notFound.join(", "));
+    throw new Error("tts 404");
   };
 
   FridayVoice.prototype._fetchClip = async function (text, voiceId, tag) {
@@ -874,7 +927,7 @@
       try { t = await res.text(); } catch (e) {}
       var em = t;
       try { var ej = JSON.parse(t); em = (ej.error && (ej.error.message || ej.error.code)) || t; } catch (e) {}
-      root.FridayStorage.set("aiVoiceError", { status: res.status, msg: String(em).slice(0, 400), at: Date.now() });
+      root.FridayStorage.set("aiVoiceError", { provider: "groq", status: res.status, msg: String(em).slice(0, 400), at: Date.now() });
       var pause = /per day|daily|rpd|tpd/i.test(t) ? 3 * 3600 * 1000 : (res.status === 429 ? 10 * 60 * 1000 : 30 * 60 * 1000);
       if (res.status === 401) pause = 0;
       if (pause) root.FridayStorage.set("aiVoicePauseUntil", Date.now() + pause);
@@ -1275,7 +1328,8 @@
       try { buf = await this._fetchClip(line, voiceId, ""); }
       catch (e) {
         var last = root.FridayStorage.get("aiVoiceError", null);
-        if (!last || Date.now() - (last.at || 0) > 15000) root.FridayStorage.set("aiVoiceError", { status: 0, msg: String((e && e.message) || ""), at: Date.now() });
+        var gem = String(voiceId || "").indexOf("gem-") === 0;
+        if (!last || Date.now() - (last.at || 0) > 15000) root.FridayStorage.set("aiVoiceError", { provider: gem ? "gemini" : "groq", status: 0, msg: String((e && e.message) || ""), at: Date.now() });
         return { ok: false, reason: aiVoiceReason() };
       }
       if (gen !== this._gen) return { ok: true };

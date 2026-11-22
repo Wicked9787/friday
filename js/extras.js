@@ -11,7 +11,7 @@
   function cap(t) { t = String(t || "").trim(); return t.charAt(0).toUpperCase() + t.slice(1); }
   function norm(t) {
     return String(t || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?]+$/g, "")
-      .replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/, "")
+      .replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/, "")
       .replace(/^(please |can you |could you |would you )/, "").replace(/\s+/g, " ").trim();
   }
   function money(n) { return D().money ? D().money(n) : "$" + (Math.round(n * 100) / 100); }
@@ -94,7 +94,7 @@
   function partnerMessage(text, profile) {
     var cfg = partnerCfg(profile);
     if (!cfg.on || !cfg.names.length || !cfg.contact) return null;
-    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/^(please |can you |could you )/i, "");
+    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/i, "").replace(/^(please |can you |could you )/i, "");
     var N = "(" + cfg.names.map(esc).join("|") + ")";
     var pats = [
       new RegExp("^(?:tell|let) " + N + " know (?:that )?(.+)$", "i"),
@@ -127,7 +127,7 @@
     var action = (m[2] || "").toLowerCase(), q = parseQuery(m[3]);
     if (action === "msg" || action === "message") {
       var txt = String(q.text || q.t || "").trim();
-      var pm = txt.match(/^(?:💬\s*)?from (friday|jarvis)\s*:\s*/i);
+      var pm = txt.match(/^(?:💬\s*)?from (friday|jarvis|reed)\s*:\s*/i);
       if (pm) txt = txt.slice(pm[0].length);
       // texts or emails handed over by an automation: friday://msg?kind=text&from=Mom&text=...
       var kind = String(q.kind || (pm ? "partner" : (q.from ? "text" : "partner"))).toLowerCase();
@@ -295,7 +295,7 @@
     new RegExp("^what(?:'s| is) [\"“']?(.+?)[\"”']? in (" + LANG_RE + ")$", "i")
   ];
   function parseTranslate(text) {
-    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/[?.!]+$/, "");
+    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/i, "").replace(/[?.!]+$/, "");
     var m = t.match(new RegExp("^translate (?:to|into) (" + LANG_RE + ")[:,]?\\s+(.+)$", "i"));
     if (m) return { text: m[2].trim(), language: cap(m[1].toLowerCase()), code: LANGS[m[1].toLowerCase()] };
     for (var i = 0; i < TR.length; i++) {
@@ -340,7 +340,7 @@
 
   // ---------- 3.1: "text Mom I'm on my way" goes straight to the Shortcut (no AI step) ----------
   function textSend(text) {
-    var raw = String(text || "").trim().replace(/[\u2019]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/^(please |can you |could you )/i, "").replace(/[.!]+$/, "");
+    var raw = String(text || "").trim().replace(/[\u2019]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/i, "").replace(/^(please |can you |could you )/i, "").replace(/[.!]+$/, "");
     if (/\b(draft|write|compose|reword|rewrite|help me)\b/i.test(raw)) return null;
     var m = raw.match(/^(?:send (?:a )?(?:text|message) to|text|message)\s+(.+)$/i);
     if (!m) return null;

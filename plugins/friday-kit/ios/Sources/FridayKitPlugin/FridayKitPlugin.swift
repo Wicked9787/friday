@@ -31,6 +31,7 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "canOpen", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "darkKeyboard", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "thermal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "brightness", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "secretGet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "secretSet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "secretDelete", returnType: CAPPluginReturnPromise),
@@ -70,6 +71,18 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
 
     @objc func thermal(_ call: CAPPluginCall) {
         call.resolve(["state": FridayKitPlugin.thermalName()])
+    }
+
+    // 3.5.1 headache mode: read and set the screen brightness (0.0 to 1.0).
+    @objc func brightness(_ call: CAPPluginCall) {
+        let value = call.getDouble("value")
+        DispatchQueue.main.async {
+            let previous = Double(UIScreen.main.brightness)
+            if let v = value {
+                UIScreen.main.brightness = CGFloat(max(0.0, min(1.0, v)))
+            }
+            call.resolve(["previous": previous])
+        }
     }
 
     // ---------- private line keys (iPhone Keychain, this phone only) ----------

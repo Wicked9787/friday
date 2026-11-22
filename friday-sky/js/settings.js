@@ -207,7 +207,17 @@
     if (this.profile.daddySms && !this.values.daddySms) this.values.daddySms = this.profile.daddySms;
     saveSettings(this.values);
     this._bind();
+    this._pronouns();
   }
+
+  // 3.5.1: Reed is a he, so his Settings say "Him" instead of "Her".
+  FridaySettings.prototype._pronouns = function () {
+    if ((this.profile || {}).pronoun !== "him") return;
+    document.querySelectorAll('.shub-b[data-group="her"] .shub-l, .sgroup[data-group="her"] .sgroup-h').forEach(function (e) { e.textContent = "Him"; });
+    var hf = document.querySelector('#qs-handsfree');
+    var small = hf && hf.parentNode ? hf.parentNode.querySelector("small") : null;
+    if (small) small.textContent = small.textContent.replace(/\bher\b/, "him");
+  };
 
   FridaySettings.prototype._syncHeaders = function () {
     var looks = document.getElementById("looks-current");
@@ -944,7 +954,7 @@
     };
     syncWifi();
     var nh = el("nfc-hint");
-    if (nh) { var sc = (prof.assistantName || "Friday").toLowerCase(); nh.innerHTML = nh.innerHTML.replace(/friday:\/\//g, sc + "://"); }
+    if (nh) { var sc = prof.scheme || (prof.assistantName || "Friday").toLowerCase(); nh.innerHTML = nh.innerHTML.replace(/friday:\/\//g, sc + "://"); }
   };
 
   // ---------- 3.4: private line ----------
@@ -952,7 +962,8 @@
     var self = this, v = this.values;
     var PL = root.FridayPrivate;
     var prof = this.profile || {};
-    var other = prof.id === "batsie" ? "Friday" : "Jarvis", otherScheme = other.toLowerCase();
+    // 3.5.1: Jarvis is now called Reed, but his app address stays jarvis:// so old links keep working.
+    var other = prof.id === "batsie" ? "Friday" : "Reed", otherScheme = prof.id === "batsie" ? "friday" : "jarvis";
     var partner = String(v.partnerNames || (prof.id === "batsie" ? "Sky" : "Batsie")).split(",")[0].trim() || (prof.id === "batsie" ? "Sky" : "Batsie");
     function el(id) { return document.getElementById(id); }
     function setText(id, t) { var e = el(id); if (e) e.textContent = t; }
@@ -1070,7 +1081,7 @@
   // ---------- 3.1: talk time, phone jobs, Back Tap, contacts, widget styles ----------
   FridaySettings.prototype._bind31 = function () {
     var self = this, v = this.values, prof = this.profile || {};
-    var name = prof.assistantName || "Friday", scheme = name.toLowerCase();
+    var name = prof.assistantName || "Friday", scheme = prof.scheme || name.toLowerCase();
     function setText(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
     function copyText(text, msg) {
       function fallback() {
@@ -1449,8 +1460,8 @@
       rh.onchange = function () { v.recapHour = parseInt(rh.value, 10); saveSettings(v); };
     }
     var isB = prof.id === "batsie";
-    var other = isB ? "Friday" : "Jarvis";
-    var scheme = String(prof.assistantName || "Friday").toLowerCase();
+    var other = isB ? "Friday" : "Reed";
+    var scheme = prof.scheme || String(prof.assistantName || "Friday").toLowerCase();
     var defNames = isB ? "Sky, Daddy" : "Batsie";
     var pn = document.getElementById("set-partner-names"), pc = document.getElementById("set-partner-contact");
     function firstName() { return String(v.partnerNames || defNames).split(",")[0].trim(); }
@@ -1538,7 +1549,7 @@
       Object.keys(moods).forEach(function (k) {
         var b = document.createElement("button");
         b.type = "button"; b.className = "life-tab"; b.setAttribute("data-mood", k); b.textContent = moods[k].name;
-        b.onclick = function () { v.mood = k; saveSettings(v); syncMood(); };
+        b.onclick = function () { v.mood = k; saveSettings(v); syncMood(); try { root.dispatchEvent(new CustomEvent("friday:mood", { detail: { from: "settings" } })); } catch (e) {} };
         row.appendChild(b);
       });
     }
@@ -1988,7 +1999,7 @@
     this._syncHeaders();
     this.onIcon(id);
     var tag = (this.profile.id || "sky").replace(/[^a-z0-9]/g, "") || "sky";
-    var label = this.profile.assistantName || (tag === "batsie" ? "Jarvis" : "Friday");
+    var label = this.profile.assistantName || (tag === "batsie" ? "Reed" : "Friday");
     var href = appUrl(this.profile.id || "sky");
     fetch("icons/choices/" + id + "-180.png").then(function (r) {
       if (!r.ok) throw new Error("icon");

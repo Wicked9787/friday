@@ -36,7 +36,7 @@ jobs:
             app_name: Friday
             artifact_name: friday
           - profile: batsie
-            app_name: Jarvis
+            app_name: Reed
             artifact_name: jarvis
 
     env:

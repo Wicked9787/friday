@@ -94,7 +94,7 @@
   async function status() {
     if (!subtle) return { ok: false, paired: false, verified: false, words: [], reason: "no-crypto" };
     var me = await getMe(false), peer = await getPeer();
-    return { ok: true, haveKey: !!me, sent: !!(me && me.sent), paired: !!(me && peer), verified: !!(me && peer && peer.verified), words: me && peer ? await safetyWords() : [], partner: theirs(), at: peer ? peer.at : 0 };
+    return { ok: true, haveKey: !!me, sent: !!(me && me.sent), paired: !!(me && peer), verified: !!(me && peer && peer.verified), words: me && peer ? await safetyWords() : [], partner: theirs() === "Jarvis" ? "Reed" : theirs(), at: peer ? peer.at : 0 };
   }
   // The pairing payload for a text: "k.<my public key>"
   async function myKeyPayload() { var me = await getMe(true); return "k." + me.pub; }

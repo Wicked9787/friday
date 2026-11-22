@@ -298,6 +298,15 @@
       P.thermal().then(function (r) { if (r && r.state) fn(r.state); }, function () {});
       if (P.addListener) { try { P.addListener("thermal", function (e) { if (e && e.state) fn(e.state); }); } catch (e) {} }
     },
+    // 3.5.1: set the screen brightness (0 to 1). Resolves with the brightness it was before, or null.
+    brightness: async function (value) {
+      var P = plugin("FridayKit");
+      if (!P || !P.brightness) return null;
+      try {
+        var r = await P.brightness(value == null ? {} : { value: Math.max(0, Math.min(1, +value)) });
+        return r && typeof r.previous === "number" ? r.previous : null;
+      } catch (e) { return null; }
+    },
     personalVoice: async function () {
       var P = plugin("FridayKit");
       if (!P || !P.personalVoice) return { status: "unsupported", voices: [] };

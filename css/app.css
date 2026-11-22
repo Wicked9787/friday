@@ -1301,3 +1301,9 @@ body.typing.no-suggestions #type-thread { bottom: max(calc(70px + var(--safe-bot
 .neural-mode { position: absolute; bottom: 10px; left: 10px; display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: rgba(20,20,22,.78); border: 1px solid var(--line); z-index: 3; }
 .neural-mode button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 9px; }
 .neural-mode button.on { background: var(--gold); color: #14110a; }
+
+/* 3.5.1 headache mode: everything darker and calmer, no bright flashes. */
+body.headache #orb-canvas { filter: brightness(0.35) saturate(0.6); transition: filter 1.2s ease; }
+body.headache #bubble-tray, body.headache #chips { opacity: 0.5; transition: opacity 1.2s ease; }
+body.headache::after { content: ""; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); pointer-events: none; z-index: 2147483000; transition: opacity 1.2s ease; }
+@media (prefers-reduced-motion: reduce) { body.headache #orb-canvas, body.headache #bubble-tray, body.headache #chips { transition: none; } }

@@ -9,11 +9,12 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.0";
+  var APP_VERSION = "3.5.1";
   var APP_LABEL = "All In";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false);
-  function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false; }
+  var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
+  function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
+  function handsFreeOn() { var v = (settings && settings.values) || settingsData || {}; return v.handsFree !== false && !headacheOn(); }
   var busy = false;
 
 
@@ -496,6 +497,7 @@
 
   function maybeGreet() {
     var s = (settings && settings.values) || settingsData || {};
+    if (headacheOn()) return; // 3.5.1: no briefing or greeting while she has a headache
     var now = new Date();
     var hour = now.getHours();
     var dayKey = now.getFullYear() + "-" + (now.getMonth() + 1) + "-" + now.getDate();
@@ -783,6 +785,7 @@
         if (act.url) { await voice.speak(act.say, profile); goUrl(act.url, opts); return; }
         await voice.speak(act.say, profile);
         if (act.shortcut) goShortcut(act.shortcut, opts);
+        if (act.steps && act.steps.length) await runMany(act.steps, null, opts);
         return;
       }
       var spokeStream = false;
@@ -1219,7 +1222,7 @@
     var active = busy || (voice && (voice.speaking || voice.listening));
     if (active) lastActivity = Date.now();
     var rest = s.restingOrb !== false && !active && Date.now() - lastActivity > 60000;
-    var night = s.nightOrb !== false && !!(window.FridayNight && window.FridayNight.isNight());
+    var night = (s.nightOrb !== false && !!(window.FridayNight && window.FridayNight.isNight())) || headacheOn();
     orb.setPower({ rest: rest, night: night, saver: !!orb.lowPower });
   }
   // ---------- background window (3.1.3) ----------
@@ -1334,7 +1337,7 @@
   }
   function privateCommand(text) {
     var pc = partnerInfo();
-    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/i, "").replace(/^(please |can you |could you )/i, "");
+    var t = String(text || "").trim().replace(/[’]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/i, "").replace(/^(please |can you |could you )/i, "");
     var names = (pc.names || []).map(function (n) { return n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); });
     if (names.length) {
       var N = "(?:" + names.join("|") + ")";
@@ -1352,7 +1355,7 @@
     var r = t.match(/^(?:reply privately|private reply|reply in private)(?: saying| with)?[,:]?\s*(.*)$/i);
     if (r) return { kind: "send", body: (r[1] || "").trim().replace(/[.!]+$/, "") };
     if (/^(?:open |show |read |check |play )?(?:my |the )?private (?:messages|inbox|line|texts)(?: please)?$/i.test(t) || /^(?:any|do i have any) (?:new )?private messages\??$/i.test(t)) return { kind: "open" };
-    if (/^(?:start|set up|setup|pair) (?:the |a |our )?private line$|^pair (?:with )?(?:friday|jarvis)$/i.test(t)) return { kind: "pair" };
+    if (/^(?:start|set up|setup|pair) (?:the |a |our )?private line$|^pair (?:with )?(?:friday|jarvis|reed)$/i.test(t)) return { kind: "pair" };
     return null;
   }
   function capFirst(x) { x = String(x || ""); return x.charAt(0).toUpperCase() + x.slice(1); }
@@ -1692,6 +1695,7 @@
   var lastPhoto = null;
 
   function chime() {
+    if (headacheOn()) return;
     var Ctx = window.AudioContext || window.webkitAudioContext;
     var ctx = new Ctx();
     [0, 0.28, 0.56].forEach(function (t, i) {
@@ -1710,7 +1714,35 @@
   function applyNight() {
     var on = !!(window.FridayNight && window.FridayNight.isNight());
     document.body.classList.toggle("night", on);
+    applyHeadache();
   }
+
+  // ---------- 3.5.1: headache mode ----------
+  // Dims the screen (and the phone's real brightness in the app), slows and quiets her voice,
+  // and pauses hands-free, chimes, briefings and greetings. The brightness goes back when it ends.
+  var headacheWas = null;
+  function applyHeadache() {
+    var on = headacheOn();
+    document.body.classList.toggle("headache", on);
+    if (on === headacheWas) return;
+    var first = headacheWas === null;
+    headacheWas = on;
+    var N = window.FridayNative;
+    if (on) {
+      if (handsFree) handsFree = false;
+      if (N && N.brightness) N.brightness(0.12).then(function (prev) {
+        if (prev != null && FridayStorage.get("headacheBrightness", null) == null) FridayStorage.set("headacheBrightness", prev);
+      });
+      try { applyPower(); } catch (e) {}
+    } else if (!first) {
+      var prev = FridayStorage.get("headacheBrightness", null);
+      FridayStorage.set("headacheBrightness", null);
+      if (N && N.brightness && prev != null) N.brightness(prev);
+      handsFree = handsFreeOn();
+      try { applyPower(); } catch (e) {}
+    }
+  }
+  window.addEventListener("friday:mood", function () { applyHeadache(); });
 
   // ---------- diagnostics ----------
   async function runDiagnostics(speak) {

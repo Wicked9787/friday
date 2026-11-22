@@ -370,13 +370,32 @@
      { say, panel, url, shortcut, photo } for the app to act on. */
   FridayLife.prototype.handle = function (text) {
     var raw = String(text || "").trim();
-    var t = clean(raw).toLowerCase().replace(/^(hey |ok |okay )?(friday|jarvis)[, ]+/, "").replace(/^(please |can you |could you |would you )/, "");
+    var t = clean(raw).toLowerCase().replace(/[\u2019]/g, "'").replace(/^(hey |ok |okay )?(friday|jarvis|reed)[, ]+/, "").replace(/^(please |can you |could you |would you )/, "");
     var m, self = this, name;
     if (!t) return null;
 
     // instant answers: time, date, math, conversions (no AI, no internet)
     var quick = instantAnswer(t);
     if (quick) return { say: quick, instant: true };
+
+    // 3.5.1: headache mode — dim screen, quiet slow voice, fewer interruptions, and a dim house.
+    if (/^(?:i (?:have|got|'ve got|think i have) (?:a |such a |a bad |a really bad |a terrible |another )?(?:headache|migraine)(?: again)?|my head (?:hurts|is killing me|is pounding|really hurts)|(?:turn on |switch to |go to |start |put on )?(?:headache|migraine) mode(?: on)?)$/.test(t)) {
+      var hs = S().get("settings", {}) || {};
+      var was = hs.mood === "headache";
+      hs.mood = "headache";
+      S().set("settings", hs);
+      fire("friday:mood");
+      return { say: was ? "Still in headache mode. I'll stay quiet." : "Sorry about your head. I'll keep it dim and quiet.", steps: was ? [] : (hs.headacheSteps || ["lights to 10 percent", "turn off the tv"]) };
+    }
+    if (/^(?:(?:turn off |stop |end |exit |cancel )?(?:headache|migraine) mode(?: off)?|(?:my |the )?headache(?:'s| is) (?:gone|better|over|done)|i(?:'m| am) feeling better(?: now)?|i feel better(?: now)?)$/.test(t) && !/^(?:headache|migraine) mode(?: on)?$/.test(t)) {
+      var hs2 = S().get("settings", {}) || {};
+      if (hs2.mood === "headache") {
+        hs2.mood = "normal";
+        S().set("settings", hs2);
+        fire("friday:mood");
+        return { say: "Glad you're feeling better. Back to normal." };
+      }
+    }
 
     // moods
     m = t.match(/^(?:switch to |go to |turn on |set |use )?(normal|focus|hype|calm|bedtime) mode$|^(?:back to normal|normal mode|regular mode)$/);
