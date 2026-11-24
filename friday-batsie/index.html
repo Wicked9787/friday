@@ -84,6 +84,7 @@
     </div>
     <div id="reveal-zone" aria-hidden="true"></div>
     <div id="caption">
+      <div class="pics" id="pics" hidden></div>
       <div class="name" id="caption-name">friday</div>
       <div class="line" id="caption-line">Tap to talk</div>
     </div>
@@ -135,6 +136,8 @@
           <div class="sub">When you type, her orb steps away until you turn Live back on.</div>
           <label class="toggle-row" style="margin-top:12px">Speak typed replies <input type="checkbox" id="set-speak-typed"></label>
           <div class="sub">Off: when you type, she answers on screen only. On: she says it out loud too.</div>
+          <label class="toggle-row" style="margin-top:12px">Pictures with answers <input type="checkbox" id="set-pictures"></label>
+          <div class="sub">When photos help (tools, how-to, things you ask about), she shows a few from the web. Tap one to see it big.</div>
           <label class="toggle-row" style="margin-top:12px">Suggestions <input type="checkbox" id="set-suggestions"></label>
           <div class="sub">The quick reply chips above the text box. Edit them below.</div>
         </div>
@@ -426,6 +429,8 @@
         <label>Done right in the app</label>
         <div class="sub" id="phone-status">She tries everything she can right in the app first. Only what the iPhone doesn't let apps do goes to your Shortcut.</div>
         <ul class="phone-list" id="phone-list"></ul>
+        <label class="toggle-row" style="margin-top:12px">Camera in the app <input type="checkbox" id="set-camera-inapp"></label>
+        <div class="sub">On: “open the camera” or “take a picture” opens Apple's simple camera right inside her (photo and video, flash, flip, zoom), and it saves to your Photos. No Shortcut. Off: your Shortcut opens the Camera app.</div>
         <button class="btn gold" type="button" id="btn-notify-on">Turn on notifications</button>
         <div class="sub" id="notify-sub">So timers, bills and countdowns ring even when the app is closed.</div>
         <label class="toggle-row" style="margin-top:12px">Texts and calls from the app <input type="checkbox" id="set-texts-inapp"></label>
@@ -743,6 +748,11 @@
     </div>
   </section>
 
+  <div id="pic-view" class="pic-view" hidden>
+    <img id="pic-view-img" alt="">
+    <div class="pic-view-bar"><span id="pic-view-title"></span><a id="pic-view-src" href="#" target="_blank" rel="noopener">Source</a></div>
+  </div>
+
   <section class="panel" id="panel-private" aria-label="Private messages">
     <header>
       <h1>Private</h1>
@@ -882,8 +892,14 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5.4</h1>
-      <p class="wn-tag">Backups that actually save</p>
+      <h1>What's new in 3.5.5</h1>
+      <p class="wn-tag">Keyboard and camera</p>
+      <ul>
+        <li>The typing bar sits right on top of the keyboard now (no more hiding behind it), and the arrows bar above the keyboard is gone</li>
+        <li>Photos without asking: when photos would help, like “what are the best tools?”, she shows a few of the things she named under her answer. Tap one to see it big</li>
+        <li>Optional camera inside the app: Settings → Phone → In the app → Camera in the app</li>
+      </ul>
+      <p class="wn-tag">3.5.4 · Backups that actually save</p>
       <ul>
         <li>Settings → Backup &amp; About → Save backup opens the iPhone menu: pick Save to Files (or AirDrop, or send it to yourself). Restore from file brings it back</li>
         <li>Her mic switches back on by itself if her audio got stuck in speaker-only mode</li>

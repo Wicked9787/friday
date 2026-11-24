@@ -1,5 +1,5 @@
 /* Friday service worker: cache the app shell so the home screen still opens offline. */
-var CACHE = "friday-shell-v25";
+var CACHE = "friday-shell-v26";
 var SHELL = [
   "./",
   "./index.html",

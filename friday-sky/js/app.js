@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.4";
-  var APP_LABEL = "Pictures & Robot";
+  var APP_VERSION = "3.5.5";
+  var APP_LABEL = "Keyboard & Camera";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -721,7 +721,34 @@
         await voice.whenDone();
         return;
       }
-      var camCmd = cameraCommand(text);
+      var camCmd = cameraCommand(text) || (/^(?:hey \w+ )?(?:please )?(?:take|snap) (?:a |me a )?(?:picture|photo|pic|selfie|video)(?: please)?$/i.test(text.replace(/[.!?,]/g, "").trim()) ? "open camera" : null);
+      // 3.5.2: the camera inside the app (Settings → Phone → In the app → Camera in the app)
+      if (camCmd === "open camera" && sv().cameraInApp === true && window.FridayNative && FridayNative.kit.camera) {
+        setCaption("Opening the camera.");
+        var cr0 = await FridayNative.kit.camera(/video/i.test(text) ? "video" : "photo");
+        if (cr0.ok) {
+          if (cr0.photo) { lastPhoto = cr0.photo; lastPhotoAt = Date.now(); }
+          var cl0 = cr0.result === "saved" ? (cr0.kind === "video" ? "Video saved to your Photos." : "Saved to your Photos. Ask me \u201cwhat is this?\u201d and I'll take a look.") : "Okay.";
+          setCaption(cl0);
+          await voice.speak(cl0.replace(/\u201c|\u201d/g, ""), profile);
+          return;
+        }
+      }
+      // "what is this?" right after taking a picture in her camera
+      if (lastPhoto && lastPhotoAt && Date.now() - lastPhotoAt < 600000 && /^(?:hey \w+ )?(?:what(?:'s| is) (?:this|that|it)|what am i looking at|what do you see|look at (?:this|that|it|the picture|the photo)|can you see (?:this|it)|tell me about (?:this|the) (?:picture|photo))\b/i.test(text.replace(/[’]/g, "'").trim())) {
+        chat._push("user", text);
+        setCaption("Looking…");
+        emitActivity("vision", "Looked at your photo");
+        var va = await window.FridayBrain.ask([
+          { role: "system", content: "You are " + (profile.assistantName || "Friday") + ". Answer about the photo in two to four short spoken sentences, no lists or markdown." },
+          { role: "user", content: [{ type: "text", text: text }, { type: "image_url", image_url: { url: lastPhoto } }] }
+        ], { purpose: "vision", max_tokens: 300 });
+        va = window.FridayGroq ? window.FridayGroq.cleanSpoken(va || "") : String(va || "");
+        chat._push("assistant", va);
+        setCaption(va);
+        await voice.speak(va, profile);
+        return;
+      }
       if (camCmd) {
         setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
         goShortcut(camCmd, opts);
@@ -845,6 +872,11 @@
           // 3.5.2: real photos in their own panel, with her answer on top
           window.FridayPictures.render(document.getElementById("pics-box"), result.pictures, result.text, openUrl);
           openPanel("pictures");
+        }
+        else {
+          // 3.5.5: no picture words, but photos would help (like "best tools"): show a few under her answer
+          hidePics();
+          picturesFor(text, result.text || "").then(function (pl) { showPics(pl, result.text || ""); }, function () {});
         }
         if (bubbles && bubbles.noteAppMentions(text)) bubbles.refreshSuggestions();
         if (result.streamed || spokeStream) await voice.whenDone();
@@ -1356,6 +1388,92 @@
     beginListen();
   }
 
+  // ---------- 3.5.2: pictures with answers ----------
+  // After she answers, a tiny AI step decides if photos would help and names the exact things
+  // (so "what are the best tools?" shows those tools). Free photos come from Openverse, then Wikimedia Commons.
+  var PIC_HINT = /\b(show|picture|pictures|photo|photos|image|images|pic|pics|look like|looks like|tools?|how (?:do|to|can|should|would)|best way|types? of|kinds? of|build|make|fix|install|repair|diy|what is a|what's a|which|recipe|plant|flower|dog|cat|bird|car|truck|house|room|outfit)\b/i;
+  var picsTimer = 0, threadPics = null;
+  function httpGet(url) {
+    var h = window.FridayBrain && FridayBrain.http ? FridayBrain.http : function (u, i) { return fetch(u, i); };
+    return h(url, { method: "GET", headers: { Accept: "application/json" } }).then(function (r) { return r.ok ? r.json() : null; }, function () { return null; });
+  }
+  async function imagesFor(q, n) {
+    var out = [];
+    var ov = await httpGet("https://api.openverse.org/v1/images/?q=" + encodeURIComponent(q) + "&page_size=" + (n + 2) + "&mature=false");
+    ((ov && ov.results) || []).forEach(function (r) {
+      if (out.length < n && r && (r.thumbnail || r.url)) out.push({ thumb: r.thumbnail || r.url, full: r.url || r.thumbnail, title: r.title || q, src: r.foreign_landing_url || r.url });
+    });
+    if (out.length < n) {
+      var wc = await httpGet("https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrnamespace=6&gsrlimit=" + (n + 2) + "&prop=imageinfo&iiprop=url&iiurlwidth=600&gsrsearch=" + encodeURIComponent(q + " filetype:bitmap"));
+      var pages = (wc && wc.query && wc.query.pages) || {};
+      Object.keys(pages).forEach(function (k) {
+        var p = pages[k], ii = p && p.imageinfo && p.imageinfo[0];
+        if (out.length < n && ii && (ii.thumburl || ii.url)) out.push({ thumb: ii.thumburl || ii.url, full: ii.thumburl || ii.url, title: String(p.title || q).replace(/^File:/, "").replace(/\.[a-z]+$/i, ""), src: ii.descriptionurl || ii.url });
+      });
+    }
+    return out;
+  }
+  async function picturesFor(question, answer) {
+    var s0 = sv();
+    if (s0.pictures === false || !answer || !window.FridayBrain || !FridayStorage.hasApiKey()) return [];
+    if (!PIC_HINT.test(question) && String(answer).length < 260) return [];
+    var picks = "";
+    try {
+      picks = await FridayBrain.ask([
+        { role: "system", content: "You choose photos to show next to a voice assistant's answer. If photos would really help (physical things, tools, materials, parts, steps of a build or repair, places, animals, plants, food, products, or the user asked to see something), reply with 1 to 3 short image search queries of 2 to 5 words, one per line, most useful first. Name the specific things from the answer, like \"circular saw\" or \"stair stringer\". If photos would not help (feelings, opinions, advice, math, schedules, news, small talk), reply NONE. Reply with nothing else." },
+        { role: "user", content: "Question: " + String(question).slice(0, 400) + "\nAnswer: " + String(answer).slice(0, 1400) }
+      ], { purpose: "small", max_tokens: 60, temperature: 0, noBackup: false, quietLog: true });
+    } catch (e) { return []; }
+    var qs = String(picks || "").split(/\n+/).map(function (x) { return x.replace(/^[\s\-*\d.)"']+|["']+$/g, "").trim(); })
+      .filter(function (x) { return x && !/^none\b/i.test(x) && x.length <= 60; }).slice(0, 3);
+    if (!qs.length) return [];
+    var per = qs.length === 1 ? 6 : qs.length === 2 ? 3 : 2, all = [], seen = {};
+    var lists = await Promise.all(qs.map(function (q) { return imagesFor(q, per).catch(function () { return []; }); }));
+    lists.forEach(function (l) { l.forEach(function (im) { if (!seen[im.thumb]) { seen[im.thumb] = 1; all.push(im); } }); });
+    return all.slice(0, 6);
+  }
+  function picStrip(list) {
+    var box = document.createElement("div");
+    list.forEach(function (im) {
+      var img = document.createElement("img");
+      img.src = im.thumb; img.alt = im.title; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+      img.onerror = function () { img.remove(); };
+      img.addEventListener("click", function (ev) { ev.stopPropagation(); openPic(im); });
+      box.appendChild(img);
+    });
+    return box;
+  }
+  function openPic(im) {
+    var v = document.getElementById("pic-view");
+    if (!v) return;
+    document.getElementById("pic-view-img").src = im.full || im.thumb;
+    document.getElementById("pic-view-title").textContent = im.title || "";
+    var a = document.getElementById("pic-view-src");
+    a.href = im.src || im.full;
+    a.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); openUrl(im.src || im.full); };
+    v.hidden = false;
+  }
+  function hidePics() {
+    clearTimeout(picsTimer);
+    var el = document.getElementById("pics");
+    if (el) { el.hidden = true; el.innerHTML = ""; }
+  }
+  function showPics(list, answer) {
+    if (!list || !list.length) return;
+    var el = document.getElementById("pics");
+    if (el) {
+      el.innerHTML = "";
+      var strip = picStrip(list);
+      while (strip.firstChild) el.appendChild(strip.firstChild);
+      el.hidden = false;
+      clearTimeout(picsTimer);
+      picsTimer = setTimeout(hidePics, 120000);
+    }
+    threadPics = { text: answer, list: list };
+    if (typing) renderThread();
+  }
+  window.__fridayPics = { picturesFor: picturesFor, show: showPics, hide: hidePics, imagesFor: imagesFor };
+
   // ---------- 3.4: private line (locked messages between Friday and Jarvis) ----------
   // Private messages never reach her AI brain, chat history, memory or the activity log,
   // and she reads them only with an iPhone voice, so the words stay on the phone.
@@ -1586,7 +1704,12 @@
     var r = document.getElementById("orb-ring");
     if (r) r.classList.remove("on");
   }
-  function setKb(px) { document.documentElement.style.setProperty("--kb", Math.max(0, Math.round(px || 0)) + "px"); }
+  // The bar, chips and typed thread use the Size setting's zoom, so the keyboard height is divided by it.
+  function setKb(px) {
+    var z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-zoom")) || 1;
+    document.documentElement.style.setProperty("--kb", Math.max(0, Math.round((px || 0) / z)) + "px");
+  }
+  var nativeKb = false;
   function placeOrbForTyping() {
     if (!orb) return;
     var v = sv();
@@ -1643,6 +1766,11 @@
       d.className = m.role === "user" ? "tt-me" : "tt-her";
       d.textContent = m.text;
       box.appendChild(d);
+      if (m.role === "assistant" && threadPics && threadPics.text && m.text === threadPics.text) {
+        var st = picStrip(threadPics.list);
+        st.className = "tt-pics";
+        box.appendChild(st);
+      }
     });
     if (threadPending) {
       var dots = document.createElement("div");
@@ -1701,9 +1829,17 @@
       var b = document.getElementById(id);
       if (b) b.addEventListener("click", function () { if (eyes) eyes.open(""); });
     });
+    // 3.5.2: the installed app reports the real keyboard height; the web page falls back to visualViewport.
+    if (window.FridayNative && FridayNative.kit && FridayNative.kit.onKeyboard) {
+      nativeKb = FridayNative.kit.onKeyboard(function (h) {
+        setKb(typing ? h : 0);
+        if (window.scrollY) window.scrollTo(0, 0);
+      });
+    }
     if (window.visualViewport) {
       var vv = window.visualViewport;
       var onVV = function () {
+        if (nativeKb) { if (window.scrollY) window.scrollTo(0, 0); return; }
         if (!typing) { setKb(0); return; }
         var kb = window.innerHeight - vv.height - vv.offsetTop;
         setKb(kb > 60 ? kb : 0);
@@ -1721,7 +1857,7 @@
     setInterval(syncLive, 400);
   }
 
-  var lastPhoto = null;
+  var lastPhoto = null, lastPhotoAt = 0;
 
   function chime() {
     if (headacheOn()) return;
@@ -2021,6 +2157,8 @@
     renderChips();
     bindTalkbar();
     bindPrivate();
+    var pv = document.getElementById("pic-view");
+    if (pv) pv.addEventListener("click", function () { pv.hidden = true; });
 
     neural = new FridayNeural(document.getElementById("neural-canvas"));
     if (window.__friday) window.__friday.neural = neural;

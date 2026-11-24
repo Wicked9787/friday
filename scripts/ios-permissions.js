@@ -21,6 +21,8 @@ const keys = {
   NSHealthShareUsageDescription: `${name} reads your steps and last night's sleep for your morning briefing when you ask. It never writes to Health.`,
   NSLocationWhenInUseUsageDescription: `${name} checks your Wi-Fi name to know when you're home, so your lights switch the fastest way. Your location isn't saved or sent anywhere.`,
   NSAlarmKitUsageDescription: `${name} sets real alarms that ring like the Clock app, even on silent, when you ask.`,
+  NSCameraUsageDescription: `${name} opens the camera right in the app when you ask, and can look at a photo you show it.`,
+  NSPhotoLibraryAddUsageDescription: `${name} saves the photos and videos you take in its camera to your Photos.`,
   NSLocalNetworkUsageDescription: `${name} switches your AiDot lights and talks to other devices on your home Wi-Fi directly when you ask, so it works without a VPN or a Shortcut.`
 };
 for (const [k, v] of Object.entries(keys)) {

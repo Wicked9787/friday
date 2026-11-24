@@ -61,6 +61,8 @@
       privateVoiceURI: "",
       onDeviceListen: true,
       healthBrief: false,
+      pictures: true,
+      cameraInApp: false,
       homeWifi: "",
       billAlerts: true,
       countdownAlerts: true
@@ -415,6 +417,7 @@
     this._bind33();
     this._bind34();
     this._bind35();
+    this._bindCamera();
     this._bindNav();
     this._syncHeaders();
 
@@ -786,6 +789,7 @@
     bindToggle("set-hide-orb", "hideOrbTyping", false);
     bindToggle("set-speak-typed", "speakTyped", false);
     bindToggle("set-suggestions", "suggestions", true, function () { syncQuick(); });
+    bindToggle("set-pictures", "pictures", true);
 
     // quick switches on the hub mirror the real switches
     var pairs = [["qs-handsfree", "set-handsfree"], ["qs-live", "set-live-listen"], ["qs-suggest", "set-suggestions"]];
@@ -970,6 +974,14 @@
     syncWifi();
     var nh = el("nfc-hint");
     if (nh) { var sc = prof.scheme || (prof.assistantName || "Friday").toLowerCase(); nh.innerHTML = nh.innerHTML.replace(/friday:\/\//g, sc + "://"); }
+  };
+
+  // 3.5.2: camera inside the app (off by default; the Shortcut opens Apple's Camera until you turn this on)
+  FridaySettings.prototype._bindCamera = function () {
+    var v = this.values, el = document.getElementById("set-camera-inapp");
+    if (!el) return;
+    el.checked = v.cameraInApp === true;
+    el.onchange = function () { v.cameraInApp = el.checked; saveSettings(v); };
   };
 
   // ---------- 3.4: private line ----------

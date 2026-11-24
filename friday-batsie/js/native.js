@@ -329,6 +329,17 @@
       try { var r = await P.alarmSet({ at: +at, title: title || "Alarm" }); return { ok: true, id: r && r.id }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
     },
+    camera: async function (mode) {
+      var P = plugin("FridayKit");
+      if (!P || !P.camera) return { ok: false };
+      try { var r = await P.camera({ mode: mode || "photo" }); return { ok: true, result: r && r.result, kind: r && r.kind, photo: r && r.photo }; }
+      catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    onKeyboard: function (fn) {
+      var P = plugin("FridayKit");
+      if (!P || !P.addListener) return false;
+      try { P.addListener("keyboard", function (e) { fn(+(e && e.height) || 0); }); return true; } catch (e) { return false; }
+    },
     darkKeyboard: async function () {
       var P = plugin("FridayKit");
       if (!P || !P.darkKeyboard) return false;

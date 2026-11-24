@@ -3,6 +3,7 @@ import Capacitor
 import MediaPlayer
 import MessageUI
 import UIKit
+import UniformTypeIdentifiers
 #if canImport(AlarmKit)
 import AlarmKit
 import SwiftUI
@@ -19,7 +20,7 @@ import ObjectiveC
 ///   Texts: opens a message with the recipient and words filled in, inside the app. iPhone always needs you to tap Send.
 /// Anything that fails is rejected, and the app hands the job to the Shortcut instead.
 @objc(FridayKitPlugin)
-public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewControllerDelegate {
+public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewControllerDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     public let identifier = "FridayKitPlugin"
     public let jsName = "FridayKit"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -40,7 +41,8 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "wifiName", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "alarmSet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "alarmCancel", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "camera", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
@@ -48,6 +50,8 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
 
     override public func load() {
         FridayKitPlugin.useDarkKeyboard()
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardMoved(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardMoved(_:)), name: UIResponder.keyboardWillHideNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(thermalChanged), name: ProcessInfo.thermalStateDidChangeNotification, object: nil)
     }
 
@@ -243,6 +247,65 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         call.resolve(["ok": false])
     }
 
+    // ---------- 3.5.2: keyboard height for the talk bar (so it sits right on top of the keyboard) ----------
+    @objc private func keyboardMoved(_ note: Notification) {
+        var h: CGFloat = 0
+        if note.name != UIResponder.keyboardWillHideNotification, let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue {
+            let screenH = UIScreen.main.bounds.height
+            h = max(0, screenH - end.origin.y)
+        }
+        let dur = (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?.doubleValue ?? 0.25
+        DispatchQueue.main.async {
+            self.notifyListeners("keyboard", data: ["height": h, "duration": dur])
+            if let sv = self.bridge?.webView?.scrollView {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { sv.setContentOffset(.zero, animated: false) }
+            }
+        }
+    }
+
+    // ---------- 3.5.2: Apple's camera inside the app; photos and videos save to Photos ----------
+    private var cameraCall: CAPPluginCall?
+    @objc func camera(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard UIImagePickerController.isSourceTypeAvailable(.camera), let vc = self.bridge?.viewController else { call.reject("no-camera"); return }
+            if let old = self.cameraCall { old.resolve(["result": "cancelled"]) }
+            let p = UIImagePickerController()
+            p.sourceType = .camera
+            p.mediaTypes = [UTType.image.identifier, UTType.movie.identifier]
+            p.cameraCaptureMode = call.getString("mode") == "video" ? .video : .photo
+            if call.getString("mode") == "video" { p.videoQuality = .typeHigh }
+            p.delegate = self
+            self.cameraCall = call
+            vc.present(p, animated: true)
+        }
+    }
+
+    public func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        cameraCall?.resolve(["result": "cancelled"])
+        cameraCall = nil
+    }
+
+    public func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        guard let call = cameraCall else { return }
+        cameraCall = nil
+        if let url = info[.mediaURL] as? URL {
+            if UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(url.path) { UISaveVideoAtPathToSavedPhotosAlbum(url.path, nil, nil, nil) }
+            call.resolve(["result": "saved", "kind": "video"])
+            return
+        }
+        guard let img = info[.originalImage] as? UIImage else { call.resolve(["result": "cancelled"]); return }
+        UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
+        // a smaller copy so she can look at it if you ask "what is this?"
+        let maxSide: CGFloat = 1024
+        let scale = min(1, maxSide / max(img.size.width, img.size.height))
+        let size = CGSize(width: img.size.width * scale, height: img.size.height * scale)
+        let small = UIGraphicsImageRenderer(size: size).image { _ in img.draw(in: CGRect(origin: .zero, size: size)) }
+        let b64 = small.jpegData(compressionQuality: 0.75)?.base64EncodedString() ?? ""
+        call.resolve(["result": "saved", "kind": "photo", "photo": b64.isEmpty ? NSNull() : "data:image/jpeg;base64," + b64])
+    }
+
     // ---------- keyboard ----------
     /// Makes the iPhone keyboard always use its dark look inside the app. Only the keyboard changes; the app's own colors stay the same.
     private static func useDarkKeyboard() {
@@ -250,6 +313,10 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         keyboardDone = true
         let block: @convention(block) (AnyObject) -> Int = { _ in UIKeyboardAppearance.dark.rawValue }
         let imp = imp_implementationWithBlock(unsafeBitCast(block, to: AnyObject.self))
+        let noBar: @convention(block) (AnyObject) -> AnyObject? = { _ in nil }
+        if let wk: AnyClass = NSClassFromString("WKContentView"), let m = class_getInstanceMethod(wk, NSSelectorFromString("inputAccessoryView")) {
+            method_setImplementation(m, imp_implementationWithBlock(unsafeBitCast(noBar, to: AnyObject.self)))
+        }
         let sel = NSSelectorFromString("keyboardAppearance")
         for name in ["WKContentView", "UITextInputTraits"] {
             guard let cls: AnyClass = NSClassFromString(name) else { continue }

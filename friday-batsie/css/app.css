@@ -1316,3 +1316,16 @@ body.headache::after { content: ""; position: fixed; inset: 0; background: rgba(
 .pics-cell.big { grid-column: 1 / -1; }
 .pics-cell.big img { aspect-ratio: auto; object-fit: contain; max-height: 70vh; }
 .pics-cell figcaption { font-size: 10px; line-height: 1.3; padding: 5px 7px; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ---------- 3.5.2 pictures with answers ---------- */
+#caption .pics { display: flex; gap: 8px; overflow-x: auto; padding: 0 0 10px; margin: 0 -14px; pointer-events: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; justify-content: center; }
+#caption .pics::-webkit-scrollbar, #type-thread .tt-pics::-webkit-scrollbar { display: none; }
+#caption .pics img, #type-thread .tt-pics img { flex: none; width: 92px; height: 92px; border-radius: 16px; object-fit: cover; background: #141416; border: 1px solid rgba(255,255,255,.1); }
+#type-thread .tt-pics { display: flex; gap: 8px; overflow-x: auto; align-self: stretch; }
+body.typing #caption .pics { display: none; }
+.pic-view { position: fixed; inset: 0; z-index: 9000; background: rgba(0,0,0,.94); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: calc(var(--safe-top) + 20px) 14px calc(var(--safe-bottom) + 20px); }
+.pic-view[hidden] { display: none; }
+.pic-view img { max-width: 100%; max-height: 78vh; border-radius: 14px; object-fit: contain; }
+.pic-view-bar { display: flex; gap: 14px; align-items: center; justify-content: space-between; width: 100%; margin-top: 12px; font-size: 14px; color: var(--muted); }
+.pic-view-bar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pic-view-bar a { color: var(--gold); text-decoration: none; font-weight: 600; }
+#caption .pics[hidden] { display: none; }
