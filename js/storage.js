@@ -84,20 +84,44 @@
     return data;
   }
 
-  function downloadBackup(includeKey) {
+  // 3.5.4: in the installed app, downloads don't go anywhere, so the backup opens the iPhone
+  // share sheet instead (Save to Files, AirDrop, Messages). The website still downloads it.
+  // Returns a promise: { how: "share" | "share-web" | "download" | "copied", completed }.
+  async function downloadBackup(includeKey) {
     set("lastBackupAt", Date.now());
     var data = exportBackup(includeKey);
-    var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    var a = document.createElement("a");
+    var text = JSON.stringify(data, null, 2);
     var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    var name = "friday-backup-" + stamp + ".json";
+    var C = root.Capacitor;
+    var native = false;
+    try { native = !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e0) {}
+    var K = native && C.Plugins && C.Plugins.FridayKit;
+    if (K && K.shareFile) {
+      try { var r = await K.shareFile({ name: name, text: text }); return { how: "share", completed: !!(r && r.completed) }; }
+      catch (e1) {}
+    }
+    if (native) {
+      try {
+        var file = new File([text], name, { type: "application/json" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: name });
+          return { how: "share-web", completed: true };
+        }
+      } catch (e2) { if (e2 && e2.name === "AbortError") return { how: "share-web", completed: false }; }
+      try { await navigator.clipboard.writeText(text); return { how: "copied", completed: true }; } catch (e3) {}
+    }
+    var blob = new Blob([text], { type: "application/json" });
+    var a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "friday-backup-" + stamp + ".json";
+    a.download = name;
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       URL.revokeObjectURL(a.href);
       a.remove();
     }, 500);
+    return { how: "download", completed: true };
   }
 
   function applyBackup(data) {

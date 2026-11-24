@@ -39,7 +39,8 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "health", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "wifiName", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "alarmSet", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "alarmCancel", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "alarmCancel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
@@ -406,6 +407,37 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
     }
 
     // ---------- texts ----------
+    // 3.5.4: save a file (like a backup) through the iPhone share sheet: Save to Files, AirDrop, Messages…
+    // Downloads don't work inside the app's web view, so backups go this way instead.
+    @objc func shareFile(_ call: CAPPluginCall) {
+        let rawName = call.getString("name") ?? "friday-backup.json"
+        let name = rawName.replacingOccurrences(of: "/", with: "-")
+        let text = call.getString("text") ?? ""
+        DispatchQueue.main.async {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            do {
+                try text.write(to: url, atomically: true, encoding: .utf8)
+            } catch {
+                call.reject("write-failed")
+                return
+            }
+            guard let vc = self.bridge?.viewController else {
+                call.reject("no-view")
+                return
+            }
+            let sheet = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            if let pop = sheet.popoverPresentationController {
+                pop.sourceView = vc.view
+                pop.sourceRect = CGRect(x: vc.view.bounds.midX, y: vc.view.bounds.midY, width: 1, height: 1)
+                pop.permittedArrowDirections = []
+            }
+            sheet.completionWithItemsHandler = { _, completed, _, _ in
+                call.resolve(["completed": completed])
+            }
+            vc.present(sheet, animated: true)
+        }
+    }
+
     @objc func canText(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             call.resolve(["ok": MFMessageComposeViewController.canSendText()])

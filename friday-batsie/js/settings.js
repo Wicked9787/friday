@@ -506,12 +506,27 @@
       saveSettings(self.values);
     };
 
-    document.getElementById("btn-backup").onclick = function () {
-      root.FridayStorage.downloadBackup(document.getElementById("backup-include-key").checked);
-      self.onToast("Backup downloaded.");
+    document.getElementById("btn-backup").onclick = async function () {
+      var r = null;
+      try { r = await root.FridayStorage.downloadBackup(document.getElementById("backup-include-key").checked); } catch (e) {}
+      if (!r) self.onToast("The backup didn't save. Try again.");
+      else if (r.how === "copied") self.onToast("Backup copied. Paste it into a note in Notes to keep it.");
+      else if (r.how === "download") self.onToast("Backup downloaded.");
+      else self.onToast(r.completed ? "Backup saved." : "Backup not saved. Tap Save to Files next time.");
     };
     document.getElementById("btn-restore").onclick = function () {
       document.getElementById("restore-file").click();
+    };
+    var rp = document.getElementById("btn-restore-paste");
+    if (rp) rp.onclick = async function () {
+      var t = "";
+      try { t = await navigator.clipboard.readText(); } catch (e) {}
+      if (!t) t = root.prompt ? (root.prompt("Paste the backup text here") || "") : "";
+      try {
+        root.FridayStorage.applyBackup(JSON.parse(t));
+        self.onToast("Backup restored. Reloading.");
+        setTimeout(function () { location.reload(); }, 500);
+      } catch (e2) { self.onToast("That doesn't look like a Friday backup. Copy the whole thing and try again."); }
     };
     document.getElementById("restore-file").onchange = function (ev) {
       var file = ev.target.files && ev.target.files[0];

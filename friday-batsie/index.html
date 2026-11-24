@@ -675,8 +675,10 @@
         <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
           <input type="checkbox" id="backup-include-key"> Include API key in this backup
         </label>
-        <button class="btn gold" type="button" id="btn-backup">Download backup</button>
+        <button class="btn gold" type="button" id="btn-backup">Save backup</button>
+        <div class="sub">In the app, pick <b>Save to Files</b> from the menu that opens.</div>
         <button class="btn" type="button" id="btn-restore">Restore from file</button>
+        <button class="btn" type="button" id="btn-restore-paste">Restore from a copied backup</button>
         <input type="file" id="restore-file" accept="application/json,.json" class="hidden">
       </div>
       <div class="row row-col">
@@ -880,7 +882,13 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5.3</h1>
+      <h1>What's new in 3.5.4</h1>
+      <p class="wn-tag">Backups that actually save</p>
+      <ul>
+        <li>Settings → Backup &amp; About → Save backup opens the iPhone menu: pick Save to Files (or AirDrop, or send it to yourself). Restore from file brings it back</li>
+        <li>Her mic switches back on by itself if her audio got stuck in speaker-only mode</li>
+      </ul>
+      <p class="wn-tag">3.5.3</p>
       <p class="wn-tag">No need to say “robot”</p>
       <ul>
         <li>Once you've paired with the robot, just ask: “open YouTube and search lo-fi music”, “play Drake on Spotify”, “turn on Low Power Mode in Settings”. She works out when a job needs tapping in another app and has the robot do it</li>
