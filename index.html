@@ -535,6 +535,13 @@
           </ol>
           <button class="btn" type="button" id="btn-copy-wake">Copy the link</button>
           <p class="hint">Back Tap works when the phone is unlocked. You can also put <span class="sc-assistant">Friday</span> in your Dock: press and hold the icon and drag it down.</p>
+          <p class="wn-tag">If <span class="sc-assistant">Friday</span> lives in LiveContainer</p>
+          <p class="hint">The link above can't reach an app inside LiveContainer. Use LiveContainer's own launch link instead. It opens <span class="sc-assistant">Friday</span> straight away and she starts listening.</p>
+          <ol class="steps">
+            <li>In <b>LiveContainer</b>, press and hold <span class="sc-assistant">Friday</span> → <b>Add to Home Screen</b> → <b>Copy Launch URL</b>.</li>
+            <li>In <b>Shortcuts</b>, tap <b>+</b>, search <b>Launch App</b>, pick the <b>LiveContainer</b> one, and paste the link into it. Name the shortcut <b>Wake <span class="sc-assistant">Friday</span></b> (not just “<span class="sc-assistant">Friday</span>”, that name is taken by her phone-jobs Shortcut).</li>
+            <li>Pick it for <b>Back Tap</b> (Settings → Accessibility → Touch → Back Tap), the <b>Action button</b>, or say <b>“Hey Siri, wake <span class="sc-assistant">Friday</span>”</b>. You can add it to your Home Screen from the shortcut's menu too.</li>
+          </ol>
         </div>
       </details>
       </section>
@@ -873,8 +880,17 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5.2</h1>
-      <p class="wn-tag">Pictures</p>
+      <h1>What's new in 3.5.3</h1>
+      <p class="wn-tag">No need to say “robot”</p>
+      <ul>
+        <li>Once you've paired with the robot, just ask: “open YouTube and search lo-fi music”, “play Drake on Spotify”, “turn on Low Power Mode in Settings”. She works out when a job needs tapping in another app and has the robot do it</li>
+        <li>Lights, alarms, timers, reminders, texts and questions still work the normal way. Saying “robot,” first still works too</li>
+      </ul>
+      <p class="wn-tag">Call her from anywhere</p>
+      <ul>
+        <li>In LiveContainer: hold her → Add to Home Screen → Copy Launch URL, then make a Shortcut with LiveContainer's Launch App action. Use it with Back Tap, the Action button, or “Hey Siri, wake <span class="sc-assistant">Friday</span>”. Steps are in Settings → Phone → Shortcut → Wake with Back Tap</li>
+      </ul>
+      <p class="wn-tag">3.5.2 · Pictures</p>
       <ul>
         <li>Ask with pictures, photos or “show me”: “show me pictures of wooden stairs”, “what does a capybara look like”. She answers and opens real photos. Tap one to see it big</li>
         <li>Free photos from Openverse and Wikimedia Commons. No key, no account</li>

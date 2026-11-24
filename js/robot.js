@@ -304,7 +304,38 @@
     return null;
   }
 
+  // ---------- 3.5.3: using the robot without saying "robot" ----------
+  // Cheap word check first; only if it looks like a job inside another app do we ask the robot
+  // if it's on and ask a small AI "does this need someone to tap around in an app?".
+  var APPS = "youtube|you tube|spotify|tiktok|tik tok|instagram|facebook|messenger|snapchat|netflix|hulu|disney|max|prime video|amazon|settings|safari|chrome|google maps|maps|google|uber|lyft|doordash|door dash|grubhub|instacart|cash app|cashapp|venmo|paypal|twitter|threads|reddit|discord|whatsapp|telegram|gmail|outlook|app store|photos|pinterest|roku|roku smart home|aidot|ai dot|home app|walmart|target|ebay|etsy|zillow|duolingo|chatgpt|capcut|shazam|soundcloud|pandora|twitch|kick|linkedin|signal|clock|calculator|files|wallet|weather app|music app|podcasts|books|news";
+  var RE_APP = new RegExp("\\b(" + APPS + ")\\b|\\b[a-z0-9][\\w'&.+-]{1,20} app\\b", "i");
+  var RE_OPEN_AND = /\b(open|launch|go to|go into|pull up)\s+(?:the |my )?\S+(?:\s\S+)?\s+(and|then)\b/i;
+  var RE_DOING = /\b(search|look up|find|play|watch|put on|post|like|follow|unfollow|scroll|order|add|buy|book|turn on|turn off|enable|disable|switch|change|set|clear|delete|open|go to|check|show|send|reply|subscribe|save|download|upload|share|type|tap|click|start|stop|pause|skip|request|call me an?)\b/i;
+  var RE_DIRECT = /\b(lights?|lamps?|bulbs?|alarm|timer|remind|reminder|thermostat|temperature inside|forecast|weather)\b/i;
+
+  function looksLikeAppTask(text) {
+    var t = String(text || "");
+    if (t.length < 8 || /\?\s*$/.test(t) && !RE_OPEN_AND.test(t)) return false;
+    if (RE_DIRECT.test(t) && !RE_APP.test(t.replace(RE_DIRECT, ""))) return false;
+    if (/^(?:please )?(?:open|launch|go to|pull up|start)\s+(?:the |my )?[\w'&.+ -]{1,30}?(?: app)?[.!]?$/i.test(t.trim()) && !RE_OPEN_AND.test(t)) return false; // just opening an app: she does that herself
+    if (RE_OPEN_AND.test(t)) return true;
+    return RE_APP.test(t) && RE_DOING.test(t);
+  }
+
+  async function shouldUse(text) {
+    if (!savedKey() || running) return false;
+    if (!(await isRunning())) return false;
+    try {
+      var out = await root.FridayBrain.ask([
+        { role: "system", content: "Answer with only YES or NO. YES if doing this request needs someone to operate another app's screen on the iPhone: open an app and then tap, type, search, scroll or change something inside it (for example: search for something on YouTube, play a song on Spotify, turn on Low Power Mode in Settings, check an order in Amazon). NO if it's a question or conversation, if it only opens an app with nothing to do inside it, or if it's something with its own direct command: home lights and devices, alarms, timers, reminders, the calendar, texts, calls, weather, notes, lists, or playing music from the Apple Music library." },
+        { role: "user", content: String(text || "") }
+      ], { purpose: "small", temperature: 0, max_tokens: 200, reasoning_effort: "low", noBackup: true });
+      return /^\W*yes\b/i.test(String(out || ""));
+    } catch (e) { return false; }
+  }
+
   root.FridayRobot = {
+    looksLikeAppTask: looksLikeAppTask, shouldUse: shouldUse,
     detect: detect, handle: handle, run: run, pair: pair, call: call,
     isRunning: isRunning, isPaired: function () { return !!savedKey(); },
     hasPending: function () { return !!pending; }, busy: function () { return !!running; }

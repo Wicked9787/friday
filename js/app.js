@@ -9,7 +9,7 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.2";
+  var APP_VERSION = "3.5.3";
   var APP_LABEL = "Pictures & Robot";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
@@ -679,7 +679,14 @@
     }
     setCaption(text);
     if (!opts.part) emitActivity("listening", "Heard: " + text.slice(0, 70));
-    if (!opts.part && extras) {
+    // 3.5.3: robot jobs go straight to the robot, in one piece ("open YouTube and search …" isn't split
+    // into separate steps). Without "robot," she decides herself when a request needs tapping in another app.
+    var robotCmd = window.FridayRobot ? window.FridayRobot.detect(text) : null;
+    if (!robotCmd && !opts.part && window.FridayRobot && window.FridayRobot.isPaired() && window.FridayRobot.looksLikeAppTask(text)) {
+      if (neural) neural.setActive("thinking");
+      if (await window.FridayRobot.shouldUse(text)) robotCmd = { kind: "task", goal: text, auto: true };
+    }
+    if (!opts.part && extras && !robotCmd) {
       var steps = extras.splitCommands(text);
       if (steps.length > 1) {
         chat._push("user", text);
@@ -699,6 +706,21 @@
     if (neural) neural.setActive("thinking");
     document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
     try {
+      if (robotCmd) {
+        chat._push("user", text);
+        var sayR = function (line) { setCaption(line); voice.queue(line, profile); };
+        if (robotCmd.auto) sayR("I'll have the robot do that.");
+        var rr;
+        try { rr = await window.FridayRobot.handle(robotCmd, profile, sayR); }
+        catch (re) { rr = { text: "The robot ran into a problem: " + String((re && re.message) || re).slice(0, 120) }; }
+        var rline = (rr && rr.text) || "Done.";
+        chat._push("assistant", rline);
+        sayR(rline);
+        renderChat();
+        emitActivity("thinking", "Robot: " + rline.slice(0, 60));
+        await voice.whenDone();
+        return;
+      }
       var camCmd = cameraCommand(text);
       if (camCmd) {
         setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
