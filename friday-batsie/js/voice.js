@@ -318,9 +318,20 @@
       this._stream = null;
       if (this._ctx) { try { this._ctx.close(); } catch (e) {} this._ctx = null; }
     }
-    this._stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
+    // 3.5.3: her voice (or the keep-awake tone) can leave the audio set to speaker-only ("playback"),
+    // which blocks the mic with "AudioSession category is not compatible with audio capture".
+    // Switch to play-and-record first, and if iPhone still refuses, try once more.
+    audioSessionType("play-and-record");
+    var micOpts = { audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } };
+    try {
+      this._stream = await navigator.mediaDevices.getUserMedia(micOpts);
+    } catch (micErr) {
+      if (!/audio ?session|not compatible with audio capture|NotAllowed|AbortError|NotReadable/i.test(String((micErr && (micErr.message || micErr.name)) || ""))) throw micErr;
+      audioSessionType("auto");
+      await new Promise(function (r) { setTimeout(r, 250); });
+      audioSessionType("play-and-record");
+      this._stream = await navigator.mediaDevices.getUserMedia(micOpts);
+    }
     var Ctx = window.AudioContext || window.webkitAudioContext;
     this._ctx = new Ctx();
     if (this._ctx.state === "suspended") await this._ctx.resume();
