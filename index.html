@@ -863,10 +863,29 @@
     </div>
   </section>
 
+  <section class="panel" id="panel-pictures" aria-label="Pictures">
+    <header>
+      <h1>Pictures</h1>
+      <button class="icon-btn" data-close="pictures" aria-label="Close">✕</button>
+    </header>
+    <div class="body" id="pics-box"></div>
+  </section>
+
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5</h1>
-      <p class="wn-tag">All in</p>
+      <h1>What's new in 3.5.2</h1>
+      <p class="wn-tag">Pictures</p>
+      <ul>
+        <li>Ask with pictures, photos or “show me”: “show me pictures of wooden stairs”, “what does a capybara look like”. She answers and opens real photos. Tap one to see it big</li>
+        <li>Free photos from Openverse and Wikimedia Commons. No key, no account</li>
+      </ul>
+      <p class="wn-tag">The robot (iCTRL)</p>
+      <ul>
+        <li>If the iCTRL app is on your phone, she can tap and type in other apps for you. Start the robot in iCTRL, then say “pair with the robot” once and tap Allow</li>
+        <li>Then say “robot,” and the job: “robot, open YouTube and search lo-fi music”. “Stop the robot” cancels. “Is the robot on?” checks</li>
+        <li>She asks before tapping anything like Send, Pay, Buy, Delete or Post, and never types passwords or codes. Holding both volume buttons always stops the robot</li>
+      </ul>
+      <p class="wn-tag">3.5 · All in</p>
       <ul>
         <li>30 more AI voices from Google Gemini, using the Gemini key you added (their own free daily allowance). Your other AI voices stay</li>
         <li>Real alarms right in the app: “set an alarm for 7am” rings like the Clock app, even on silent (iOS 26 and newer)</li>
@@ -920,8 +939,8 @@
         <li>Backup brains work even when a site blocks requests from apps</li>
         <li>AiDot lights straight over home Wi-Fi, and music on your phone always stays in the app</li>
       </ul>
-      <p class="hint">Your layouts and orb looks are the same; the bar just sits at the bottom. To add the Refresh apps bubble: Settings → Your stuff → Connections → Refresh apps.</p>
-      <button class="btn gold" type="button" id="btn-wn-shortcut">Show me</button>
+      <p class="hint">The robot needs the iCTRL app running (open iCTRL, mount if it asks, tap Start Server). Without it, everything else works the same.</p>
+      <button class="btn gold" type="button" id="btn-wn-shortcut">Got it</button>
       <button class="btn" type="button" id="btn-wn-close">Later</button>
     </div>
   </div>
@@ -975,6 +994,8 @@
   <script src="js/voice.js"></script>
   <script src="js/brain.js"></script>
   <script src="js/chat.js"></script>
+  <script src="js/pictures.js"></script>
+  <script src="js/robot.js"></script>
   <script src="js/life.js"></script>
   <script src="js/extras.js"></script>
   <script src="js/native.js"></script>

@@ -99,6 +99,8 @@
       mood.line,
       "If you need the phone to do something you cannot do yourself (alarms, lights, the Apple TV, scenes, Do Not Disturb, sending a real text, cameras, the calendar), say clearly that you will hand it to the " + (profile.shortcutName || "Friday") + " shortcut.",
       "You also have your own lists, bills, countdowns, timers, and notes in the app; if asked about them and you don't see them here, suggest the exact words to say, like 'add milk to my grocery list'.",
+      "You can show real photos: when someone wants to see something, tell them to ask with the word pictures or photos (like 'show me pictures of wooden stairs'). Never say you can't show images.",
+      "If the iCTRL robot app is set up, you can tap and type in other apps: they say 'robot,' then the task (like 'robot, open YouTube and search lo-fi music').",
       summary ? ("Summary of your earlier conversations with " + profile.ownerName + " (use it to stay consistent; don't recite it):\n" + summary) : "",
       mem ? ("Things you know about " + profile.ownerName + " (use them naturally, don't recite them):\n" + mem) : "You have no long-term memory notes yet.",
       "Your name is " + profile.assistantName + ". The person you help is " + profile.ownerName + "."
@@ -306,6 +308,21 @@
     this._push("user", text);
     this.onHelper("thinking");
 
+    // 3.5.2: the robot (iCTRL) taps and types in other apps for you.
+    var robotCmd = root.FridayRobot && root.FridayRobot.detect(text);
+    if (robotCmd) {
+      this.onHelper("research");
+      var say = opts.onSentence ? function (s) { opts.onSentence(s); } : null;
+      var rr;
+      try { rr = await root.FridayRobot.handle(robotCmd, this.profile, say); }
+      catch (e) { rr = { text: "The robot ran into a problem: " + String((e && e.message) || e).slice(0, 120) }; }
+      finally { this.onHelper(null); }
+      var rline = (rr && rr.text) || "Done.";
+      this._push("assistant", rline);
+      if (say) { say(rline); return { text: rline, kind: "robot", streamed: true }; }
+      return { text: rline, kind: "robot" };
+    }
+
     var mem = this.rememberFromSpeech(text);
     if (mem) {
       this.addMemory(mem);
@@ -344,6 +361,9 @@
       return { text: handoff, kind: "phone", command: text };
     }
 
+    // 3.5.2: pictures. Look them up while she works out her answer.
+    var picsJob = (root.FridayPictures && root.FridayPictures.wants(text)) ? root.FridayPictures.find(text, this._lastUserBefore(text)).catch(function () { return null; }) : null;
+
     var st0 = settings();
     var forced = text.match(FORCE_WEB_RE);
     var link = text.match(URL_RE);
@@ -370,6 +390,9 @@
     }
     if (kind === "messages" || phone === "messages") {
       messages.push({ role: "system", content: "If they want a real text sent from the phone, include a short confirmation and know the app may open Messages or the shortcut." });
+    }
+    if (picsJob) {
+      messages.push({ role: "system", content: "Real photos for this are being shown on screen in a Pictures panel right now. Answer normally and you can point to them briefly (\"take a look at the photos\"). Never say you can't show pictures." });
     }
 
     var reply = "";
@@ -405,7 +428,8 @@
     this._push("assistant", reply);
     this.maybeSummarize().catch(function () {});
     this.onHelper(null);
-    return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null };
+    var pictures = picsJob ? await picsJob : null;
+    return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null, pictures: pictures };
   };
 
   // Long-chat memory: fold older conversation into a short running summary.
@@ -479,6 +503,15 @@
     var terms = this.profile.terms || [];
     var t = terms[0] ? ", " + terms[0] : "";
     return "On it" + t + ". I'll hand that to your shortcut.";
+  };
+
+  // The user's message before this one (so "show me pictures" knows what "it" was).
+  FridayChat.prototype._lastUserBefore = function (text) {
+    var h = this.history || [];
+    for (var i = h.length - 1; i >= 0; i--) {
+      if (h[i].role === "user" && h[i].content !== text) return h[i].content;
+    }
+    return "";
   };
 
   FridayChat.prototype.resetHistory = function () {

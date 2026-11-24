@@ -39,6 +39,12 @@ if (!xml.includes("<key>LSApplicationQueriesSchemes</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>LSApplicationQueriesSchemes</key>\n\t<array>\n` + QUERY.map(q => `\t\t<string>${q}</string>\n`).join("") + `\t</array>\n` + xml.slice(i);
 }
+// 3.5.2: the robot (iCTRL) answers on the phone itself at http://127.0.0.1:8200, so allow plain
+// local connections (only local ones; everything on the internet stays HTTPS).
+if (!xml.includes("<key>NSAppTransportSecurity</key>")) {
+  const i = xml.lastIndexOf("</dict>");
+  xml = xml.slice(0, i) + `\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>\n` + xml.slice(i);
+}
 // Background audio: lets her keep a conversation going for a few minutes after you switch apps
 // (only while you're talking with her; she goes to sleep after the time set in the app).
 if (!xml.includes("<key>UIBackgroundModes</key>")) {

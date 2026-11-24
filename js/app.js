@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.1";
-  var APP_LABEL = "All In";
+  var APP_VERSION = "3.5.2";
+  var APP_LABEL = "Pictures & Robot";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -819,6 +819,11 @@
       } else {
         setCaption(result.text || "");
         renderChat();
+        if (result.pictures && window.FridayPictures) {
+          // 3.5.2: real photos in their own panel, with her answer on top
+          window.FridayPictures.render(document.getElementById("pics-box"), result.pictures, result.text, openUrl);
+          openPanel("pictures");
+        }
         if (bubbles && bubbles.noteAppMentions(text)) bubbles.refreshSuggestions();
         if (result.streamed || spokeStream) await voice.whenDone();
         else await voice.speak(result.text, profile);
@@ -1251,6 +1256,8 @@
     bgTimer = setTimeout(function () { endBackgroundWindow(true); }, mins * 60000);
     return true;
   }
+  // 3.5.2: the robot keeps her awake while it works in another app, then lets go.
+  window.FridayKeepAlive = function (on) { try { voice.keepAlive(!!on); } catch (e) {} };
   function endBackgroundWindow(sleep) {
     var had = !!bgTimer;
     clearTimeout(bgTimer); clearInterval(bgTick); bgTimer = 0; bgTick = 0;
@@ -1826,12 +1833,8 @@
     box.classList.remove("hidden");
     function done() { box.classList.add("hidden"); FridayStorage.set("seenVersion", APP_VERSION); }
     document.getElementById("btn-wn-close").onclick = done;
-    document.getElementById("btn-wn-shortcut").onclick = function () {
-      done();
-      openPanel("settings");
-      if (window.__fridaySettingsShow) window.__fridaySettingsShow("accord-private");
-      setTimeout(function () { var el = document.getElementById("accord-private"); if (el) { el.open = true; try { el.scrollIntoView({ block: "start", behavior: "smooth" }); } catch (e) {} } }, 250);
-    };
+    // 3.5.2: nothing to set up in Settings for this one, so the gold button just closes the card.
+    document.getElementById("btn-wn-shortcut").onclick = done;
   }
 
   function showSetup(on) {
