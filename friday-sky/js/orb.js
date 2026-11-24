@@ -1269,6 +1269,25 @@
     }
   };
 
+  // 3.5.6: n stills of a look at different moments, as base64 JPEG (for the StandBy widget).
+  FridayOrb.frames = function (look, size, n) {
+    size = size || 360; n = n || 4;
+    var out = [];
+    try {
+      var c = document.createElement("canvas");
+      var o = new FridayOrb(c, { thumb: true, width: size, height: size, hd: readHD() });
+      o.speaker = "idle"; o.look = null; o.setLook(look);
+      for (var k = 0; k < n; k++) {
+        o._t0 = 0; o._last = 0;
+        var base = 1000 + k * 2600;
+        for (var i = 0; i < 18; i++) o._frame(base + i * 33);
+        out.push(String(c.toDataURL("image/jpeg", 0.88)).replace(/^data:image\/jpeg;base64,/, ""));
+      }
+      try { var ext = o.gl.getExtension("WEBGL_lose_context"); if (ext) ext.loseContext(); } catch (e2) {}
+    } catch (e) {}
+    return out;
+  };
+
   // Is anything lit around the orb center on the screen buffer?
   FridayOrb.prototype._litCheck = function () {
     var gl = this.gl, w = this.canvas.width, h = this.canvas.height;

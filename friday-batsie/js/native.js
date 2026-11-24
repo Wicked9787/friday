@@ -329,6 +329,11 @@
       try { var r = await P.alarmSet({ at: +at, title: title || "Alarm" }); return { ok: true, id: r && r.id }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
     },
+    writeShared: async function (name, opts) {
+      var P = plugin("FridayKit");
+      if (!P || !P.writeShared) return false;
+      try { await P.writeShared(Object.assign({ name: name }, opts || {})); return true; } catch (e) { return false; }
+    },
     camera: async function (mode) {
       var P = plugin("FridayKit");
       if (!P || !P.camera) return { ok: false };

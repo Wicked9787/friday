@@ -42,7 +42,8 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "alarmSet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "alarmCancel", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "shareFile", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "camera", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "camera", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "writeShared", returnType: CAPPluginReturnPromise)
     ]
 
     private var textCall: CAPPluginCall?
@@ -476,6 +477,25 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
     // ---------- texts ----------
     // 3.5.4: save a file (like a backup) through the iPhone share sheet: Save to Files, AirDrop, Messages…
     // Downloads don't work inside the app's web view, so backups go this way instead.
+    // 3.5.6: files Scriptable can read (Files → On My iPhone → Friday → Widget)
+    @objc func writeShared(_ call: CAPPluginCall) {
+        let name = (call.getString("name") ?? "").replacingOccurrences(of: "/", with: "-")
+        guard !name.isEmpty, let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else { call.reject("no-name"); return }
+        let dir = docs.appendingPathComponent("Widget", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let url = dir.appendingPathComponent(name)
+            if let b64 = call.getString("base64"), let data = Data(base64Encoded: b64) {
+                try data.write(to: url, options: .atomic)
+            } else {
+                try (call.getString("text") ?? "").write(to: url, atomically: true, encoding: .utf8)
+            }
+            call.resolve(["ok": true])
+        } catch {
+            call.reject("write-failed")
+        }
+    }
+
     @objc func shareFile(_ call: CAPPluginCall) {
         let rawName = call.getString("name") ?? "friday-backup.json"
         let name = rawName.replacingOccurrences(of: "/", with: "-")

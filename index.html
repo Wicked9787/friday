@@ -587,6 +587,20 @@
       </details>
       </section>
       <section class="spage" id="sp-widgets" data-title="Widgets &amp; Charging" hidden>
+      <details class="accord" open id="accord-standby">
+        <summary>StandBy: her own orb <span class="wn-tag">new</span></summary>
+        <div class="accord-body">
+          <div class="sub">A widget for StandBy (charging on its side) that shows the orb look you're using right now. It drifts to a new angle each time iPhone refreshes it. Tap it to talk to her.</div>
+          <label class="toggle-row" style="margin-top:10px">Show her latest reply <input type="checkbox" id="set-widget-reply"></label>
+          <div class="sub">Off: just the orb and when you last talked. On: her last answer too (anyone who sees the screen can read it).</div>
+          <button class="btn gold" type="button" id="btn-standby-copy">Copy StandBy script</button>
+          <ol class="sub" id="standby-steps" style="padding-left:18px;margin-top:8px">
+            <li>Open <b>Scriptable</b> → <b>+</b> → paste → name it <b class="assist-name">Friday</b> StandBy.</li>
+            <li>Scriptable → Settings (gear) → <b>File Bookmarks</b> → <b>+</b> → <b>Pick Folder</b> → On My iPhone → <b class="assist-name">Friday</b> → <b>Widget</b>. Name the bookmark <b class="assist-name">Friday</b>.</li>
+            <li>Put the phone on the charger <b>sideways</b> so StandBy shows, press and hold the widgets → <b>+</b> → Scriptable → small → Done. Press and hold it → <b>Edit Widget</b> → Script: <b class="assist-name">Friday</b> StandBy. Parameter: leave empty for just the orb, type <b>clock</b> for the orb with a live clock under it, or <b>info</b> for the time since you talked (and her reply if it's on).</li>
+          </ol>
+        </div>
+      </details>
       
       <div class="row row-col">
         <label>Widget styles</label>
@@ -892,7 +906,12 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5.5</h1>
+      <h1>What's new in 3.5.6</h1>
+      <p class="wn-tag">Her orb on StandBy</p>
+      <ul>
+        <li>A StandBy widget that shows the orb look you're using, with an optional live clock under it. Settings → Your stuff → Widgets &amp; Charging → StandBy shows the 3 steps</li>
+      </ul>
+      <p class="wn-tag">3.5.5</p>
       <p class="wn-tag">Keyboard and camera</p>
       <ul>
         <li>The typing bar sits right on top of the keyboard now (no more hiding behind it), and the arrows bar above the keyboard is gone</li>

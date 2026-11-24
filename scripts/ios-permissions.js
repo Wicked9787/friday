@@ -47,6 +47,13 @@ if (!xml.includes("<key>NSAppTransportSecurity</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>\n` + xml.slice(i);
 }
+// Friday's own folder in the Files app (On My iPhone → Friday), so Scriptable widgets can read her widget files.
+for (const k of ["UIFileSharingEnabled", "LSSupportsOpeningDocumentsInPlace"]) {
+  if (!xml.includes(`<key>${k}</key>`)) {
+    const i = xml.lastIndexOf("</dict>");
+    xml = xml.slice(0, i) + `\t<key>${k}</key>\n\t<true/>\n` + xml.slice(i);
+  }
+}
 // Background audio: lets her keep a conversation going for a few minutes after you switch apps
 // (only while you're talking with her; she goes to sleep after the time set in the app).
 if (!xml.includes("<key>UIBackgroundModes</key>")) {

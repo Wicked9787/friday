@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.5";
-  var APP_LABEL = "Keyboard & Camera";
+  var APP_VERSION = "3.5.6";
+  var APP_LABEL = "StandBy";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -44,6 +44,7 @@
   function applyLook(id, announce) {
     if (!id || !cfg.LOOKS[id]) return;
     if (orb) orb.setLook(id);
+    setTimeout(function () { syncWidget(); }, 0);
     if (settings) {
       settings.values.look = id;
       FridayStorage.set("settings", settings.values);
@@ -889,6 +890,7 @@
       try { await voice.speak(msg, profile); } catch (e) {}
     } finally {
       busy = false;
+      noteTalked();
       if (neural) neural.setActive(null);
       document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
       if (opts.part) {
@@ -1387,6 +1389,40 @@
     handsFree = handsFreeOn();
     beginListen();
   }
+
+  // ---------- 3.5.6: StandBy widget files (Files → On My iPhone → Friday → Widget) ----------
+  var widgetT = 0, widgetLookDone = "", lastTalkAt = +FridayStorage.get("lastTalkAt", 0) || 0;
+  function syncWidget(now) {
+    var N = window.FridayNative;
+    if (!N || !N.kit || !N.kit.writeShared || !IS_NATIVE) return;
+    clearTimeout(widgetT);
+    widgetT = setTimeout(async function () {
+      var s0 = sv(), look = s0.look || "N";
+      var hist = (chat && chat.history) || [];
+      var last = null;
+      for (var i = hist.length - 1; i >= 0; i--) { var m = hist[i]; if (m && m.role === "assistant" && typeof m.content === "string" && m.content.trim()) { last = m.content.trim(); break; } }
+      var info = {
+        name: profile.assistantName || "Friday",
+        scheme: (profile.assistantName || "Friday").toLowerCase() === "reed" ? "jarvis" : (profile.assistantName || "Friday").toLowerCase(),
+        look: look,
+        lookName: (cfg.LOOKS && cfg.LOOKS[look] && (cfg.LOOKS[look].name || cfg.LOOKS[look].label)) || look,
+        talkedAt: lastTalkAt || 0,
+        reply: s0.widgetReply === true && last ? last.slice(0, 220) : "",
+        brain: (window.FridayBrain && FridayBrain.lastUsed && FridayBrain.lastUsed()) || "",
+        mood: s0.mood || "normal",
+        updated: Date.now()
+      };
+      await N.kit.writeShared("friday-widget.json", { text: JSON.stringify(info) });
+      var key = look + ":" + (s0.render || "max");
+      if (widgetLookDone !== key && window.FridayOrb && FridayOrb.frames) {
+        var fr = FridayOrb.frames(look, 360, 4);
+        for (var k = 0; k < fr.length; k++) await N.kit.writeShared("orb-" + k + ".jpg", { base64: fr[k] });
+        if (fr.length) widgetLookDone = key;
+      }
+    }, now ? 50 : 4000);
+  }
+  function noteTalked() { lastTalkAt = Date.now(); FridayStorage.set("lastTalkAt", lastTalkAt); syncWidget(); }
+  window.__fridaySyncWidget = syncWidget;
 
   // ---------- 3.5.2: pictures with answers ----------
   // After she answers, a tiny AI step decides if photos would help and names the exact things
@@ -2157,6 +2193,8 @@
     renderChips();
     bindTalkbar();
     bindPrivate();
+    setTimeout(function () { syncWidget(); }, 6000);
+    document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") syncWidget(true); });
     var pv = document.getElementById("pic-view");
     if (pv) pv.addEventListener("click", function () { pv.hidden = true; });
 

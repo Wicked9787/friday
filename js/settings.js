@@ -63,6 +63,7 @@
       healthBrief: false,
       pictures: true,
       cameraInApp: false,
+      widgetReply: false,
       homeWifi: "",
       billAlerts: true,
       countdownAlerts: true
@@ -418,6 +419,7 @@
     this._bind34();
     this._bind35();
     this._bindCamera();
+    this._bindStandby();
     this._bindNav();
     this._syncHeaders();
 
@@ -983,6 +985,66 @@
     el.checked = v.cameraInApp === true;
     el.onchange = function () { v.cameraInApp = el.checked; saveSettings(v); };
   };
+
+  // ---------- 3.5.6: StandBy widget that shows her current orb look ----------
+  function standbyScript(name, scheme) {
+    return [
+      "// " + name + " StandBy: her current orb look, from " + name + "'s folder in Files.",
+      "// Needs a Scriptable File Bookmark named \"" + name + "\" pointing to On My iPhone > " + name + " > Widget.",
+      "const NAME = " + JSON.stringify(name) + ", SCHEME = " + JSON.stringify(scheme) + ";",
+      "const fm = FileManager.local();",
+      "const mode = String(args.widgetParameter || '').toLowerCase();",
+      "const w = new ListWidget();",
+      "w.backgroundColor = new Color('#000000');",
+      "w.url = SCHEME + '://listen';",
+      "w.setPadding(4, 4, 4, 4);",
+      "let dir = null;",
+      "try { dir = fm.bookmarkedPath(NAME); } catch (e) {}",
+      "if (!dir) {",
+      "  const t = w.addText('Open Scriptable settings > File Bookmarks and add the ' + NAME + ' > Widget folder, named ' + NAME + '.');",
+      "  t.font = Font.systemFont(11); t.textColor = new Color('#e8c872');",
+      "} else {",
+      "  let info = {};",
+      "  try { info = JSON.parse(fm.readString(fm.joinPath(dir, 'friday-widget.json'))); } catch (e) {}",
+      "  const frame = Math.floor(Date.now() / 900000) % 4;",
+      "  let img = null;",
+      "  try { img = Image.fromFile(fm.joinPath(dir, 'orb-' + frame + '.jpg')) || Image.fromFile(fm.joinPath(dir, 'orb-0.jpg')); } catch (e) {}",
+      "  w.addSpacer();",
+      "  const small = mode === 'info' || mode === 'clock';",
+      "  if (img) { const s = w.addStack(); s.addSpacer(); const im = s.addImage(img); im.imageSize = new Size(small ? 100 : 140, small ? 100 : 140); s.addSpacer(); }",
+      "  if (mode === 'clock') {",
+      "    w.addSpacer(2);",
+      "    const d = w.addDate(new Date()); d.applyTimeStyle(); d.font = Font.boldRoundedSystemFont(22); d.textColor = new Color('#f2e6c8'); d.centerAlignText();",
+      "  }",
+      "  if (mode === 'info') {",
+      "    w.addSpacer(4);",
+      "    const ago = info.talkedAt ? Math.round((Date.now() - info.talkedAt) / 60000) : null;",
+      "    const when = ago === null ? 'Tap to talk' : ago < 2 ? 'Just talked' : ago < 60 ? 'Talked ' + ago + ' min ago' : ago < 1440 ? 'Talked ' + Math.round(ago / 60) + ' h ago' : 'Tap to talk';",
+      "    const t1 = w.addText((info.name || NAME) + ' · ' + when); t1.font = Font.semiboldSystemFont(11); t1.textColor = new Color('#e8c872'); t1.centerAlignText();",
+      "    if (info.reply) { const t2 = w.addText(info.reply); t2.font = Font.systemFont(10); t2.textColor = new Color('#eeeeee'); t2.lineLimit = 3; t2.centerAlignText(); }",
+      "  }",
+      "  w.addSpacer();",
+      "}",
+      "w.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);",
+      "if (config.runsInWidget) Script.setWidget(w); else await w.presentSmall();",
+      "Script.complete();"
+    ].join("\n");
+  }
+  FridaySettings.prototype._bindStandby = function () {
+    var self = this, v = this.values, prof = this.profile || {};
+    var name = prof.assistantName || "Friday", scheme = name.toLowerCase() === "reed" ? "jarvis" : name.toLowerCase();
+    var wr = document.getElementById("set-widget-reply");
+    if (wr) { wr.checked = v.widgetReply === true; wr.onchange = function () { v.widgetReply = wr.checked; saveSettings(v); if (root.__fridaySyncWidget) root.__fridaySyncWidget(true); }; }
+    var cp = document.getElementById("btn-standby-copy");
+    if (cp) cp.onclick = function () {
+      var txt = standbyScript(name, scheme);
+      root.__fridayLastStandby = txt;
+      var done = function () { self.onToast("StandBy script copied. Paste it into a new Scriptable script."); };
+      try { navigator.clipboard.writeText(txt).then(done, function () { self.onToast("Couldn't copy. Try again."); }); } catch (e) { self.onToast("Couldn't copy. Try again."); }
+      if (root.__fridaySyncWidget) root.__fridaySyncWidget(true);
+    };
+  };
+  root.FridayStandbyScript = standbyScript;
 
   // ---------- 3.4: private line ----------
   FridaySettings.prototype._bind34 = function () {
