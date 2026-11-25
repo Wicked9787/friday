@@ -71,7 +71,7 @@
   function say(t) {
     if (!isHe()) return String(t);
     return String(t).replace(/\b(she|She|herself|Herself|hers|Hers)\b/g, function (w) { return { she: "he", She: "He", herself: "himself", Herself: "Himself", hers: "his", Hers: "His" }[w]; })
-      .replace(/\b(her|Her)\b(?=(\s+(own\s+)?[a-z]))/g, function (w) { return w === "Her" ? "His" : "his"; })
+      .replace(/\b(her|Her)\b(?=\s+(own\s+)?[a-z])(?!\s+(?:through|to|for|with|about|and|or|but|by|in|on|at|from|when|if|that|as|a|an|the|up|again|too|so|now|know|feel|back|out|off)\b)/g, function (w) { return w === "Her" ? "His" : "his"; })
       .replace(/\b(her|Her)\b/g, function (w) { return w === "Her" ? "Him" : "him"; });
   }
   function names() { var p = profileNow() || {}; return { me: p.assistantName || "Friday", you: p.ownerName || "them" }; }
