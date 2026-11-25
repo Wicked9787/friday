@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "4.1.0";
-  var APP_LABEL = "Trust";
+  var APP_VERSION = "4.2.0";
+  var APP_LABEL = "Remote";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
   function fillShownName() {
     var n = shownName(), reed = profile && profile.id === "batsie";
@@ -868,7 +868,7 @@
           chat._push("user", text);
           chat._push("assistant", ph.say);
           setCaption(ph.say);
-          emitActivity(ph.tool === "home" ? "home" : ph.tool === "battery" ? "core" : ph.tool === "music" || ph.tool === "call" ? "voice" : "calendar", ph.say.slice(0, 70));
+          emitActivity(ph.tool === "home" || ph.tool === "tv" ? "home" : ph.tool === "battery" ? "core" : ph.tool === "music" || ph.tool === "call" ? "voice" : "calendar", ph.say.slice(0, 70));
           // music is playing now: stop the hands-free conversation so she doesn't listen to the song
           if (ph.tool === "music" && ph.playing && !opts.part) handsFree = false;
           // when music starts, the music is the answer: she doesn't talk over it
@@ -2102,6 +2102,14 @@
     var used = 0;
     try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); used += (localStorage.getItem(k) || "").length + k.length; } } catch (e) {}
     add(used < 4000000, "Storage used: " + Math.round(used / 1024) + " KB");
+    // 4.2: the safety copy in the Keychain (so an update can't wipe her)
+    var vi = FridayStorage.vaultInfo ? FridayStorage.vaultInfo() : null;
+    if (vi && vi.native) {
+      var hhmm = function (t) { return new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); };
+      add(!!vi.savedAt && !vi.hold, vi.hold ? "Safety copy couldn't be read; kept untouched" : vi.savedAt ? "Safety copy saved " + hhmm(vi.savedAt) + " (" + vi.items + " parts of her)" : "Safety copy: saving soon");
+      if (vi.restoredAt) add(true, "Brought back from the safety copy " + hhmm(vi.restoredAt) + " after an update wiped her storage");
+    }
+    if (window.FridayTV && FridayTV.available()) add(true, FridayTV.isSetUp() ? "Apple TV remote: paired" : "Apple TV remote: not paired (Settings → Lights)");
     var u = FridayStorage.get("usage.brain", null);
     if (u && u.date === new Date().toDateString()) add(true, "Today: " + (u.total || 0) + " replies, " + (u.tts || 0) + " AI voice clips");
     var box = document.getElementById("diag-list");
@@ -2659,6 +2667,15 @@
     var ready = (window.FridayStorage && FridayStorage.keysReady) || Promise.resolve();
     var once = false, go = function () { if (once) return; once = true; init(); };
     Promise.race([ready, new Promise(function (r) { setTimeout(r, 2500); })]).then(go, go);
+    // 4.2: say so when an update had wiped her and she put everything back from the safety copy,
+    // or (if only the brain list was missing) when she put back the brains
+    Promise.resolve(ready).then(function () {
+      var S0 = window.FridayStorage, note = S0 && S0.takeRestoreNote ? S0.takeRestoreNote() : null;
+      var n = S0 && S0.restoredBrains ? S0.restoredBrains() : 0;
+      var msg = note ? "The update wiped my storage, so I put everything back from my safety copy: memories, chats, settings and brains." :
+        n > 0 ? "Brought back " + n + " brain" + (n === 1 ? "" : "s") + " after the update. No need to add them again." : "";
+      if (msg) setTimeout(function () { try { toast(msg); } catch (e) {} }, 3000);
+    });
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();

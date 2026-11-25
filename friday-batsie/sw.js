@@ -1,11 +1,10 @@
 /* Friday service worker: cache the app shell so the home screen still opens offline. */
-var CACHE = "friday-shell-v27";
+var CACHE = "friday-shell-v28";
 var SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./config.js",
-  "./js/baked.js",
   "./css/app.css",
   "./js/storage.js",
   "./js/orb.js",
@@ -22,6 +21,7 @@ var SHELL = [
   "./js/extras.js",
   "./js/native.js",
   "./js/private.js",
+  "./js/tv.js",
   "./js/phone.js",
   "./js/eyes.js",
   "./js/neural.js",

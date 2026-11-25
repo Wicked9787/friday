@@ -23,7 +23,7 @@ const keys = {
   NSAlarmKitUsageDescription: `${name} sets real alarms that ring like the Clock app, even on silent, when you ask.`,
   NSCameraUsageDescription: `${name} opens the camera right in the app when you ask, and can look at a photo you show it.`,
   NSPhotoLibraryAddUsageDescription: `${name} saves the photos and videos you take in its camera to your Photos.`,
-  NSLocalNetworkUsageDescription: `${name} switches your AiDot lights and talks to other devices on your home Wi-Fi directly when you ask, so it works without a VPN or a Shortcut.`
+  NSLocalNetworkUsageDescription: `${name} presses your Apple TV's remote buttons, switches your AiDot lights and talks to other devices on your home Wi-Fi directly when you ask, so it works without a VPN or a Shortcut.`
 };
 for (const [k, v] of Object.entries(keys)) {
   if (xml.includes(`<key>${k}</key>`)) continue;
@@ -46,6 +46,11 @@ if (!xml.includes("<key>LSApplicationQueriesSchemes</key>")) {
 if (!xml.includes("<key>NSAppTransportSecurity</key>")) {
   const i = xml.lastIndexOf("</dict>");
   xml = xml.slice(0, i) + `\t<key>NSAppTransportSecurity</key>\n\t<dict>\n\t\t<key>NSAllowsLocalNetworking</key>\n\t\t<true/>\n\t</dict>\n` + xml.slice(i);
+}
+// 4.2: the Apple TV remote finds the Apple TV on the home Wi-Fi with Bonjour (Apple's remote service).
+if (!xml.includes("<key>NSBonjourServices</key>")) {
+  const i = xml.lastIndexOf("</dict>");
+  xml = xml.slice(0, i) + `\t<key>NSBonjourServices</key>\n\t<array>\n\t\t<string>_companion-link._tcp</string>\n\t\t<string>_airplay._tcp</string>\n\t</array>\n` + xml.slice(i);
 }
 // Friday's own folder in the Files app (On My iPhone → Friday), so Scriptable widgets can read her widget files.
 for (const k of ["UIFileSharingEnabled", "LSSupportsOpeningDocumentsInPlace"]) {
@@ -94,4 +99,20 @@ if (fs.existsSync(iconSrc)) {
   console.log("Installed " + name + " app icon");
 } else {
   console.log("No icons/appicon-1024.png, keeping the default icon");
+}
+
+// 4.2: the Apple TV remote's protocol code needs iOS 17 or later, so the app now targets iOS 17.
+{
+  const spm = path.join(__dirname, "..", "ios", "App", "CapApp-SPM", "Package.swift");
+  if (fs.existsSync(spm)) {
+    const t = fs.readFileSync(spm, "utf8"), t2 = t.replace(/\.iOS\(\.v1[3-6]\)/g, ".iOS(.v17)");
+    if (t2 !== t) fs.writeFileSync(spm, t2);
+    console.log("CapApp-SPM platform: " + ((t2.match(/\.iOS\(\.v\d+\)/) || ["?"])[0]));
+  } else console.log("No CapApp-SPM/Package.swift found");
+  const pbx = path.join(__dirname, "..", "ios", "App", "App.xcodeproj", "project.pbxproj");
+  if (fs.existsSync(pbx)) {
+    const t = fs.readFileSync(pbx, "utf8"), t2 = t.replace(/IPHONEOS_DEPLOYMENT_TARGET = 1[3-6]\.\d;/g, "IPHONEOS_DEPLOYMENT_TARGET = 17.0;");
+    if (t2 !== t) fs.writeFileSync(pbx, t2);
+    console.log("Deployment target set to 17.0 in " + (t2.match(/IPHONEOS_DEPLOYMENT_TARGET = 17\.0;/g) || []).length + " places");
+  }
 }

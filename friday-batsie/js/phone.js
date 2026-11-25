@@ -297,6 +297,12 @@
       return { say: "Your battery is at " + b.level + " percent" + (b.charging ? " and charging." : "."), tool: "battery" };
     }
 
+    // 4.2: the Apple TV (paired remote over home Wi-Fi) comes before anything else that mentions the TV
+    if (root.FridayTV) {
+      var tvr = await root.FridayTV.handle(raw);
+      if (tvr) return tvr;
+    }
+
     var rq = parseReminder(raw);
     if (rq && nat.calendar.available()) {
       var due = rq.date || new Date(Date.now() + 3600000);

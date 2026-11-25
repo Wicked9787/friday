@@ -20,10 +20,11 @@
     "friday-home": "file:./plugins/friday-home",
     "friday-listen": "file:./plugins/friday-listen",
     "friday-kit": "file:./plugins/friday-kit",
-    "friday-aidot": "file:./plugins/friday-aidot"
+    "friday-aidot": "file:./plugins/friday-aidot",
+    "friday-atv": "file:./plugins/friday-atv"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0"
   },
-  "appVersion": "4.1.0"
+  "appVersion": "4.2.0"
 }

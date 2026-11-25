@@ -1,0 +1,13 @@
+{
+  "name": "friday-atv",
+  "version": "1.0.0",
+  "description": "Apple TV remote for Friday and Reed: pairs once with the PIN on the TV, then presses the Apple TV's buttons over home Wi-Fi (Apple's Companion protocol, via the MIT-licensed itsytv-core).",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}

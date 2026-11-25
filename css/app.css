@@ -1341,3 +1341,33 @@ body.typing #caption .srcs { display: none; }
 .src-chip.weak { opacity: .6; }
 .msg-srcs, .tt-srcs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
 .msg-srcs { justify-content: flex-start; }
+
+/* 4.2: Apple TV remote (Settings → Lights), laid out like the iPhone's Apple TV Remote */
+.atv-remote { display: flex; flex-direction: column; gap: 22px; padding: 6px 0 4px; user-select: none; -webkit-user-select: none; }
+.atv-remote button { -webkit-tap-highlight-color: transparent; }
+.atv-top { display: flex; align-items: center; gap: 12px; }
+.atv-btn { flex: none; display: grid; place-items: center; border-radius: 50%; background: #1c1c1e; border: 1px solid rgba(255,255,255,.32); color: #fff; padding: 0; transition: transform .08s ease, background .12s ease; }
+.atv-btn:active { transform: scale(.94); background: #2c2c2e; }
+.atv-btn svg { width: 44%; height: 44%; }
+.atv-sm { width: 58px; height: 58px; }
+.atv-sm svg { width: 40%; height: 40%; }
+.atv-md { width: 84px; height: 84px; }
+.atv-lg { width: 110px; height: 110px; }
+.atv-lg svg { width: 38%; height: 38%; }
+.atv-pill { flex: 1; min-width: 0; height: 58px; border-radius: 29px; background: #1c1c1e; border: 1px solid rgba(255,255,255,.32); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px; font-weight: 700; font-size: 16px; }
+.atv-pill:active { background: #2c2c2e; }
+.atv-pill-ico svg { width: 22px; height: 22px; display: block; }
+.atv-pill-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atv-chev { color: rgba(255,255,255,.45); font-size: 22px; font-weight: 600; margin-left: 2px; }
+.atv-pad { position: relative; height: 340px; border-radius: 34px; background: #1c1c1e; touch-action: none; transition: background .12s ease; }
+.atv-pad.atv-touch { background: #232325; }
+.atv-padrow { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: space-around; align-items: center; }
+.atv-ico { width: 52px; height: 52px; border: 0; background: transparent; color: #fff; display: grid; place-items: center; padding: 0; border-radius: 50%; }
+.atv-ico svg { width: 34px; height: 34px; }
+.atv-ico:active { background: rgba(255,255,255,.08); }
+.atv-ico.atv-dim { color: rgba(255,255,255,.35); }
+.atv-bottom { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.atv-remote.atv-off .atv-btn, .atv-remote.atv-off .atv-pad, .atv-remote.atv-off .atv-ico { opacity: .55; }
+.atv-remote.atv-off .atv-pill { opacity: 1; }
+#atv-pin { text-align: center; letter-spacing: .4em; font-size: 22px; }
+#accord-atv .accord-body { max-height: none; overflow: visible; }
