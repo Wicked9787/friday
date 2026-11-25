@@ -756,10 +756,11 @@
       </div>
       <div class="row row-col">
         <label>Backup and restore</label>
-        <div class="sub">Saves memory, notes, lists, bills, countdowns, spending, habits, routines, timers, chat, and layout as a file you can keep in Files or iCloud Drive. The API key is left out unless you turn that on.</div>
+        <div class="sub">Saves everything as a file you can keep in Files or iCloud Drive: memories, personality, chats, notes, lists, bills, countdowns, spending, habits, routines, timers, layout, brains and the Apple TV. Keys are left out unless you turn that on.</div>
         <label class="hint" style="display:flex;gap:8px;align-items:center;margin:10px 0">
-          <input type="checkbox" id="backup-include-key"> Include API key in this backup
+          <input type="checkbox" id="backup-include-key"> Include keys in this backup (Groq, every brain's key, and the Apple TV pairing)
         </label>
+        <div class="sub">With keys in it, anyone who has the file can use your AI keys and your Apple TV remote. Keep it in Files or iCloud Drive and don't send it to anyone.</div>
         <button class="btn gold" type="button" id="btn-backup">Save backup</button>
         <div class="sub">In the app, pick <b>Save to Files</b> from the menu that opens.</div>
         <button class="btn" type="button" id="btn-restore">Restore from file</button>
@@ -973,6 +974,11 @@
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
       <h1>What's new in 4.2</h1>
+      <p class="wn-tag">4.2.1</p>
+      <ul>
+        <li>Backups to Files now hold everything, personality and the Apple TV included. Turn on “Include keys” and every brain's key and the Apple TV pairing go in too, so a restore needs nothing re-entered</li>
+        <li>Ask for diagnostics any way you like: “can you run diagnostics”, “run a diagnostic check please”, “diagnose yourself”, “check your systems”</li>
+      </ul>
       <p class="wn-tag">Apple TV remote</p>
       <ul>
         <li>A remote laid out like the iPhone's Apple TV Remote, in Settings → Lights: touch area (swipe to move, tap to select), back and forward 10 seconds, play/pause, back, TV, mute and power. Pair once with the code that shows on your TV</li>

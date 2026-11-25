@@ -305,6 +305,73 @@ async def main():
         chk("S10 Reset on this phone clears the safety copy too, so a reset stays a reset (nothing comes back)", not any(k.startswith("ai.vault") or k == "ai.brains" for k in kc) and "Sky drives a blue truck" not in n5["memory"] and n5["restored"] is None, [kc, n5["memory"][:3], n5["restored"]])
         err += e4
         await ctx.close()
+        # ================= 4.2.1: backup files hold everything; keys only when you include them =================
+        ctx, pg, e6 = await native_ctx(b, BASE_SKY)
+        await pg.evaluate("""() => {
+          const c = JSON.parse(localStorage.getItem('friday.connections')); c.push({id:'g1',name:'Gemini',type:'agent',provider:'gemini',baseUrl:'https://generativelanguage.googleapis.com/v1beta/openai',model:'gemini-2.5-flash',kind:'chat',backup:true});
+          FridayStorage.set('connections', c); FridayStorage.setAgentKey('g1', 'AIza-test-gemini-key-123');
+          FridayStorage.set('atv', {id:'ATV1', name:'Whitfield 8823', paired:true});
+          localStorage.setItem('friday.persona.state', JSON.stringify({traits:{warmth:7.5}, era:2, marker:'grown-up-friday'}));
+          window.__atv.st.known = true; window.__atv.st.paired = true;
+          Capacitor.Plugins.FridayAtv.exportPairing = async () => ({ id: 'ATV1', name: 'Whitfield 8823', creds: 'Q1JFRFM=' });
+          Capacitor.Plugins.FridayAtv.importPairing = async (o) => { window.__atv.calls.push(['importPairing', o]); return { ok: true, status: 'disconnected' }; };
+          window.__shared = [];
+          Capacitor.Plugins.FridayKit.shareFile = async (o) => { window.__shared.push(o.text); return { completed: true }; };
+        }""")
+        await pg.wait_for_timeout(300)
+        await pg.evaluate("FridayStorage.downloadBackup(false)")
+        await pg.evaluate("FridayStorage.downloadBackup(true)")
+        bk = await pg.evaluate("window.__shared.map(t => JSON.parse(t))")
+        nokey, withkey = bk[0], bk[1]
+        nk_text, wk_text = json.dumps(nokey), json.dumps(withkey)
+        chk("B1 a backup file now holds everything: personality, the Apple TV, brains, memories, chats, settings",
+            nokey.get("version") == 4 and "persona.state" in nokey.get("all", {}) and "grown-up-friday" in nokey["all"]["persona.state"] and "atv" in nokey["all"] and any(c.get("name") == "Gemini" for c in nokey.get("connections", [])) and nokey.get("memory") and nokey.get("history"),
+            sorted(nokey.get("all", {}).keys())[:40])
+        chk("B2 without 'Include keys' there are no keys and no pairing in the file at all",
+            "gsk_test_key" not in nk_text and "AIza-test" not in nk_text and "sk-test-openai" not in nk_text and "atvPairing" not in nokey and "apiKey" not in nokey, [k for k in nokey.keys()])
+        chk("B3 with 'Include keys' on: the Groq key, every brain's key and the Apple TV pairing are in it",
+            withkey.get("apiKey") == "gsk_test_key_1234567890" and withkey.get("agentKeys", {}).get("g1") == "AIza-test-gemini-key-123" and withkey.get("agentKeys", {}).get("a1") == "sk-test-openai" and (withkey.get("atvPairing") or {}).get("creds") == "Q1JFRFM=",
+            {k: (withkey.get(k) if k != "all" else "...") for k in ("apiKey", "agentKeys", "atvPairing")})
+        # restore into a wiped phone (no safety copy, no keys): everything comes back, nothing to re-enter
+        await pg.evaluate("localStorage.removeItem('__kc'); localStorage.removeItem('__atvfake');")
+        await pg.evaluate(WIPE)
+        await pg.reload(wait_until="load"); await pg.wait_for_timeout(3000)
+        await pg.evaluate("""() => { Capacitor.Plugins.FridayAtv.importPairing = async (o) => { window.__atv.calls.push(['importPairing', o]); return { ok: true, status: 'disconnected' }; }; }""")
+        blank = await pg.evaluate(STATE_NOW)
+        await pg.evaluate("b => FridayStorage.applyBackup(b)", withkey)
+        imp = await pg.evaluate("window.__atv.calls.filter(c => c[0] === 'importPairing').map(c => c[1])")
+        await pg.reload(wait_until="load"); await pg.wait_for_timeout(3000)
+        rs = await pg.evaluate(STATE_NOW)
+        per = await pg.evaluate("localStorage.getItem('friday.persona.state') || ''")
+        kc = await pg.evaluate("JSON.parse(localStorage.getItem('__kc') || '{}')")
+        chk("B4 restoring that file on a wiped phone brings back everything, personality and keys included, with no setup screen",
+            blank["setupOpen"] and "grown-up-friday" in per and rs["groq"] == "gsk_test_key_1234567890" and rs["gemKey"] == "AIza-test-gemini-key-123" and "Gemini" in rs["conns"] and rs["atv"] and not rs["setupOpen"],
+            {"blank_setup": blank["setupOpen"], "per": per[:60], "groq": rs["groq"], "gem": rs["gemKey"], "conns": rs["conns"], "setup": rs["setupOpen"]})
+        chk("B5 the Apple TV pairing goes back into the Keychain, so the remote works without a new code", imp and imp[0].get("creds") == "Q1JFRFM=" and imp[0].get("id") == "ATV1", imp)
+        chk("B6 the restore also refreshes the safety copy (so the two never disagree)", "ai.vault.meta" in kc and rs["mark"], [k for k in kc.keys() if k.startswith("ai.vault")])
+        # an old (4.1-style) backup still restores
+        old = {k: v for k, v in nokey.items() if k not in ("all",)}
+        old["version"] = 3; old["memory"] = [{"text": "From an old backup", "at": "2026-11-01T10:00:00Z"}]
+        await pg.evaluate("b => FridayStorage.applyBackup(b)", old)
+        await pg.reload(wait_until="load"); await pg.wait_for_timeout(2800)
+        ob = await pg.evaluate(STATE_NOW)
+        chk("B7 backups made by older versions still restore", "From an old backup" in ob["memory"], ob["memory"][:3])
+        err += e6
+        await ctx.close()
+        # ================= 4.2.1: diagnostics by voice =================
+        ctx, pg, e7 = await native_ctx(b, BASE_SKY)
+        dres = {}
+        for ph in ["run diagnostics", "can you run diagnostics", "hey friday, run diagnostics please", "do a diagnostic check", "diagnose yourself", "check your systems", "run a full diagnostic on yourself", "are your systems ok",
+                   "check the weather", "do a diagnostic check on my car", "run my morning routine"]:
+            await pg.evaluate("document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'))")
+            await say(pg, ph, 3600)
+            dres[ph] = await pg.evaluate("({ open: document.getElementById('panel-diag').classList.contains('open'), last: (window.__friday.chat.history.slice(-1)[0] || {}).content || '' })")
+        asks = ["run diagnostics", "can you run diagnostics", "hey friday, run diagnostics please", "do a diagnostic check", "diagnose yourself", "check your systems", "run a full diagnostic on yourself", "are your systems ok"]
+        chk("D1 she runs diagnostics however you ask (\"can you run diagnostics\", \"diagnose yourself\", \"check your systems\"…), and her summary shows in the chat",
+            all(dres[a]["open"] and ("Diagnostics done" in dres[a]["last"] or "All systems normal" in dres[a]["last"]) for a in asks), {a: dres[a] for a in asks if not (dres[a]["open"] and ("Diagnostics done" in dres[a]["last"] or "All systems normal" in dres[a]["last"]))})
+        chk("D2 other things that sound close don't trigger it (the weather, your car, a routine)", not any(dres[a]["open"] for a in ["check the weather", "do a diagnostic check on my car", "run my morning routine"]), {a: dres[a]["open"] for a in ["check the weather", "do a diagnostic check on my car", "run my morning routine"]})
+        err += e7
+        await ctx.close()
         # a damaged copy is never overwritten, and nothing half-restores
         ctx, pg, e5 = await native_ctx(b, BASE_SKY)
         await pg.evaluate("window.__friday.chat.addMemory('Sky likes tacos'); window.__friday.chat.save();")

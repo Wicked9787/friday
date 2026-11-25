@@ -32,6 +32,9 @@
   function connect(id) { return call("connect", id ? { id: id } : {}); }
   function pin(code) { return call("pin", { pin: code }); }
   function forget() { save(null); return call("forget"); }
+  // for backup files (only when keys are included): the pairing itself, so the remote works again without a code
+  async function exportPairing() { var r = await call("exportPairing"); return r && r.creds ? { id: r.id, name: r.name || "", creds: r.creds } : null; }
+  async function importPairing(p) { if (!p || !p.id || !p.creds) return false; var r = await call("importPairing", p); return !!(r && r.ok); }
 
   // Wait a moment for the connection to settle so she can say if something's wrong.
   async function settle(ms) {
@@ -256,6 +259,7 @@
   root.FridayTV = {
     available: available, isSetUp: isSetUp, parse: parse, handle: handle, run: run,
     press: press, swipe: swipe, power: power, skip: skip, mute: mute, status: status, scan: scan, connect: connect, pin: pin, forget: forget,
+    exportPairing: exportPairing, importPairing: importPairing,
     bindRemote: bindRemote
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindRemote);

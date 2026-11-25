@@ -529,9 +529,9 @@
       try { t = await navigator.clipboard.readText(); } catch (e) {}
       if (!t) t = root.prompt ? (root.prompt("Paste the backup text here") || "") : "";
       try {
-        root.FridayStorage.applyBackup(JSON.parse(t));
+        var done1 = root.FridayStorage.applyBackup(JSON.parse(t));
         self.onToast("Backup restored. Reloading.");
-        setTimeout(function () { location.reload(); }, 500);
+        Promise.resolve(done1).then(function () { setTimeout(function () { location.reload(); }, 300); });
       } catch (e2) { self.onToast("That doesn't look like a Friday backup. Copy the whole thing and try again."); }
     };
     document.getElementById("restore-file").onchange = function (ev) {
@@ -542,9 +542,9 @@
       reader.onload = function () {
         try {
           var data = JSON.parse(reader.result);
-          root.FridayStorage.applyBackup(data);
+          var done2 = root.FridayStorage.applyBackup(data);
           self.onToast("Backup restored. Reloading.");
-          setTimeout(function () { location.reload(); }, 500);
+          Promise.resolve(done2).then(function () { setTimeout(function () { location.reload(); }, 300); });
         } catch (e) {
           self.onToast("That file could not be read.");
         }

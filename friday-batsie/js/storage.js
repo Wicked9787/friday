@@ -246,15 +246,14 @@
   function keySet(name, value) {
     value = String(value || "").trim();
     var K = keyCache ? kit() : null;
-    if (!K) { if (value) rawSet(PREFIX + name, value); else rawDel(PREFIX + name); return; }
+    if (!K) { if (value) rawSet(PREFIX + name, value); else rawDel(PREFIX + name); return Promise.resolve(); }
     if (value) {
       keyCache[name] = value;
-      K.secretSet({ key: "ai." + name, value: value }).then(function () { rawDel(PREFIX + name); }, function () { rawSet(PREFIX + name, value); });
-    } else {
-      delete keyCache[name];
-      rawDel(PREFIX + name);
-      try { K.secretDelete({ key: "ai." + name }).catch(function () {}); } catch (e) {}
+      return K.secretSet({ key: "ai." + name, value: value }).then(function () { rawDel(PREFIX + name); }, function () { rawSet(PREFIX + name, value); });
     }
+    delete keyCache[name];
+    rawDel(PREFIX + name);
+    try { return K.secretDelete({ key: "ai." + name }).catch(function () {}); } catch (e) { return Promise.resolve(); }
   }
   function keyStore() { return keyCache ? "keychain" : "storage"; }
 
@@ -298,7 +297,16 @@
       usage: get("usage", {}),
       dismissedSuggestions: get("dismissedSuggestions", [])
     };
-    if (includeKey) data.apiKey = getApiKey();
+    // 4.2.1: everything else she keeps goes in too (her personality, the Apple TV, expired memories…)
+    data.version = 4;
+    data.all = vaultSnapshot();
+    // keys only when you choose to include them: the Groq key and every extra brain's key
+    if (includeKey) {
+      data.apiKey = getApiKey();
+      var ak = {};
+      (get("connections", []) || []).forEach(function (c) { if (c && c.type === "agent" && c.id) { var k = getAgentKey(c.id); if (k) ak[c.id] = k; } });
+      if (Object.keys(ak).length) data.agentKeys = ak;
+    }
     return data;
   }
 
@@ -308,6 +316,10 @@
   async function downloadBackup(includeKey) {
     set("lastBackupAt", Date.now());
     var data = exportBackup(includeKey);
+    // with keys included, the Apple TV pairing goes in too, so the remote works again without a new code
+    if (includeKey && root.FridayTV && root.FridayTV.exportPairing) {
+      try { var pp = await root.FridayTV.exportPairing(); if (pp) data.atvPairing = pp; } catch (e) {}
+    }
     var text = JSON.stringify(data, null, 2);
     var stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
     var name = "friday-backup-" + stamp + ".json";
@@ -342,8 +354,12 @@
     return { how: "download", completed: true };
   }
 
+  // Returns a promise that settles once keys, the Apple TV pairing and the safety copy are written.
   function applyBackup(data) {
     if (!data || typeof data !== "object") throw new Error("That file does not look like a Friday backup.");
+    if (data.all && typeof data.all === "object") {
+      Object.keys(data.all).forEach(function (n) { if (typeof data.all[n] === "string" && !vaultSkip(n)) rawSet(PREFIX + n, data.all[n]); });
+    }
     if (data.settings) set("settings", data.settings);
     if (data.bubbles) set("bubbles", data.bubbles);
     if (data.memory) set("memory", data.memory);
@@ -361,7 +377,14 @@
     if (data.usage) set("usage", data.usage);
     if (data.dismissedSuggestions) set("dismissedSuggestions", data.dismissedSuggestions);
     if (data.profile) rawSet(PREFIX + "profile", data.profile);
-    if (typeof data.apiKey === "string" && data.apiKey) setApiKey(data.apiKey);
+    var waits = [];
+    if (typeof data.apiKey === "string" && data.apiKey) waits.push(keySet("apiKey", data.apiKey));
+    if (data.agentKeys && typeof data.agentKeys === "object") {
+      Object.keys(data.agentKeys).forEach(function (id) { var k = data.agentKeys[id]; if (typeof k === "string" && k) waits.push(keySet("agentKey." + id, k)); });
+    }
+    if (data.atvPairing && root.FridayTV && root.FridayTV.importPairing) waits.push(root.FridayTV.importPairing(data.atvPairing));
+    rawSet(VAULT_MARK, String(Date.now()));        // this is her storage now: the safety copy follows it
+    return Promise.all(waits.map(function (p) { return Promise.resolve(p).catch(noop); })).then(function () { return vaultNow(); }).catch(noop);
   }
 
   function resetAll(keepKey) {

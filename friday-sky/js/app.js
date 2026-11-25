@@ -9,7 +9,7 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "4.2.0";
+  var APP_VERSION = "4.2.1";
   var APP_LABEL = "Remote";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
   function fillShownName() {
@@ -878,7 +878,7 @@
         }
       }
       var act = life ? life.handle(text) : null;
-      if (!act && /^(run |start )?(a )?(diagnostics?|system check|self[- ]?check|health check)$|^check (yourself|your systems)$/.test(low)) {
+      if (!act && isDiagAsk(low)) {
         chat._push("user", text);
         await runDiagnostics(true);
         return;
@@ -2066,6 +2066,19 @@
   window.addEventListener("friday:mood", function () { applyHeadache(); });
 
   // ---------- diagnostics ----------
+  // 4.2.1: the ways people ask for diagnostics ("can you run diagnostics", "run a diagnostic check please",
+  // "hey Friday, diagnose yourself", "check your systems")
+  function isDiagAsk(low) {
+    var t = String(low || "").toLowerCase().replace(/[’]/g, "'").replace(/[.!?,]+/g, " ").replace(/\s+/g, " ").trim()
+      .replace(/^(?:hey |ok |okay )?(?:friday|f r i d a y|jarvis|reed) /, "")
+      .replace(/^(?:please |can you |could you |would you |will you |go ahead and |i want you to |i need you to )+/, "")
+      .replace(/(?: please| now| for me| real quick| quickly)+$/, "").trim();
+    return /^(?:(?:run|do|start|perform|give me|show me|show|open)\s+)?(?:a |an |the |your |some |my )?(?:full |quick |complete |whole )?(?:system |systems |self |self-)?(?:diagnostics?|diagnostic (?:check|test|scan|report)|system check|systems check|self[- ]?check|self[- ]?test|health check|check ?up|status check)(?: on (?:yourself|your ?self|your systems|everything|the app))?$/.test(t) ||
+      /^check (?:yourself|your ?self|your systems|all (?:of )?your systems)(?: out)?$/.test(t) ||
+      /^diagnose (?:yourself|your ?self|your systems|the app)$/.test(t) ||
+      /^(?:are )?(?:all )?(?:of )?your systems (?:ok|okay|good|working|running)$/.test(t);
+  }
+
   async function runDiagnostics(speak) {
     var lines = [], problems = 0;
     function add(ok, text) { lines.push((ok ? "✓ " : "✗ ") + text); if (!ok) problems++; }
@@ -2117,6 +2130,7 @@
     openPanel("diag");
     var summary = problems ? "Diagnostics done. I found " + problems + " thing" + (problems > 1 ? "s" : "") + " to look at; they're on screen." : "All systems normal" + (honorific() ? ", " + honorific() : "") + ".";
     setCaption(summary);
+    if (speak && chat) chat._push("assistant", summary);   // asked out loud: her answer shows in the chat too
     if (speak) await voice.speak(summary, profile);
     return problems;
   }

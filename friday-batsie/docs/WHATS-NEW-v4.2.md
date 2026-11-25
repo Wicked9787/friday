@@ -24,3 +24,12 @@
   you. Diagnostics shows when the safety copy was last saved, and when it was last used.
 - Extra brains also keep their own copy, so even on their own they come back with their keys.
 - Reset on this phone clears the safety copy too, so a reset stays a reset.
+
+## 4.2.1
+- Backups to Files hold everything: memories, personality, chats, lists, settings, brains and the
+  Apple TV. With "Include keys" on, the Groq key, every brain's key and the Apple TV pairing go in
+  too, so restoring needs nothing re-entered. Without it, no keys are in the file.
+- Restoring a backup also refreshes the safety copy, so the two never disagree.
+- Diagnostics by voice understands more ways of asking: "can you run diagnostics", "run diagnostics
+  please", "hey Reed, run a diagnostic check", "diagnose yourself", "check your systems",
+  "are your systems OK". His summary now shows in the chat too.

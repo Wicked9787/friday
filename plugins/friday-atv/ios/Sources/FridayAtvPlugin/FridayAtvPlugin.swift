@@ -21,7 +21,9 @@ public class FridayAtvPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "power", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "skip", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "mute", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "forget", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "forget", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "exportPairing", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "importPairing", returnType: CAPPluginReturnPromise)
     ]
 
     private var manager: AppleTVManager?
@@ -160,6 +162,32 @@ public class FridayAtvPlugin: CAPPlugin, CAPBridgedPlugin {
             self.defaults.removeObject(forKey: FridayAtvPlugin.lastIdKey)
             self.defaults.removeObject(forKey: FridayAtvPlugin.lastNameKey)
             call.resolve(self.state())
+        }
+    }
+
+    // ---------- the pairing in a backup file (only when you choose to include keys) ----------
+
+    /// The pairing keys for the Apple TV used last, so a backup can bring the remote back without a new code.
+    @objc func exportPairing(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            let m = self.mgr()
+            guard let id = self.lastId(m) ?? KeychainStorage.allPairedDeviceIDs().first,
+                  let creds = KeychainStorage.load(for: id),
+                  let data = try? JSONEncoder().encode(creds) else { call.resolve([:]); return }
+            call.resolve(["id": id, "name": self.defaults.string(forKey: FridayAtvPlugin.lastNameKey) ?? "", "creds": data.base64EncodedString()])
+        }
+    }
+
+    @objc func importPairing(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"), !id.isEmpty, let b64 = call.getString("creds"),
+              let data = Data(base64Encoded: b64), let creds = try? JSONDecoder().decode(HAPCredentials.self, from: data) else {
+            call.reject("bad-pairing"); return
+        }
+        DispatchQueue.main.async {
+            do { try KeychainStorage.save(credentials: creds, for: id) } catch { call.reject("keychain"); return }
+            self.defaults.set(id, forKey: FridayAtvPlugin.lastIdKey)
+            if let name = call.getString("name"), !name.isEmpty { self.defaults.set(name, forKey: FridayAtvPlugin.lastNameKey) }
+            call.resolve(self.state(["ok": true]))
         }
     }
 
