@@ -553,10 +553,9 @@
     if (T.need === "web") list = list.filter(function (r) { return r.caps.web && r.kind === "groq"; });   // the web tool is Groq's
     if (opts.noBackup) list = list.filter(function (r) { return r.kind === "groq"; });
     if (T.background || opts.priority === "background") {
-      // background work never spends paid brains or the last of a free allowance
-      var bg = list.filter(function (r) { return r.free && quotaLeft(r) > 0.3; });
-      if (bg.length) list = bg;
-      else list = list.filter(function (r) { return r.free; });
+      // Background work (reflections, learning, summaries, sorting) never spends a paid brain or the last
+      // 30% of a free allowance. If no free brain has that much left, the work waits for another time.
+      list = list.filter(function (r) { return r.free && quotaLeft(r) > 0.3; });
     }
     list.forEach(function (r) { r.score = scoreRoute(r, task); });
     list.sort(function (a, b) { return b.score - a.score; });
@@ -631,6 +630,10 @@
     }
     if (!groqKey() && !backupAgents().length) throw BrainError("Add a Groq API key in Settings first.", "auth");
     if (!p.order.length && p.task === "web") return { text: "", data: null, route: null, task: p.task };
+    if (!p.order.length && (TASKS[p.task].background || opts.priority === "background")) {
+      activity("thinking", "Saved " + TASKS[p.task].label.toLowerCase() + " for later: every free brain is low today", { quiet: true });
+      throw BrainError("Saved for later to protect the free allowance.", "deferred");
+    }
     throw BrainError(friendly(counts), "exhausted");
   }
   async function ask(messages, opts) {
