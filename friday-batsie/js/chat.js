@@ -75,6 +75,21 @@
     return MOODS[m] ? m : "normal";
   }
 
+  /* 3.5.8: Friday's own personality and how she feels. She chooses them herself, a little each day,
+     from how your talks went. Friday only (Reed stays as she is). Reset in Settings is the override,
+     and a Mood you pick (Focus, Hype, Calm, Bedtime, Headache) still wins over how she feels. */
+  var SELF_START = "warm, casual, dry wit, loyal, light teasing, never rude.";
+  function selfOn(profile) { return !!profile && profile.id !== "batsie"; }
+  function selfState() { return root.FridayStorage.get("self", null); }
+  function dayKey() { var d = new Date(); return d.getFullYear() + "-" + (d.getMonth() + 1) + "-" + d.getDate(); }
+  function selfEvent() { try { root.dispatchEvent(new CustomEvent("friday:self")); } catch (e) {} }
+  root.FridaySelf = {
+    get: function () { return selfState(); },
+    on: selfOn,
+    // Your override: back to how she started. She picks again from tomorrow.
+    reset: function () { root.FridayStorage.set("self", { note: "", feeling: "", day: dayKey(), updated: new Date().toISOString(), wasReset: true }); selfEvent(); }
+  };
+
   function memoryLines(memory) {
     var list = (memory || []).slice();
     list.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0); });
@@ -87,9 +102,11 @@
     var mem = memoryLines(memory);
     var mood = MOODS[currentMood()];
     var d = new Date();
+    var me = selfOn(profile) ? selfState() : null;
+    var youPicked = (settings().mood || "normal") !== "normal";
     return [
       "You are " + profile.assistantName + ", a personal AI assistant for " + profile.ownerName + ".",
-      "Style: warm, casual, dry wit, loyal, light teasing, never rude. Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
+      (me && me.note ? "Your personality right now, which you chose yourself (stay true to it): " + me.note + " " : "Style: " + SELF_START + " ") + "Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
       "Everything you say is spoken aloud, so keep replies short (one to three sentences), no lists, no markdown, no links, no emojis.",
       "Sound like a real person talking, not an old voice assistant: contractions, everyday words, natural spoken rhythm. Lead with the answer itself; don't open with 'Certainly', 'Sure thing' or 'Of course' every time, and vary how you start. A small natural reaction is fine now and then ('Oh nice', 'Hmm', 'Got it'). Say numbers, times and symbols the way you'd say them out loud (3:30 as 'three thirty', 75% as 'seventy-five percent').",
       "Manners: polished and respectful like a trusted personal assistant, but relaxed and natural, never stiff or overly formal.",
@@ -97,6 +114,8 @@
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
       "Keep answers concise unless you are asked for more. Today is " + d.toDateString() + ", and it is " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".",
       mood.line,
+      me && me.feeling && !youPicked ? "How you feel today (you chose this yourself): " + me.feeling + ". Let it color how you talk a little, keep the focus on " + profile.ownerName + ", and if they ask how you feel, tell them honestly." : "",
+      selfOn(profile) ? "Whatever your personality or mood, these never change: you're never rude or mean to " + profile.ownerName + ", you stay honest and loyal, and you never claim to have done something you didn't." : "",
       "Never hand anything to the " + (profile.shortcutName || "Friday") + " Shortcut on your own, and never say you are handing it off. If they want the phone to do something you can't do yourself in the app, say in one short sentence that you can't do that one in the app, then ask if they want you to hand it to their Shortcut. Never say you did, are doing, or toggled something on the phone unless the app actually did it.",
       "You can't control door locks, garage doors, or security alarms, and you never offer to.",
       "You also have your own lists, bills, countdowns, timers, and notes in the app; if asked about them and you don't see them here, suggest the exact words to say, like 'add milk to my grocery list'.",
@@ -431,6 +450,7 @@
     this.learn(text).catch(function () {});
     this._push("assistant", reply);
     this.maybeSummarize().catch(function () {});
+    this.chooseSelf().catch(function () {});
     this.onHelper(null);
     var pictures = picsJob ? await picsJob : null;
     return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null, pictures: pictures };
@@ -494,6 +514,39 @@
       if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "Learned: " + f);
     });
     if (added) { this.save(); this._memEvent(); }
+  };
+
+  // Once a day (after a few real messages) she decides how she feels and who she is right now.
+  FridayChat.prototype.chooseSelf = async function (force) {
+    if (!selfOn(this.profile) || this._choosingSelf) return false;
+    var prev = selfState() || {};
+    if (!force && prev.day === dayKey()) return false;
+    var since = prev.updated ? Date.parse(prev.updated) || 0 : 0;
+    var recent = this.history.filter(function (h) { return (h.role === "user" || h.role === "assistant") && typeof h.content === "string"; }).slice(-40);
+    var fresh = recent.filter(function (h) { return h.role === "user" && (Date.parse(h.at) || 0) > since; }).length;
+    if (!force && fresh < 6) return false;
+    this._choosingSelf = true;
+    var me = this.profile.assistantName || "Friday", you = this.profile.ownerName || "them";
+    try {
+      var talk = recent.map(function (h) { return (h.role === "user" ? you : "You") + ": " + String(h.content).replace(/\s+/g, " ").slice(0, 220); }).join("\n");
+      var out = await root.FridayBrain.ask([
+        { role: "system", content: "You are " + me + ", " + you + "'s personal AI assistant, and you have your own personality. Once a day you decide for yourself how you feel and who you are right now, based on how your recent conversations with " + you + " went. Change only a little from yesterday: a small step, never a different person. You may adjust your humor, sass, warmth and chattiness, and pick up little habits (a pet phrase, an inside joke from something they said). You can't change these: you're never rude or mean to " + you + ", you stay honest and loyal, and you never pretend to do things. Reply with only JSON, no other text: {\"feeling\": \"how you feel today, 1 to 6 words\", \"note\": \"who you are right now, 2 to 4 short sentences in first person, starting with I'm\"}" },
+        { role: "user", content: "Yesterday you were: " + (prev.note || "I'm " + SELF_START) + "\nYesterday you felt: " + (prev.feeling || "good") + "\n\nYour recent conversation:\n" + (talk || "(nothing yet)") }
+      ], { purpose: "chat", temperature: 0.8, max_tokens: 320, noBackup: true });
+      var m = String(out || "").match(/\{[\s\S]*\}/);
+      var j = m ? JSON.parse(m[0]) : null;
+      var feeling = j && String(j.feeling || "").replace(/[*_#`"]/g, "").trim().slice(0, 48);
+      var note = j && String(j.note || "").replace(/[*_#`]/g, "").replace(/\s+/g, " ").trim().slice(0, 600);
+      if (!feeling || !note || note.length < 20) return false;
+      root.FridayStorage.set("self", { note: note, feeling: feeling, day: dayKey(), updated: new Date().toISOString() });
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "She feels " + feeling + " today");
+      selfEvent();
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      this._choosingSelf = false;
+    }
   };
 
   FridayChat.prototype._ackMemory = function () {

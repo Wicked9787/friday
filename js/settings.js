@@ -420,6 +420,7 @@
     this._bind35();
     this._bindCamera();
     this._bindStandby();
+    this._bindSelf();
     this._bindNav();
     this._syncHeaders();
 
@@ -1030,6 +1031,28 @@
       "Script.complete();"
     ].join("\n");
   }
+  // 3.5.8: Friday's own personality: read it in her words; Reset is your override (Friday only)
+  FridaySettings.prototype._bindSelf = function () {
+    var self = this, box = document.getElementById("self-box");
+    if (!box) return;
+    var FS = function () { return root.FridaySelf; };
+    if (!FS() || !FS().on(this.profile)) { box.hidden = true; return; }
+    box.hidden = false;
+    var name = (this.profile && this.profile.assistantName) || "Friday";
+    var paint = function () {
+      var s = FS().get() || {};
+      document.getElementById("self-feel").textContent = s.feeling ? "Today she feels: " + s.feeling : (s.wasReset ? "Back to how she started. She'll start choosing again tomorrow." : "She hasn't picked yet. She will after a day of talking.");
+      document.getElementById("self-note").textContent = s.note ? "“" + s.note + "”" : "";
+    };
+    paint();
+    if (!this._selfWatch) { this._selfWatch = true; root.addEventListener("friday:self", paint); }
+    document.getElementById("btn-self-reset").onclick = function () {
+      if (!confirm("Reset " + name + "'s personality to how she started? She'll start choosing again tomorrow.")) return;
+      FS().reset();
+      self.onToast(name + "'s personality is reset.");
+    };
+  };
+
   FridaySettings.prototype._bindStandby = function () {
     var self = this, v = this.values, prof = this.profile || {};
     var name = prof.assistantName || "Friday", scheme = name.toLowerCase() === "reed" ? "jarvis" : name.toLowerCase();

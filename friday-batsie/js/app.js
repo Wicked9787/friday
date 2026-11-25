@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.7";
-  var APP_LABEL = "Ask First";
+  var APP_VERSION = "3.5.8";
+  var APP_LABEL = "Her Own Self";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -2245,7 +2245,7 @@
     tickStageClock();
     setInterval(tickStageClock, 15000);
     window.__friday = { bubbles: bubbles, orb: orb, applyLayout: applyLayout, applyLook: applyLook, voice: voice,
-      typing: function () { return typing; }, enterTyping: enterTyping, exitTyping: exitTyping, sendTyped: sendTyped, liveOn: liveOn, openPanel: openPanel };
+      chat: chat, typing: function () { return typing; }, enterTyping: enterTyping, exitTyping: exitTyping, sendTyped: sendTyped, liveOn: liveOn, openPanel: openPanel };
     if (settings.values.iconId) applyAppIcon(settings.values.iconId);
     renderChips();
     bindTalkbar();
