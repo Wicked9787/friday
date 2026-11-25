@@ -799,7 +799,7 @@ async def main():
         ok("R AI voice: clips play back to back with a natural pause, never overlapping", not gv["overlap"] and all(0.09 <= g <= 3.0 for g in gv["gaps"]), gv)
         await pg.click("#btn-settings"); await pg.wait_for_timeout(300)
         verl = await pg.evaluate("document.getElementById('app-version').textContent")
-        ok("R Settings shows the version and its label", verl == "Version 4.2.1 · Remote", verl)
+        ok("R Settings shows the version and its label", verl == "Version 4.2.2 · Remote", verl)
         await close_panels(pg)
 
         nm = await pg.evaluate("""() => ['tell patsy dinner is ready', 'text Batsy I am home', 'tell bats e hello', 'I have a party tonight', 'patty melt'].map(t => FridayVoice.fixNames(t))""")

@@ -33,3 +33,8 @@
 - Diagnostics by voice understands more ways of asking: "can you run diagnostics", "run diagnostics
   please", "hey Reed, run a diagnostic check", "diagnose yourself", "check your systems",
   "are your systems OK". His summary now shows in the chat too.
+
+## 4.2.2
+- Same features as 4.2.1, packaged so SideStore can install it: two small resource folders that the
+  Apple TV code's libraries add (an App Store privacy note, nothing the app uses) are left out, so the
+  app is laid out like 4.1.
