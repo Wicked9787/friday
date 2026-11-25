@@ -84,10 +84,10 @@
     return list.slice(0, 60).map(function (m) { return "- " + m.text; }).join("\n");
   }
 
-  function personaPrompt(profile, memory, summary) {
+  function personaPrompt(profile, memory, summary, query) {
     var terms = (profile.terms || []).join(" or ");
     var perTen = profile.addressPerTen || 4;
-    var mem = memoryLines(memory);
+    var mem = root.FridayMemory ? root.FridayMemory.promptBlock(memory, profile, query) : memoryLines(memory);
     var mood = MOODS[currentMood()];
     var d = new Date();
     var P = root.FridayPersona, pOn = !!(P && P.on(profile));
@@ -95,7 +95,7 @@
     var pLines = [];
     try { pLines = pOn ? P.promptLines(profile, youPicked) : []; } catch (e) { pLines = []; }
     return [
-      "You are " + profile.assistantName + ", a personal AI assistant for " + profile.ownerName + ".",
+      "You are " + profile.assistantName + ", a personal AI assistant for " + profile.ownerName + "." + (profile.displayName && profile.displayName !== profile.assistantName ? " Your name is written " + profile.displayName + " and said \"" + profile.assistantName + "\"." : ""),
       (pOn ? "" : "Style: " + SELF_START + " ") + "Talk like a close friend having a real back-and-forth conversation: react to what they said, remember what was said earlier, and sometimes ask a short follow-up question.",
       "Everything you say is spoken aloud, so keep replies short (one to three sentences), no lists, no markdown, no links, no emojis.",
       "Sound like a real person talking, not an old voice assistant: contractions, everyday words, natural spoken rhythm. Lead with the answer itself; don't open with 'Certainly', 'Sure thing' or 'Of course' every time, and vary how you start. A small natural reaction is fine now and then ('Oh nice', 'Hmm', 'Got it'). Say numbers, times and symbols the way you'd say them out loud (3:30 as 'three thirty', 75% as 'seventy-five percent').",
@@ -111,7 +111,7 @@
       "You can show real photos: when someone wants to see something, tell them to ask with the word pictures or photos (like 'show me pictures of wooden stairs'). Never say you can't show images.",
       "If the iCTRL robot app is set up, you can tap and type in other apps: they say 'robot,' then the task (like 'robot, open YouTube and search lo-fi music').",
       summary ? ("Summary of your earlier conversations with " + profile.ownerName + " (use it to stay consistent; don't recite it):\n" + summary) : "",
-      mem ? ("Things you know about " + profile.ownerName + " (use them naturally, don't recite them):\n" + mem) : "You have no long-term memory notes yet.",
+      mem ? ("What you know about " + profile.ownerName + " (use it naturally, don't recite it):\n" + mem) : "You have no long-term memory notes yet.",
       "Your name is " + profile.assistantName + ". The person you help is " + profile.ownerName + "."
     ].filter(Boolean).join("\n");
   }
@@ -172,24 +172,6 @@
     return out;
   }
 
-  // Free facts from Wikipedia (works from the phone, no key).
-  async function wikiFacts(q) {
-    q = String(q || "").replace(/^(hey |ok )?(friday|jarvis|reed)[, ]+/i, "").replace(/^(who|what|when|where|why|how)( is| are| was| were| did| does| do)?\s+/i, "").replace(/[?.!]+$/, "").trim();
-    if (q.length < 3) return "";
-    try {
-      var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-      var tm = setTimeout(function () { if (ctl) ctl.abort(); }, 5000);
-      var r = await fetch("https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0&format=json&origin=*&search=" + encodeURIComponent(q), ctl ? { signal: ctl.signal } : {});
-      var j = await r.json();
-      var title = j && j[1] && j[1][0];
-      if (!title) { clearTimeout(tm); return ""; }
-      var r2 = await fetch("https://en.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title.replace(/ /g, "_")), ctl ? { signal: ctl.signal } : {});
-      clearTimeout(tm);
-      var j2 = await r2.json();
-      return j2 && j2.extract ? (title + ": " + j2.extract).slice(0, 1200) : "";
-    } catch (e) { return ""; }
-  }
-
   // Splits streamed text into speakable sentences.
   function SentenceSplitter(onSentence) {
     this.buf = "";
@@ -225,6 +207,10 @@
     this.profile = opts.profile;
     this.history = root.FridayStorage.get("history", []);
     this.memory = root.FridayStorage.get("memory", []);
+    if (root.FridayMemory) {
+      var mch = root.FridayMemory.normalizeAll(this.memory), mgone = root.FridayMemory.prune(this.memory);
+      if (mch || mgone) root.FridayStorage.set("memory", this.memory);
+    }
     this.summary = root.FridayStorage.get("summary", { text: "", upTo: 0 });
     this.onHelper = opts.onHelper || function () {};
   }
@@ -241,7 +227,13 @@
   FridayChat.prototype.addMemory = function (text) {
     text = String(text || "").trim();
     if (!text) return;
-    this.memory.push({ text: text, at: new Date().toISOString() });
+    var item = { text: text, at: new Date().toISOString() };
+    if (root.FridayMemory) {
+      var c = root.FridayMemory.classifyLocal(text);
+      item.type = c.type;
+      if (c.type === "context") item.expiresAt = root.FridayMemory.expiresFrom(c.days);
+    }
+    this.memory.push(item);
     this.save();
     this._memEvent();
   };
@@ -258,6 +250,11 @@
     if (!text) return this.removeMemory(i);
     this.memory[i].text = text;
     this.memory[i].edited = new Date().toISOString();
+    if (root.FridayMemory) {
+      var c = root.FridayMemory.classifyLocal(text);
+      this.memory[i].type = c.type;
+      if (c.type === "context") this.memory[i].expiresAt = root.FridayMemory.expiresFrom(c.days); else delete this.memory[i].expiresAt;
+    }
     this.save();
     this._memEvent();
   };
@@ -291,7 +288,7 @@
       var out = (await root.FridayBrain.ask([
         { role: "system", content: "Classify the user request as one of: chat, research, coding, money, messages, phone. Reply with only the one word." },
         { role: "user", content: text }
-      ], { purpose: "small", temperature: 0, max_tokens: 16, noBackup: true })).toLowerCase();
+      ], { task: "quick", priority: "background", temperature: 0, max_tokens: 16 })).toLowerCase();
       if (/research/.test(out)) return "research";
       if (/cod/.test(out)) return "coding";
       if (/money|bill|budget/.test(out)) return "money";
@@ -386,11 +383,12 @@
         helperText = await groqChat([
           { role: "system", content: HELPERS[kind].system },
           { role: "user", content: text }
-        ], { temperature: 0.4 });
+        ], { temperature: 0.4, task: { coding: "coding", research: "reasoning", money: "reasoning", messages: "writing" }[kind] || "reasoning" });
       } catch (e) { helperText = ""; }
     }
 
-    var messages = [{ role: "system", content: personaPrompt(this.profile, this.memory, this.summary && this.summary.text) }];
+    if (root.FridayMemory && root.FridayMemory.prune(this.memory)) this.save();
+    var messages = [{ role: "system", content: personaPrompt(this.profile, this.memory, this.summary && this.summary.text, text) }];
     this.history.slice(-HISTORY_LIMIT).forEach(function (h) {
       if (h.role === "user" || h.role === "assistant") messages.push({ role: h.role, content: h.content });
     });
@@ -409,40 +407,50 @@
 
     var reply = "";
     var streamed = false;
-    if (web) {
-      var webNote = link
-        ? "The user shared a link: " + link[1] + ". Open that page with your browser tool, read it, and answer what they asked about it (or summarize it) in two to four short spoken sentences. No links or citations."
-        : "Search the web for current, accurate information, then answer in one to three short spoken sentences. Mention the date if it matters. No links or citations.";
+    var found = null;   // 4.0: research results (sources shown under her answer)
+    if (web && link) {
+      // a link: read that page
       try {
-        if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("research", link ? "Reading a link" : (forced ? "Searching the web for " + forced[1].slice(0, 50) : "Searching the web"));
-        messages.push({ role: "system", content: webNote });
-        reply = cleanSpoken(await groqChat(messages, { tools: [{ type: "browser_search" }], reasoning_effort: "low", temperature: 0.5, noBackup: true }));
+        if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("research", "Reading a link");
+        messages.push({ role: "system", content: "The user shared a link: " + link[1] + ". Open that page with your browser tool, read it, and answer what they asked about it (or summarize it) in two to four short spoken sentences. Never read out the link." });
+        reply = cleanSpoken(await groqChat(messages, { task: "web", tools: [{ type: "browser_search" }], reasoning_effort: "low", temperature: 0.5 }));
       } catch (e) { reply = ""; }
-      if (!reply) {
-        messages.pop();
-        // Free fallback: Wikipedia, so she still has facts when web search is busy.
-        var wiki = link ? "" : await wikiFacts(forced ? forced[1] : text);
-        if (wiki) messages.push({ role: "system", content: "Web search was busy. Here is a Wikipedia summary that may help (say it's from Wikipedia if you use it):\n" + wiki });
+      if (reply) { var lk = /^https?:/i.test(link[1]) ? link[1] : "https://" + link[1]; found = { sources: root.FridayResearch ? [root.FridayResearch.makeSource(lk, lk, "Link")] : [], points: [], conflicts: [] }; }
+      else { messages.pop(); messages.push({ role: "system", content: "You couldn't open that link right now. Say so in one short sentence." }); }
+    } else if (web) {
+      // several sources, checked and weighed, then one answer in her own voice
+      var rr = null;
+      try { rr = root.FridayResearch ? await root.FridayResearch.research(forced ? forced[1] : text) : null; } catch (e) { rr = null; }
+      if (rr && rr.ok) {
+        found = rr;
+        messages.push({ role: "system", content: rr.brief });
+      } else {
+        messages.push({ role: "system", content: "You tried to check sources for this but couldn't reach any right now. Say that honestly in one short sentence, and don't guess at anything that could have changed recently." });
       }
     }
     if (!reply) {
       var useStream = !!opts.onSentence && settings().fastReplies !== false;
       if (useStream) {
         var splitter = new SentenceSplitter(function (s) { streamed = true; opts.onSentence(s); });
-        reply = await groqChat(messages, { stream: true, onDelta: function (p) { splitter.push(p); } });
+        reply = await groqChat(messages, { task: "chat", stream: true, onDelta: function (p) { splitter.push(p); } });
         splitter.flush();
       } else {
-        reply = await groqChat(messages);
+        reply = await groqChat(messages, { task: "chat" });
       }
     }
     reply = cleanSpoken(reply);
     this.learn(text).catch(function () {});
     this._push("assistant", reply);
+    if (found && found.sources && found.sources.length) {
+      // keep the sources with her answer so the chat can show them later
+      this.history[this.history.length - 1].sources = found.sources.slice(0, 8).map(function (s) { return { title: s.title, url: s.url, domain: s.domain, tier: s.tier, verified: !!s.verified }; });
+      this.save();
+    }
     this.maybeSummarize().catch(function () {});
     if (root.FridayPersona) root.FridayPersona.maybeReflect(this).catch(function () {});
     this.onHelper(null);
     var pictures = picsJob ? await picsJob : null;
-    return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null, pictures: pictures };
+    return { text: reply, kind: kind, streamed: streamed, command: (kind === "messages" || phone === "messages") ? text : null, pictures: pictures, research: found };
   };
 
   // Long-chat memory: fold older conversation into a short running summary.
@@ -462,7 +470,7 @@
       var out = await root.FridayBrain.ask([
         { role: "system", content: "You keep a running summary of conversations between " + owner + " and their assistant. Merge the old summary with the new conversation. Keep what matters later: topics, plans, decisions, promises, open questions, how " + owner + " was feeling. Drop small talk. Third person, plain sentences, under 140 words." },
         { role: "user", content: "Old summary:\n" + (this.summary.text || "(none)") + "\n\nNew conversation:\n" + transcript }
-      ], { purpose: "small", temperature: 0.2, max_tokens: 320 });
+      ], { task: "summary", temperature: 0.2, max_tokens: 320 });
       out = String(out || "").trim();
       if (out) {
         this.summary = { text: out, lastAt: older[older.length - 1].at || new Date().toISOString() };
@@ -473,34 +481,31 @@
     }
   };
 
-  // Quietly pick up lasting personal facts from what the user says.
+  // Quietly pick up personal facts, preferences and temporary context from what the user says.
   FridayChat.prototype.learn = async function (userText) {
     var t = String(userText || "");
     if (t.length < 12 || !/\b(i|i'm|im|i've|my|me|mine|we|our|us)\b/i.test(t)) return;
     var owner = this.profile.ownerName || "the user";
     var out = await root.FridayBrain.ask([
-      { role: "system", content: "Extract lasting personal facts about " + owner + " from their message: preferences, likes and dislikes, names of family, friends or pets, routines, important dates like birthdays, where things are. Ignore one-off requests, questions, and anything temporary. Write each fact as a short third-person sentence starting with " + owner + " (for example: " + owner + " likes black coffee.). Reply with only a JSON array of strings, or [] if there is nothing lasting." },
+      { role: "system", content: "Pick out things worth remembering about " + owner + " from their message. Types: fact (lasting facts: names of family, friends or pets, where things are, important dates, routines), preference (likes, dislikes, how they prefer things), context (temporary: plans, appointments, how they're doing today; give how many days it stays relevant, 1 to 30), event (something you and " + owner + " did or finished together). Ignore requests, questions, and anything about the assistant herself. Write each as a short third-person sentence starting with " + owner + " (for example: " + owner + " likes black coffee.). Reply with only a JSON array like [{\"text\": \"...\", \"type\": \"fact|preference|context|event\", \"days\": 3}], or [] if there's nothing worth keeping." },
       { role: "user", content: t }
-    ], { purpose: "small", temperature: 0, max_tokens: 400, reasoning_effort: "low", noBackup: true });
+    ], { task: "quick", priority: "background", temperature: 0, max_tokens: 400, reasoning_effort: "low" });
     var m = String(out || "").match(/\[[\s\S]*\]/);
     if (!m) return;
     var facts;
     try { facts = JSON.parse(m[0]); } catch (e) { return; }
     if (!Array.isArray(facts) || !facts.length) return;
+    var items = root.FridayMemory ? root.FridayMemory.accept(facts.slice(0, 3), this.profile) : facts.slice(0, 3).map(function (f) { return { text: String((f && f.text) || f || "").trim(), at: new Date().toISOString(), auto: true }; });
     function norm(x) { return String(x || "").toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim(); }
     var self = this, added = 0;
-    facts.slice(0, 3).forEach(function (f) {
-      f = String(f || "").trim();
-      var nf = norm(f);
+    items.forEach(function (it) {
+      var nf = norm(it.text);
       if (nf.length < 6 || nf.length > 200) return;
-      var dup = self.memory.some(function (x) {
-        var nx = norm(x.text);
-        return nx === nf || nx.indexOf(nf) >= 0 || nf.indexOf(nx) >= 0;
-      });
+      var dup = self.memory.some(function (x) { var nx = norm(x.text); return nx === nf || nx.indexOf(nf) >= 0 || nf.indexOf(nx) >= 0; });
       if (dup) return;
-      self.memory.push({ text: f, at: new Date().toISOString(), auto: true });
+      self.memory.push(it);
       added++;
-      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "Learned: " + f);
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "Learned (" + (it.type || "fact") + "): " + it.text);
     });
     if (added) { this.save(); this._memEvent(); }
   };

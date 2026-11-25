@@ -19,7 +19,7 @@
   function plugin(name) { var p = cap(); return p && p[name] ? p[name] : null; }
   function appName() {
     var p = root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile ? root.FRIDAY_CONFIG.getProfile() : null;
-    return (p && p.assistantName) || "Friday";
+    return (p && (p.displayName || p.assistantName)) || "Friday";   // the name iPhone Settings shows
   }
   function hashId(str) {
     var h = 0;

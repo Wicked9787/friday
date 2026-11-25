@@ -140,7 +140,7 @@
       }
       self.nodes[d.id] = { def: d, p: p, sx: 0, sy: 0, sz: 0, scale: 1, glow: 0, seed: Math.random() * 100 };
     });
-    var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile && root.FRIDAY_CONFIG.getProfile().assistantName) || "Friday";
+    var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.shownName && root.FRIDAY_CONFIG.shownName()) || "Friday";
     var pcfg = null;
     try {
       pcfg = root.FridayExtras && root.FridayExtras.partnerCfg ? root.FridayExtras.partnerCfg(root.FRIDAY_CONFIG.getProfile()) : null;

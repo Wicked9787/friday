@@ -32,7 +32,7 @@
       var out = await root.FridayBrain.ask([
         { role: "system", content: "Turn the user's request into a 2 to 5 word photo search phrase that would find helpful real photos. Reply with only the phrase, no quotes." },
         { role: "user", content: (context ? "Earlier they said: " + String(context).slice(0, 300) + "\nNow: " : "") + String(text || "") }
-      ], { purpose: "small", temperature: 0, max_tokens: 30, reasoning_effort: "low", noBackup: true });
+      ], { task: "quick", priority: "background", temperature: 0, max_tokens: 30, reasoning_effort: "low" });
       out = String(out || "").replace(/["'\n]/g, " ").replace(/\s+/g, " ").trim();
       return out && out.length < 80 ? out : fallback;
     } catch (e) { return fallback; }

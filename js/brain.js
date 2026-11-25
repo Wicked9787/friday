@@ -1,6 +1,7 @@
 /* Friday's brain: one place that talks to AI services.
-   - Tries Groq models in order (each model has its own free limit).
-   - If all Groq models are busy, falls back to any connection marked "Backup brain".
+   - 4.0: a central router sorts each request into a task and ranks every brain she can use
+     (Groq models and your backup brains) by what it's good at, how it's been doing, and how much
+     free allowance is left, then falls back automatically down that list.
    - Speaks OpenAI-style APIs (Groq, OpenAI, Gemini, OpenRouter, Cerebras, Mistral, xAI, DeepSeek...)
      and Anthropic's Claude API.
    - Can stream replies sentence by sentence so she starts talking sooner. */
@@ -269,12 +270,12 @@
       }
       throw BrainError(errText.slice(0, 200) || ("HTTP " + res.status), kind);
     }
-    if (opts.stream && opts.onDelta && !res.native && res.body) return readStream(res, opts.onDelta);
+    if (opts.stream && opts.onDelta && !res.native && res.body) { var st = await readStream(res, opts.onDelta); return opts.raw ? { text: st, data: null } : st; }
     var data = await res.json();
     if (data && data.result && !data.choices && data.success !== undefined) data = data.result;
     var text = extractText(data);
     if (opts.onDelta && text) opts.onDelta(text);
-    return text;
+    return opts.raw ? { text: text, data: data } : text;
   }
 
   // Google's own Gemini API (works with both the old AIza… keys and the new AQ.… keys).
@@ -394,10 +395,183 @@
     return callOpenAI(agent.baseUrl, key, agent.model, messages, opts);
   }
 
-  // ---------- the fallback chain ----------
+  // ---------- 4.0: central intelligence router ----------
+  /* Every request is sorted into a task, every brain she can use is a "route" with known strengths,
+     and the routes are ranked for that task using what each is good at, how it has been doing,
+     and how much of its free daily allowance is left. She tries them in that order and falls back
+     automatically to the next compatible one. Adding a key in Settings adds a route; nothing else
+     has to change. Her personality and memory are built on the phone and sent the same way to
+     every brain, so switching brains never changes who she is. */
+
+  // What each kind of model is good at (1 to 3). First match wins. Unknown models get the middle.
+  var CAPS = [
+    [/gpt-oss-120b/, { reason: 3, speed: 2, code: 3, write: 2, json: 3, web: true }],
+    [/gpt-oss-20b/, { reason: 2, speed: 3, code: 2, write: 2, json: 2, web: true }],
+    [/llama-4|scout|maverick|qwen3\.\d+-\d+b|-vl\b|vision/, { reason: 2, speed: 2, code: 1, write: 2, json: 2, vision: true }],
+    [/llama-3\.3-70b/, { reason: 2, speed: 2, code: 2, write: 3, json: 2 }],
+    [/qwen\/qwen3|qwen-?3/, { reason: 2, speed: 2, code: 3, write: 2, json: 2 }],
+    [/8b-instant|llama-3\.1-8b/, { reason: 1, speed: 3, code: 1, write: 1, json: 1 }],
+    [/gemini.*flash-lite/, { reason: 2, speed: 3, code: 2, write: 2, json: 2, vision: true, ground: true }],
+    [/gemini/, { reason: 3, speed: 2, code: 3, write: 3, json: 3, vision: true, ground: true }],
+    [/deepseek.*(r1|reason)/, { reason: 3, speed: 1, code: 3, write: 2, json: 2 }],
+    [/deepseek/, { reason: 3, speed: 2, code: 3, write: 2, json: 2 }],
+    [/coder|codestral|devstral/, { reason: 2, speed: 2, code: 3, write: 1, json: 2 }],
+    [/claude|gpt-5|gpt-4\.1|grok-4/, { reason: 3, speed: 2, code: 3, write: 3, json: 3, vision: true }],
+    [/mistral-(small|medium)|nemo/, { reason: 2, speed: 2, code: 2, write: 2, json: 2 }],
+    [/gemma/, { reason: 2, speed: 2, code: 1, write: 2, json: 1 }]
+  ];
+  var CAPS_DEFAULT = { reason: 2, speed: 2, code: 2, write: 2, json: 2 };
+  function capsFor(text) {
+    text = String(text || "").toLowerCase();
+    for (var i = 0; i < CAPS.length; i++) if (CAPS[i][0].test(text)) return Object.assign({}, CAPS_DEFAULT, CAPS[i][1]);
+    return Object.assign({}, CAPS_DEFAULT);
+  }
+  // Rough free daily allowances (requests a day). Estimates: real limits change, errors still count most.
+  var FREE_DAILY = [
+    [/^groq:.*8b-instant/, 14400], [/^groq:/, 1000],
+    [/gemini.*flash-lite/, 1000], [/gemini/, 250],
+    [/openrouter|:free$/, 50], [/cloudflare/, 300], [/cerebras/, 1000], [/mistral/, 500]
+  ];
+  function dailyLimit(r) {
+    if (!r.free) return 0;                                   // paid: no free allowance to protect
+    var key = r.id + " " + (r.provider || "") + " " + (r.model || "");
+    for (var i = 0; i < FREE_DAILY.length; i++) if (FREE_DAILY[i][0].test(key)) return FREE_DAILY[i][1];
+    return 300;
+  }
+
+  // Tasks: what matters for each (weights on the strengths above).
+  var TASKS = {
+    chat:       { label: "Conversation", w: { speed: 1.2, write: 1, reason: 0.6 } },
+    quick:      { label: "Quick sorting", w: { speed: 2, reason: 0.3, json: 0.3 }, background: true },
+    reasoning:  { label: "Thinking things through", w: { reason: 2, write: 0.5, speed: 0.3 } },
+    coding:     { label: "Code", w: { code: 2, reason: 1 } },
+    writing:    { label: "Writing texts and messages", w: { write: 2, reason: 0.5, speed: 0.5 } },
+    research:   { label: "Research (weighing sources)", w: { reason: 1.5, json: 1, speed: 0.3 } },
+    web:        { label: "Searching the web", w: { reason: 1, speed: 1 }, need: "web" },
+    vision:     { label: "Looking at photos", w: { reason: 1, speed: 1 }, need: "vision" },
+    reflection: { label: "Her reflections", w: { reason: 2, json: 1.5 }, background: true },
+    summary:    { label: "Summaries and memory", w: { speed: 1, write: 1, json: 0.5 }, background: true }
+  };
+  var CODE_RE = /\b(code|coding|javascript|typescript|python|swift|html|css|function|regex|bug|stack trace|compile|sql|json|api|script)\b/i;
+  var THINK_RE = /\b(explain|why does|why do|why is|compare|pros and cons|plan|step by step|calculate|math|solve|figure out|analy[sz]e|strategy|decide|should i)\b/i;
+  function lastUserText(messages) {
+    for (var i = (messages || []).length - 1; i >= 0; i--) {
+      var m = messages[i];
+      if (m && m.role === "user") return typeof m.content === "string" ? m.content : (Array.isArray(m.content) ? m.content.map(function (p) { return p.text || ""; }).join(" ") : "");
+    }
+    return "";
+  }
+  function classifyTask(messages, opts) {
+    opts = opts || {};
+    if (opts.task && TASKS[opts.task]) return opts.task;
+    if (opts.purpose === "vision") return "vision";
+    if (opts.tools) return "web";
+    if (opts.purpose === "small") return "quick";
+    var t = lastUserText(messages);
+    if (CODE_RE.test(t)) return "coding";
+    if (THINK_RE.test(t) || t.split(/\s+/).length > 60) return "reasoning";
+    return "chat";
+  }
+
+  // How each route has been doing: kept on the phone so it carries across restarts.
+  var HEALTH_KEY = "brain.health", USE_KEY = "brain.usage";
+  var healthCache = null, healthSaveT = 0;
+  function healthAll() { if (!healthCache) healthCache = store().get(HEALTH_KEY, {}) || {}; return healthCache; }
+  function healthOf(id) { var h = healthAll(); return h[id] || (h[id] = { ok: 0, fail: 0, fails: [], ms: 0, tasks: {}, dailyHits: [] }); }
+  function saveHealth() { clearTimeout(healthSaveT); healthSaveT = setTimeout(function () { try { store().set(HEALTH_KEY, healthAll()); } catch (e) {} }, 400); }
+  function todayKey() { return new Date().toDateString(); }
+  function usageAll() { var u = store().get(USE_KEY, null); if (!u || u.date !== todayKey()) u = { date: todayKey(), counts: {} }; return u; }
+  function usedToday(id) { return usageAll().counts[id] || 0; }
+  function noteRoute(r, task, ok, kind, msTaken) {
+    var h = healthOf(r.id), t = h.tasks[task] || (h.tasks[task] = { ok: 0, fail: 0 }), at = now();
+    if (ok) {
+      h.ok++; t.ok++;
+      h.ms = h.ms ? Math.round(h.ms * 0.7 + msTaken * 0.3) : msTaken;
+      var u = usageAll(); u.counts[r.id] = (u.counts[r.id] || 0) + 1; store().set(USE_KEY, u);
+    } else {
+      h.fail++; t.fail++;
+      h.fails = (h.fails || []).filter(function (x) { return at - x < 30 * 60 * 1000; }).concat([at]).slice(-10);
+      h.lastKind = kind; h.lastFailAt = at;
+      if (kind === "daily") h.dailyHits = (h.dailyHits || []).filter(function (x) { return new Date(x).toDateString() === todayKey(); }).concat([at]);
+    }
+    saveHealth();
+  }
+  // How much of today's free allowance is left (0 to 1). Two "daily limit" errors today = none left.
+  function quotaLeft(r) {
+    var h = healthOf(r.id);
+    if ((h.dailyHits || []).filter(function (x) { return new Date(x).toDateString() === todayKey(); }).length >= 2) return 0;
+    var lim = dailyLimit(r);
+    if (!lim) return 1;
+    return Math.max(0, 1 - usedToday(r.id) / lim);
+  }
+
+  // Every brain she can use right now.
+  function routes(forVision) {
+    var out = [], seen = {}, key = groqKey();
+    if (key) {
+      var models = forVision ? GROQ_VISION_MODELS.slice() : GROQ_CHAT_MODELS.concat(GROQ_SMALL_MODELS);
+      if (!forVision && cfg().MODEL) models.unshift(cfg().MODEL);
+      models.forEach(function (m) {
+        if (seen[m]) return; seen[m] = 1;
+        var c = capsFor(m);
+        if (forVision) c.vision = true;
+        out.push({ id: "groq:" + m, kind: "groq", name: "Groq " + m.replace(/^.*\//, ""), provider: "groq", model: m, free: true, main: true, preferred: m === cfg().MODEL, caps: c });
+      });
+    }
+    backupAgents().forEach(function (ag) {
+      var pr = PRESETS[ag.provider] || {};
+      var c = capsFor((ag.provider || "") + "/" + (ag.model || ""));
+      if (ag.vision === false) c.vision = false;
+      out.push({ id: "agent:" + ag.id, kind: "agent", agent: ag, name: ag.name, provider: ag.provider, model: ag.model,
+        free: !!pr.free || /:free$/.test(ag.model || "") || ag.provider === "cloudflare", caps: c });
+    });
+    return out;
+  }
+
+  function scoreRoute(r, task) {
+    var w = TASKS[task].w, c = r.caps, s = 0;
+    Object.keys(w).forEach(function (k) { s += w[k] * (c[k] || 0); });
+    var lim = dailyLimit(r), left = quotaLeft(r), h = healthOf(r.id);
+    if (r.free) s += lim >= 1000 ? 0.5 : lim <= 60 ? -0.5 : 0;   // spend plentiful free allowances before scarce ones
+    if (left < 0.15) s -= 3; else if (left < 0.35) s -= 1;
+    s -= Math.min(3, ((h.fails || []).filter(function (x) { return now() - x < 30 * 60 * 1000; }).length) * 0.8);
+    var t = h.tasks && h.tasks[task];
+    if (t && t.ok + t.fail >= 5) s += (t.ok / (t.ok + t.fail) - 0.8) * 2;   // learned: how it actually does at this task
+    if (h.ms > 9000) s -= 0.5;
+    if (r.main) s += 0.4;          // her main brain: fastest and free
+    if (r.preferred && task === "chat") s += 0.3;
+    if (!r.free) s -= 1.5;         // paid brains only when clearly better or the free ones are out
+    return Math.round(s * 100) / 100;
+  }
+
+  // The order she'll try brains in for this request.
+  function plan(messages, opts) {
+    opts = opts || {};
+    var task = classifyTask(messages, opts), T = TASKS[task];
+    var list = routes(T.need === "vision").filter(function (r) { return !missing[r.id]; });
+    if (T.need === "vision") list = list.filter(function (r) { return r.caps.vision; });
+    if (T.need === "web") list = list.filter(function (r) { return r.caps.web && r.kind === "groq"; });   // the web tool is Groq's
+    if (opts.noBackup) list = list.filter(function (r) { return r.kind === "groq"; });
+    if (T.background || opts.priority === "background") {
+      // background work never spends paid brains or the last of a free allowance
+      var bg = list.filter(function (r) { return r.free && quotaLeft(r) > 0.3; });
+      if (bg.length) list = bg;
+      else list = list.filter(function (r) { return r.free; });
+    }
+    list.forEach(function (r) { r.score = scoreRoute(r, task); });
+    list.sort(function (a, b) { return b.score - a.score; });
+    var ready = list.filter(function (r) { return available(r.id); });
+    if (!ready.length && list.length) {
+      // everything is resting: try the one whose rest ends first instead of refusing
+      var rest = list.slice().sort(function (a, b) { return (cooldown[a.id] || 0) - (cooldown[b.id] || 0); });
+      delete cooldown[rest[0].id];
+      ready = [rest[0]];
+    }
+    return { task: task, label: T.label, order: ready, all: list };
+  }
 
   function friendly(kindCounts) {
-    if (kindCounts.auth && !kindCounts.busy && !kindCounts.daily) return "My Groq key was rejected. Check it in Settings.";
+    if (kindCounts.auth && !kindCounts.busy && !kindCounts.daily) return groqKey() ? "My brain rejected its key. Check it in Settings." : "Add a Groq key in Settings first.";
     if (kindCounts.daily || kindCounts.busy) {
       return backupAgents().length
         ? "Every brain I have is busy right now. Give me a minute and try again."
@@ -408,81 +582,103 @@
     return "Something went wrong talking to my brain. Try again.";
   }
 
-  /* opts: { purpose: "chat"|"small"|"vision", temperature, max_tokens, tools, reasoning_effort,
-             stream, onDelta, signal, noBackup } */
-  async function ask(messages, opts) {
+  /* opts: { task, purpose: "chat"|"small"|"vision", priority: "background", temperature, max_tokens, tools,
+             reasoning_effort, stream, onDelta, signal, noBackup, raw }
+     Returns { text, data, route, task }. */
+  async function askDetailed(messages, opts) {
     opts = opts || {};
-    var key = groqKey();
-    var counts = {};
-    var list = opts.purpose === "small" ? GROQ_SMALL_MODELS : opts.purpose === "vision" ? GROQ_VISION_MODELS : GROQ_CHAT_MODELS;
-    if (opts.purpose === "chat" && cfg().MODEL && list.indexOf(cfg().MODEL) < 0) list = [cfg().MODEL].concat(list);
-    // Web search only works on the gpt-oss models. If they can't search right now,
-    // return nothing so the caller can use the free Wikipedia backup instead of a guess.
-    if (opts.tools) list = list.filter(function (m) { return /gpt-oss/.test(m); });
+    var p = plan(messages, opts), counts = {}, tried = 0;
     var started = false;
     var wrapDelta = opts.onDelta ? function (t) { started = true; opts.onDelta(t); } : null;
-
-    if (key) {
-      var tried = 0;
-      var order = list.filter(function (m) { return !missing["groq:" + m]; });
-      if (order.length && !order.some(function (m) { return available("groq:" + m); })) {
-        // Every model is resting. Try the one whose rest ends first instead of refusing.
-        order.sort(function (a, b) { return (cooldown["groq:" + a] || 0) - (cooldown["groq:" + b] || 0); });
-        delete cooldown["groq:" + order[0]];
-      }
-      for (var i = 0; i < list.length; i++) {
-        var model = list[i];
-        var id = "groq:" + model;
-        if (!available(id)) continue;
-        tried++;
-        try {
-          var out = await callOpenAI(GROQ_BASE, key, model, messages, Object.assign({}, opts, { groq: true, onDelta: wrapDelta }));
-          if (!out && !started) { counts.other = (counts.other || 0) + 1; continue; }
-          lastUsed = "Groq " + model.replace(/^.*\//, "");
-          if (opts.purpose !== "small") { noteUse(model); activity("thinking", (tried > 1 ? "Switched brains · " : "") + "Answered by " + lastUsed, { brain: lastUsed, quiet: opts.quietLog }); }
-          return out;
-        } catch (e) {
-          if (e && e.name === "AbortError") throw e;
-          if (started) throw e;
-          var kind = e.kind || "other";
-          counts[kind] = (counts[kind] || 0) + 1;
-          if (kind === "auth" || kind === "offline") break;
-          if (kind === "model") missing[id] = true;
-          // A failed web search is usually the search tool, not the model: only rest it for real limits.
-          else if (kind !== "toolong" && !(opts.tools && kind !== "busy" && kind !== "daily")) markCooldown(id, kind);
+    for (var i = 0; i < p.order.length; i++) {
+      var r = p.order[i];
+      if (!available(r.id) && i > 0) continue;
+      tried++;
+      var t0 = now();
+      try {
+        var res;
+        if (r.kind === "groq") {
+          res = await callOpenAI(GROQ_BASE, groqKey(), r.model, messages, Object.assign({}, opts, { groq: true, onDelta: wrapDelta, tools: p.task === "web" ? opts.tools : null, raw: true }));
+        } else {
+          var o = Object.assign({}, opts, { groq: /groq\.com/.test(r.agent.baseUrl || ""), tools: null, onDelta: wrapDelta });
+          res = { text: await callAgent(r.agent, messages, o), data: null };
         }
-      }
-    } else {
-      counts.auth = 1;
-    }
-
-    if (!opts.noBackup) {
-      var backups = backupAgents();
-      for (var b = 0; b < backups.length; b++) {
-        var ag = backups[b];
-        var aid = "agent:" + ag.id;
-        if (!available(aid)) continue;
-        try {
-          var o = Object.assign({}, opts, { groq: /groq\.com/.test(ag.baseUrl || ""), tools: null, onDelta: wrapDelta });
-          if (opts.purpose === "vision" && ag.vision === false) continue;
-          var txt = await callAgent(ag, messages, o);
-          if (!txt && !started) continue;
-          lastUsed = ag.name;
-          noteUse(ag.name);
-          activity("agents", "Groq was busy · backup brain " + ag.name + " answered", { brain: ag.name });
-          return txt;
-        } catch (e3) {
-          if (e3 && e3.name === "AbortError") throw e3;
-          if (started) throw e3;
-          var k3 = e3.kind || "other";
-          counts[k3] = (counts[k3] || 0) + 1;
-          if (k3 === "offline") break;
-          if (k3 !== "auth" && k3 !== "model") markCooldown(aid, k3);
+        var out = res && typeof res === "object" ? res.text : res;
+        if (!out && !started) { counts.other = (counts.other || 0) + 1; noteRoute(r, p.task, false, "empty", 0); continue; }
+        noteRoute(r, p.task, true, null, now() - t0);
+        lastUsed = r.name;
+        noteUse(r.kind === "groq" ? r.model : r.name);
+        if (p.task !== "quick" && !(TASKS[p.task].background)) {
+          activity(r.kind === "groq" ? "thinking" : "agents", (tried > 1 ? "Switched brains · " : "") + TASKS[p.task].label + " · " + r.name, { brain: r.name, quiet: opts.quietLog });
         }
+        return { text: out, data: res && res.data, route: { id: r.id, name: r.name }, task: p.task };
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+        if (started) throw e;
+        var kind = e.kind || "other";
+        counts[kind] = (counts[kind] || 0) + 1;
+        noteRoute(r, p.task, false, kind, 0);
+        if (kind === "offline") break;
+        if (kind === "auth") {
+          // a rejected key is the provider's key, not one model: rest every route that uses it
+          p.order.forEach(function (x) { if (x.kind === r.kind && (r.kind === "groq" || x.id === r.id)) markCooldown(x.id, "daily"); });
+          continue;
+        }
+        if (kind === "model") missing[r.id] = true;
+        // a failed web search is usually the search tool, not the model: only rest it for real limits
+        else if (kind !== "toolong" && !(p.task === "web" && kind !== "busy" && kind !== "daily")) markCooldown(r.id, kind);
       }
     }
-    if (!key && !backupAgents().length) throw BrainError("Add a Groq API key in Settings first.", "auth");
+    if (!groqKey() && !backupAgents().length) throw BrainError("Add a Groq API key in Settings first.", "auth");
+    if (!p.order.length && p.task === "web") return { text: "", data: null, route: null, task: p.task };
     throw BrainError(friendly(counts), "exhausted");
+  }
+  async function ask(messages, opts) {
+    var r = await askDetailed(messages, opts);
+    return r.text;
+  }
+
+  // Gemini with Google Search: answers grounded in pages it actually found (free tier, if a Gemini key is set up).
+  async function groundedSearch(question, opts) {
+    opts = opts || {};
+    var gem = connections().filter(function (c) { return c.provider === "gemini" || /generativelanguage/.test(c.baseUrl || ""); })
+      .filter(function (c) { return keyFor(c) && available("ground:" + c.id); })[0];
+    if (!gem) return null;
+    var key = keyFor(gem), model = /flash/.test(gem.model || "") ? gem.model : "gemini-flash-latest";
+    var url = geminiBase(gem.baseUrl) + "/models/" + encodeURIComponent(String(model).replace(/^models\//, "")) + ":generateContent";
+    var body = { contents: [{ role: "user", parts: [{ text: question }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } };
+    var r = { id: "ground:" + gem.id, name: gem.name + " + Google Search", free: true, provider: "gemini", model: model };
+    var t0 = now();
+    try {
+      var res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: opts.signal });
+      if (!res.ok) { var et = ""; try { et = await res.text(); } catch (e0) {} throw BrainError(et.slice(0, 200), classifyError(res.status, et)); }
+      var data = await res.json();
+      var cand = (data.candidates || [])[0] || {};
+      var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join("").trim();
+      var gm = cand.groundingMetadata || {};
+      var chunks = (gm.groundingChunks || []).map(function (c) { return c && c.web ? { title: c.web.title || "", url: c.web.uri || "" } : null; });
+      var supports = (gm.groundingSupports || []).map(function (s) { return { text: (s.segment && s.segment.text) || "", chunks: s.groundingChunkIndices || [] }; });
+      noteRoute(r, "web", true, null, now() - t0);
+      noteUse(r.name);
+      return { text: text, chunks: chunks, supports: supports, via: "Google Search" };
+    } catch (e) {
+      if (e && e.name === "AbortError") throw e;
+      noteRoute(r, "web", false, e.kind || "other", 0);
+      if (e.kind && e.kind !== "offline") markCooldown(r.id, e.kind === "bad" ? "daily" : e.kind);
+      return null;
+    }
+  }
+
+  // What she'd pick for each task right now (for Settings and the neural map).
+  function explain() {
+    return Object.keys(TASKS).map(function (task) {
+      var p = plan([{ role: "user", content: "" }], { task: task });
+      return { task: task, label: TASKS[task].label, order: p.all.slice(0, 4).map(function (r) { return { name: r.name, score: r.score, resting: !available(r.id), left: Math.round(quotaLeft(r) * 100), free: r.free }; }) };
+    });
+  }
+  function routeReport() {
+    return routes(false).concat(routes(true).filter(function (r) { return r.kind === "groq"; })).filter(function (r, i, a) { return a.findIndex(function (x) { return x.id === r.id; }) === i; })
+      .map(function (r) { var h = healthOf(r.id), lim = dailyLimit(r); return { id: r.id, name: r.name, free: r.free, used: usedToday(r.id), limit: lim, left: Math.round(quotaLeft(r) * 100), ok: h.ok, fail: h.fail, resting: !available(r.id), missing: !!missing[r.id], caps: r.caps }; });
   }
 
   // Ask one named connection directly ("ask Gemini ...").
@@ -679,6 +875,14 @@
     noteUse: noteUse,
     activity: activity,
     ask: ask,
+    askDetailed: askDetailed,
+    plan: plan,
+    classifyTask: classifyTask,
+    explain: explain,
+    routeReport: routeReport,
+    groundedSearch: groundedSearch,
+    TASKS: TASKS,
+    capsFor: capsFor,
     askAgent: askAgent,
     listModels: listModels,
     test: test,
@@ -687,7 +891,7 @@
     lastUsed: function () { return lastUsed; },
     status: function () {
       var busy = Object.keys(cooldown).filter(function (k) { return cooldown[k] > now(); });
-      return { busy: busy, missing: Object.keys(missing), backups: backupAgents().map(function (a) { return a.name; }) };
+      return { busy: busy, missing: Object.keys(missing), backups: backupAgents().map(function (a) { return a.name; }), routes: routeReport() };
     }
   };
 })(window);

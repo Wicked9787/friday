@@ -278,7 +278,7 @@
     return { who: who, facetime: /face ?time/.test(m[1]) };
   }
 
-  function appTitle(profile) { return (profile && profile.assistantName) || "Friday"; }
+  function appTitle(profile) { return (profile && (profile.displayName || profile.assistantName)) || "Friday"; }
   function inAppTexts() {
     var st = (root.FridayStorage && root.FridayStorage.get("settings", {})) || {};
     return st.textsInApp !== false;

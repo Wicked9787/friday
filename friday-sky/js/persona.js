@@ -321,7 +321,7 @@
         "Reply with only JSON, no other text: " + schema
       ].join("\n");
       var user = "Already in her memory:\n" + (mem || "(nothing)") + "\n\nConversation since her last reflection" + (w.since ? " (" + new Date(w.since).toLocaleString() + ")" : "") + ":\n" + talk;
-      var out = opts.reply != null ? opts.reply : await root.FridayBrain.ask([{ role: "system", content: sys }, { role: "user", content: user }], { purpose: "chat", temperature: 0.4, max_tokens: 1000, noBackup: true });
+      var out = opts.reply != null ? opts.reply : await root.FridayBrain.ask([{ role: "system", content: sys }, { role: "user", content: user }], { task: "reflection", priority: "background", temperature: 0.4, max_tokens: 1000 });
       var mm = String(out || "").match(/\{[\s\S]*\}/);
       var j = null;
       try { j = mm ? JSON.parse(mm[0]) : null; } catch (e) { j = null; }
@@ -460,7 +460,7 @@
       var text = clip(m && m.text, 160);
       if (!text || evidenceFrom(text, ctx) !== "owner") return;
       if (chat.memory.some(function (x) { return similar(x.text || x, text); })) return;
-      chat.memory.push({ text: text, at: at, auto: true, kind: m.kind === "episodic" ? "episodic" : "semantic", from: "reflection" });
+      chat.memory.push({ text: text, at: at, auto: true, kind: m.kind === "episodic" ? "episodic" : "semantic", type: m.kind === "episodic" ? "event" : "fact", from: "reflection" });
       rec.memories.push(text);
     });
     if (rec.memories.length) { try { chat.save(); chat._memEvent(); } catch (e) {} }
@@ -518,7 +518,7 @@
         " The point is to evaluate whether your identity needs to evolve, not to change it because a review happened: keeping things as they are is a perfectly good outcome. Evolve only if your settled development clearly shows a lasting change, and stay recognizably yourself. You may revise your identity statement and conversational identity, and you may move the baseline of settled traits toward where they've settled (never past where they are now). Your principles and boundaries can't change. Your original starting point is kept permanently either way." +
         " Reply with only JSON: {\"evolve\": true or false, \"reason\": \"short\", \"statement\": \"your identity statement, first person, 2 to 3 sentences (only if evolving)\", \"identity\": \"one sentence describing your conversational character (only if evolving)\", \"baseline\": {\"trait name\": new baseline number}}";
       var user = "Original statement: " + f.original.statement + "\nCurrent statement: " + f.statement + "\nCurrent identity: " + f.identity + "\nTraits: " + traitLines + "\nSettled since last review:\n" + (settled.join("\n") || "(none)") + "\nEstablished patterns: " + (pats.join("; ") || "(none)") + "\nRecent reflections:\n" + (refl.join("\n") || "(none)") + "\nPast reviews: " + (f.reviewLog.slice(-3).map(function (r) { return dayKey(r.at) + " " + (r.evolved ? "evolved" : "kept") + ": " + r.reason; }).join(" | ") || "(none)");
-      var out = opts.reply != null ? opts.reply : await root.FridayBrain.ask([{ role: "system", content: sys }, { role: "user", content: user }], { purpose: "chat", temperature: 0.5, max_tokens: 500, noBackup: true });
+      var out = opts.reply != null ? opts.reply : await root.FridayBrain.ask([{ role: "system", content: sys }, { role: "user", content: user }], { task: "reflection", priority: "background", temperature: 0.5, max_tokens: 500 });
       var mm = String(out || "").match(/\{[\s\S]*\}/), j = null;
       try { j = mm ? JSON.parse(mm[0]) : null; } catch (e) { j = null; }
       if (!j) return { ok: false, text: "The review didn't come back right. She'll try again another time." };

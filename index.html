@@ -85,6 +85,7 @@
     <div id="reveal-zone" aria-hidden="true"></div>
     <div id="caption">
       <div class="pics" id="pics" hidden></div>
+      <div class="srcs" id="srcs" hidden></div>
       <div class="name" id="caption-name">friday</div>
       <div class="line" id="caption-line">Tap to talk</div>
     </div>
@@ -313,7 +314,10 @@
       <details class="accord" open id="accord-brain">
         <summary>Brain <span class="accord-current" id="brain-current">Groq</span></summary>
         <div class="accord-body">
-          <p class="hint">Her main brain is Groq. If one Groq model is at its limit she tries the next one, then your backup brains below, in order.</p>
+          <p class="hint">She picks the best brain for each job: what it's good at, how it's been doing, and how much of its free use is left today. If one is busy or out, she moves to the next one that can do the job. Every brain gets the same memory and personality, so she's the same <span class="sc-shown">F.R.I.D.A.Y.</span> whichever one answers.</p>
+          <div class="field-label" style="margin-top:10px">Who she'd ask right now</div>
+          <div id="brain-router" class="sub"></div>
+          <div class="field-label" style="margin-top:12px">Brains today</div>
           <div id="brain-status" class="sub"></div>
           
           
@@ -931,8 +935,32 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.6.1</h1>
-      <p class="wn-tag">She manages her own development</p>
+      <h1>What's new in 4.0</h1>
+      <p class="wn-tag">F.R.I.D.A.Y.</p>
+      <ul>
+        <li>Her name is written F.R.I.D.A.Y. everywhere you see it, including under her icon, and she still says it "Friday"</li>
+      </ul>
+      <p class="wn-tag">One brain that picks the right brain</p>
+      <ul>
+        <li>Every request is sorted (conversation, thinking, code, writing, research, photos) and she picks the best brain for it: what each is good at, how it's been doing, and how much free use it has left today</li>
+        <li>If a brain is busy, out for the day, or its key is rejected, she moves to the next one that can do the job, across Groq and your backup brains</li>
+        <li>Background work like her reflections never uses a paid brain or the last of a free allowance</li>
+        <li>Every brain gets the same personality and memory from your phone, so she's the same whichever one answers. See who she'd ask in Settings → Brains</li>
+      </ul>
+      <p class="wn-tag">Research she can back up</p>
+      <ul>
+        <li>She checks several free sources at once: web search, Google Search (with a free Gemini key), Wikipedia, DuckDuckGo and Google News</li>
+        <li>Each site is rated. Something counts as verified only when two sites back it (one reliable) or one highly reliable site does. Single-source, uncertain and disputed points are said that way</li>
+        <li>Tap the sources under her answer to open them (✓ means verified). They stay with her answer in the chat</li>
+        <li>If she can't reach any source, she says so instead of guessing</li>
+      </ul>
+      <p class="wn-tag">Memory that knows what it is</p>
+      <ul>
+        <li>Memories are sorted into facts, preferences, temporary things (plans, appointments, today) that clear themselves, and moments you've shared</li>
+        <li>She picks the memories that fit what you're talking about, the same way for every brain</li>
+        <li>Statements about who she should be are never filed as memories: her personality only changes through her own reflections</li>
+      </ul>
+      <p class="wn-tag">3.6.1 · She manages her own development</p>
       <ul>
         <li>She starts identity reviews herself when her experience warrants one, and decides whether her identity should evolve. Keeping it as it is counts as a real outcome</li>
         <li>When her identity evolves, her baseline moves to where she's settled, so how far she can grow isn't capped forever. Where she started is kept permanently, along with her whole history</li>
@@ -1112,6 +1140,8 @@
   <script src="js/bubbles.js"></script>
   <script src="js/voice.js"></script>
   <script src="js/brain.js"></script>
+  <script src="js/memory.js"></script>
+  <script src="js/research.js"></script>
   <script src="js/persona.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/pictures.js"></script>

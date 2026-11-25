@@ -130,6 +130,7 @@
   /* Text as it should be said out loud: no symbols, links or emojis read like a robot. */
   function speakable(t) {
     return String(t || "")
+      .replace(/\bF\.\s?R\.\s?I\.\s?D\.\s?A\.\s?Y\b\.?/gi, "Friday")   // her written name is said "Friday"
       .replace(/https?:\/\/\S+/g, "")
       .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}]/gu, "")
       .replace(/(\d)\s*%/g, "$1 percent")

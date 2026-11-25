@@ -66,6 +66,15 @@ const ver = String(pkg.appVersion || "1.0");
 xml = xml.replace(/(<key>CFBundleShortVersionString<\/key>\s*<string>)[^<]*(<\/string>)/, `$1${ver}$2`);
 xml = xml.replace(/(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/, `$1${ver}$2`);
 fs.writeFileSync(plist, xml);
+// 4.0: the label under her icon and in iPhone Settings (Friday's is written F.R.I.D.A.Y.)
+{
+  const shown = process.env.FRIDAY_PROFILE === "batsie" ? "Reed" : "F.R.I.D.A.Y.";
+  let x2 = fs.readFileSync(plist, "utf8");
+  if (/<key>CFBundleDisplayName<\/key>\s*<string>[^<]*<\/string>/.test(x2)) x2 = x2.replace(/(<key>CFBundleDisplayName<\/key>\s*<string>)[^<]*(<\/string>)/, "$1" + shown + "$2");
+  else { const k = x2.lastIndexOf("</dict>"); x2 = x2.slice(0, k) + "\t<key>CFBundleDisplayName</key>\n\t<string>" + shown + "</string>\n" + x2.slice(k); }
+  fs.writeFileSync(plist, x2);
+  console.log("Display name: " + shown);
+}
 console.log("Added mic permission and version " + ver + " to Info.plist");
 
 // App icon: copy the Friday/Jarvis art into the Xcode asset catalog

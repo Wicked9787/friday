@@ -1331,3 +1331,12 @@ body.typing #caption .pics { display: none; }
 .pic-view-bar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pic-view-bar a { color: var(--gold); text-decoration: none; font-weight: 600; }
 #caption .pics[hidden] { display: none; }
+/* 4.0: sources under her answer (tap to open) */
+#caption .srcs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; padding: 0 0 10px; pointer-events: auto; }
+#caption .srcs[hidden] { display: none; }
+body.typing #caption .srcs { display: none; }
+.src-chip { border: 1px solid rgba(232,200,114,.35); background: rgba(20,20,22,.78); color: rgba(239,236,232,.85); font: 600 12px -apple-system, system-ui, sans-serif; padding: 6px 10px; border-radius: 999px; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.src-chip.ok { border-color: rgba(120,200,140,.6); }
+.src-chip.weak { opacity: .6; }
+.msg-srcs, .tt-srcs { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 10px; }
+.msg-srcs { justify-content: flex-start; }

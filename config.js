@@ -5,7 +5,8 @@
   var PROFILES = {
     sky: {
       id: "sky",
-      assistantName: "Friday",
+      assistantName: "Friday",          // spoken name; also used for her links (friday://) and the Shortcut
+      displayName: "F.R.I.D.A.Y.",      // 4.0: how her name is written everywhere you see it
       ownerName: "Sky",
       terms: ["sir", "Sky", "boss"],
       addressPerTen: 4,
@@ -19,6 +20,7 @@
     batsie: {
       id: "batsie",
       assistantName: "Reed",
+      displayName: "Reed",
       ownerName: "Batsie",
       terms: ["Miss Batsie", "Batsie"],
       pronoun: "him",
@@ -247,6 +249,8 @@
     WHISPER_MODEL: WHISPER_MODEL,
     queryParam: queryParam,
     resolveProfileId: resolveProfileId,
-    getProfile: getProfile
+    getProfile: getProfile,
+    // 4.0: her name as written (F.R.I.D.A.Y.); her spoken name stays assistantName (Friday)
+    shownName: function (p) { p = p || getProfile(); return (p && (p.displayName || p.assistantName)) || "Friday"; }
   };
 })(window);

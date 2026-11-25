@@ -9,8 +9,9 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.6.1";
-  var APP_LABEL = "Her Own Development";
+  var APP_VERSION = "4.0.0";
+  var APP_LABEL = "Central Intelligence";
+  function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -634,6 +635,7 @@
       d.className = "msg " + (h.role === "user" ? "user" : "friday");
       d.textContent = h.content;
       thread.appendChild(d);
+      if (h.role === "assistant" && h.sources && h.sources.length) { var sc = srcChips(h.sources); sc.className = "msg-srcs"; thread.appendChild(sc); }
     });
     if (!chat.history.length) {
       var s = document.createElement("div");
@@ -664,7 +666,23 @@
     else items.sort(function (a, b) { return ((b.m.pinned ? 1 : 0) - (a.m.pinned ? 1 : 0)) || String(b.m.at || "").localeCompare(String(a.m.at || "")); });
     box.innerHTML = "";
     if (!items.length) { box.innerHTML = '<p class="hint">' + (q || memFilter !== "all" ? "No memories match." : "Nothing here yet. Say “remember that …” or add one above.") + "</p>"; }
+    // 4.0: grouped by type (right now, preferences, facts, shared moments)
+    var TY = (window.FridayMemory && window.FridayMemory.TYPES) || {};
+    var grouped = memFilter === "all" && !q && window.FridayMemory;
+    if (grouped) {
+      var order = { context: 0, preference: 1, fact: 2, event: 3 };
+      items.forEach(function (x) { window.FridayMemory.normalize(x.m); });
+      items.sort(function (a, b) { return ((order[a.m.type] || 0) - (order[b.m.type] || 0)) || ((b.m.pinned ? 1 : 0) - (a.m.pinned ? 1 : 0)) || String(b.m.at || "").localeCompare(String(a.m.at || "")); });
+    }
+    var lastType = null;
     items.forEach(function (x) {
+      if (grouped && x.m.type !== lastType) {
+        lastType = x.m.type;
+        var hd = document.createElement("div");
+        hd.className = "sgroup-h"; hd.style.margin = "14px 4px 6px";
+        hd.textContent = (TY[lastType] || "Memories") + (lastType === "context" ? " (clears itself)" : "");
+        box.appendChild(hd);
+      }
       var card = document.createElement("div");
       card.className = "list-card mem-card";
       var p = document.createElement("p");
@@ -673,7 +691,9 @@
       meta.className = "meta";
       var when = "";
       try { when = new Date(x.m.at).toLocaleDateString(undefined, { month: "short", day: "numeric" }); } catch (e) {}
-      meta.textContent = when + (x.m.auto ? " · learned on her own" : "") + (x.m.pinned ? " · pinned" : "");
+      var tyName = x.m.type && TY[x.m.type] ? (x.m.type === "context" ? "Temporary" : TY[x.m.type].replace(/s$/, "").replace(/^Shared moment$/, "Shared moment")) : "";
+      var until = x.m.type === "context" && x.m.expiresAt ? " · until " + new Date(x.m.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+      meta.textContent = (tyName && !grouped ? tyName + " · " : "") + when + until + (x.m.auto ? " · learned on her own" : "") + (x.m.pinned ? " · pinned" : "");
       var acts = document.createElement("div");
       acts.className = "mem-acts";
       [["Edit", function () {
@@ -698,7 +718,9 @@
     var sum = document.getElementById("memory-summary");
     if (sum) {
       var smry = (chat.summary && chat.summary.text) || "";
-      sum.textContent = chat.memory.length + " things remembered." + (smry ? " She also keeps a short summary of your older chats so she remembers past conversations." : "");
+      var pOn = window.FridayPersona && window.FridayPersona.on(profile);
+      sum.textContent = chat.memory.length + " things remembered." + (smry ? " She also keeps a short summary of your older chats so she remembers past conversations." : "") +
+        (pOn ? " Her conclusions about her own personality aren't kept here; they're in Settings → Mood & Display → Her own personality." : "");
     }
   }
 
@@ -747,7 +769,7 @@
     }
     busy = true;
     if (neural) neural.setActive("thinking");
-    document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
+    document.getElementById("neural-caption").textContent = shownName().toUpperCase() + " · THINKING";
     try {
       if (robotCmd) {
         chat._push("user", text);
@@ -922,6 +944,7 @@
       } else {
         setCaption(result.text || "");
         renderChat();
+        if (result.research && result.research.sources && result.research.sources.length) showSources(result.research.sources); else hideSources();
         if (!opts.collect && /\bshortcut\b[^.!]*\?\s*$/i.test(result.text || "")) offerShortcut([{ kind: "shortcut", value: text }], "", true);
         if (result.pictures && window.FridayPictures) {
           // 3.5.2: real photos in their own panel, with her answer on top
@@ -946,7 +969,7 @@
       busy = false;
       noteTalked();
       if (neural) neural.setActive(null);
-      document.getElementById("neural-caption").textContent = (profile.assistantName || "Friday").toUpperCase() + " · THINKING";
+      document.getElementById("neural-caption").textContent = shownName().toUpperCase() + " · THINKING";
       if (opts.part) {
         // a step inside a multi-task sentence: the caller decides what happens next
       } else if (leftForApp) {
@@ -1230,14 +1253,14 @@
         if (!st || st.paid || st.days < 0 || st.days > 40) return;
         var at = nine(st.days), key = "bill:" + (b.id || b.name) + ":" + at.toDateString();
         keys.push(key);
-        N.notify.at(key, b.name + " bill is due today", (b.amount ? D.money(b.amount) + ". " : "") + "Tell " + (profile.assistantName || "Friday") + " when it's paid.", at);
+        N.notify.at(key, b.name + " bill is due today", (b.amount ? D.money(b.amount) + ". " : "") + "Tell " + shownName() + " when it's paid.", at);
       });
       if (s.countdownAlerts !== false) D.countdowns().forEach(function (c) {
         var n = D.countdownDays(c);
         if (n == null || n < 0 || n > 60) return;
         var at = nine(n), key = "cd:" + (c.id || c.name) + ":" + at.toDateString();
         keys.push(key);
-        N.notify.at(key, c.name + " is today!", "Counting down with " + (profile.assistantName || "Friday") + ".", at);
+        N.notify.at(key, c.name + " is today!", "Counting down with " + shownName() + ".", at);
       });
       FridayStorage.set("alertKeys", keys);
     }, 800);
@@ -1247,7 +1270,7 @@
     if (!N || !N.notify.available()) { toast("Notifications work in the installed app."); return false; }
     var ok = await N.notify.ask();
     FridayStorage.set("notifyAsked", true);
-    toast(ok ? "Notifications are on." : "Notifications are off. Turn them on in iPhone Settings, " + (profile.assistantName || "Friday") + ", Notifications.");
+    toast(ok ? "Notifications are on." : "Notifications are off. Turn them on in iPhone Settings, " + shownName() + ", Notifications.");
     if (ok) scheduleLifeAlerts();
     return ok;
   }
@@ -1305,7 +1328,7 @@
       var soon = new Date(); soon.setMinutes(soon.getMinutes() + 2);
       if (at < soon) { at = new Date(); at.setHours(hour, 0, 0, 0); if (at < soon) at.setDate(at.getDate() + 1); }
       var title = "Time to refresh your apps";
-      var body = "Tap here and " + (profile.assistantName || "Friday") + " turns on LocalDevVPN and opens " + FridayRefresh.name() + ".";
+      var body = "Tap here and " + shownName() + " turns on LocalDevVPN and opens " + FridayRefresh.name() + ".";
       await N.notify.at("refresh-apps", title, body, at, { action: "refresh-apps" });
       var again = new Date(at.getTime() + 86400000);
       await N.notify.at("refresh-apps-2", "Your apps still need a refresh", body, again, { action: "refresh-apps" });
@@ -1548,6 +1571,37 @@
     a.onclick = function (ev) { ev.preventDefault(); ev.stopPropagation(); openUrl(im.src || im.full); };
     v.hidden = false;
   }
+  // 4.0: sources under her answer. ✓ = backs a verified point; dimmed = weak site. Tap to open.
+  var srcsTimer = 0;
+  function srcChips(list) {
+    var box = document.createElement("div");
+    (list || []).slice(0, 6).forEach(function (s) {
+      if (!s || !s.url) return;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "src-chip" + (s.verified ? " ok" : "") + (s.tier === "low" ? " weak" : "");
+      b.textContent = (s.verified ? "✓ " : "") + (s.domain || s.title || "source");
+      b.title = s.title || s.url;
+      b.onclick = function (e) { e.stopPropagation(); openUrl(s.url); };
+      box.appendChild(b);
+    });
+    return box;
+  }
+  function hideSources() {
+    clearTimeout(srcsTimer);
+    var el = document.getElementById("srcs");
+    if (el) { el.hidden = true; el.innerHTML = ""; }
+  }
+  function showSources(list) {
+    var el = document.getElementById("srcs");
+    if (!el || !list || !list.length) { hideSources(); return; }
+    el.innerHTML = "";
+    var ch = srcChips(list);
+    while (ch.firstChild) el.appendChild(ch.firstChild);
+    el.hidden = !el.childNodes.length;
+    clearTimeout(srcsTimer);
+    srcsTimer = setTimeout(hideSources, 120000);
+  }
   function hidePics() {
     clearTimeout(picsTimer);
     var el = document.getElementById("pics");
@@ -1777,7 +1831,7 @@
     b.classList.toggle("no-suggestions", v.suggestions === false);
     b.classList.toggle("hide-orb-typing", v.hideOrbTyping === true);
     var inp = document.getElementById("tb-input");
-    if (inp) inp.placeholder = "Type to " + (profile.assistantName || "Friday");
+    if (inp) inp.placeholder = "Type to " + shownName();
     if (typing) placeOrbForTyping();
     if (bubbles) bubbles.layout();
     syncLive();
@@ -1848,7 +1902,7 @@
     var box = document.getElementById("type-thread");
     if (!box) return;
     var hist = ((chat && chat.history) || []).filter(function (m) { return m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim(); });
-    var items = hist.slice(-4).map(function (m) { return { role: m.role, text: m.content }; });
+    var items = hist.slice(-4).map(function (m) { return { role: m.role, text: m.content, sources: m.sources }; });
     if (threadPending) {
       var last = items[items.length - 1];
       if (!last || last.role !== "user" || last.text !== threadPending) items.push({ role: "user", text: threadPending });
@@ -1860,6 +1914,7 @@
       d.className = m.role === "user" ? "tt-me" : "tt-her";
       d.textContent = m.text;
       box.appendChild(d);
+      if (m.role === "assistant" && m.sources && m.sources.length) { var ts = srcChips(m.sources); ts.className = "tt-srcs"; box.appendChild(ts); }
       if (m.role === "assistant" && threadPics && threadPics.text && m.text === threadPics.text) {
         var st = picStrip(threadPics.list);
         st.className = "tt-pics";
@@ -2094,9 +2149,11 @@
   }
 
   function init() {
-    document.getElementById("caption-name").textContent = (profile.assistantName || "Friday").toLowerCase();
-    document.getElementById("setup-name").textContent = (profile.assistantName || "Friday").toLowerCase();
-    document.title = profile.assistantName || "Friday";
+    // 4.0: an acronym name (F.R.I.D.A.Y.) is shown as written; plain names keep the lowercase style
+    var shown0 = shownName(), styled = /\./.test(shown0) ? shown0 : shown0.toLowerCase();
+    document.getElementById("caption-name").textContent = styled;
+    document.getElementById("setup-name").textContent = styled;
+    document.title = shown0;
 
     orb = new FridayOrb(document.getElementById("orb-canvas"));
     orb.setLook(settingsData.look || profile.defaultLook || "N");
@@ -2142,7 +2199,7 @@
         if (neural) neural.setActive(kind || (busy ? "thinking" : null));
         if (kind && kind !== "thinking") {
           document.getElementById("neural-caption").textContent =
-            (profile.assistantName || "Friday").toUpperCase() + " · " + String(kind).toUpperCase();
+            shownName().toUpperCase() + " · " + String(kind).toUpperCase();
         }
       }
     });

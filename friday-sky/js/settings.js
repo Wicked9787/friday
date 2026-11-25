@@ -1039,7 +1039,7 @@
     var P = function () { return root.FridayPersona; };
     if (!P() || !P().on(this.profile)) { box.hidden = true; acc.hidden = true; return; }
     box.hidden = false; acc.hidden = false;
-    var name = (this.profile && this.profile.assistantName) || "Friday";
+    var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.shownName) ? root.FRIDAY_CONFIG.shownName(this.profile) : ((this.profile && this.profile.assistantName) || "Friday");
     function el(id) { return document.getElementById(id); }
     function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
     var paint = function () {
@@ -1236,6 +1236,8 @@
       else fallback();
     }
     document.querySelectorAll(".sc-assistant").forEach(function (e) { e.textContent = name; });
+    var shownNm = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.shownName) ? root.FRIDAY_CONFIG.shownName(prof) : name;
+    document.querySelectorAll(".sc-shown").forEach(function (e) { e.textContent = shownNm; });
     setText("bt-url", scheme + "://listen");
     setText("rt-url", scheme + "://msg?kind=text&from=");
     var cw = document.getElementById("btn-copy-wake");
@@ -1308,7 +1310,7 @@
         var why;
         if (ok) why = "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".");
         else if (!hi) why = "She couldn't check your Home just now. Try again in a moment.";
-        else if (hi.authorization && hi.authorization !== "authorized") why = "Home access is off for this app. Turn on Home Information in iPhone Settings → " + ((self.profile && self.profile.assistantName) || "Friday") + ".";
+        else if (hi.authorization && hi.authorization !== "authorized") why = "Home access is off for this app. Turn on Home Information in iPhone Settings → " + ((self.profile && self.profile.displayName) || (self.profile && self.profile.assistantName) || "Friday") + ".";
         else if (!hi.homes) why = "Home access is on, but iOS isn't showing this install any homes. That usually means the Home permission didn't come through when AltStore signed the app. The LightsTest version is the one that carries it.";
         else if (!hi.lights) why = "She can see your Home (" + (hi.accessories || 0) + " accessories) but none of them are lights" + (hi.otherPlugs ? ". If a lamp is on a smart plug or switch, rename it in the Home app to include \u201clight\u201d or \u201clamp\u201d" : "") + ".";
         else why = "Something stopped her from reaching your lights. Try again in a moment.";
@@ -1713,15 +1715,27 @@
     if (nf) nf.onchange = function () { v.nightFrom = +nf.value; saveSettings(v); self.onNight(); };
     if (nt) nt.onchange = function () { v.nightTo = +nt.value; saveSettings(v); self.onNight(); };
 
-    var bs = document.getElementById("brain-status"), bc = document.getElementById("brain-current");
+    var bs = document.getElementById("brain-status"), bc = document.getElementById("brain-current"), br = document.getElementById("brain-router");
     function syncBrain() {
+      var B = root.FridayBrain;
       var backups = loadConnections().filter(function (c) { return c.type === "agent" && c.backup; }).map(function (c) { return c.name; });
       var u = root.FridayStorage.get("usage.brain", null);
       var today = u && u.date === new Date().toDateString() ? u : { total: 0, tts: 0, models: {} };
-      var per = Object.keys(today.models || {}).map(function (k) { return k.replace(/^.*\//, "") + " " + today.models[k]; }).join(", ");
-      var meter = "Today: " + (today.total || 0) + " replies" + (per ? " (" + per + ")" : "") + " · AI voice " + (today.tts || 0) + " of about 100 clips. Each Groq brain has its own free daily limit, about 1,000 replies.";
-      if (bs) bs.textContent = (backups.length ? "Backup brains: " + backups.join(", ") + ". " : "No backup brain yet. Add a free one (Gemini, OpenRouter, Cerebras, Mistral) in Connections and turn on Backup brain. ") + meter;
-      if (bc) bc.textContent = backups.length ? "Groq + " + backups.length + " backup" + (backups.length > 1 ? "s" : "") : "Groq";
+      // 4.0: who answers what, and how each brain is doing today
+      if (br && B && B.explain) {
+        var want = ["chat", "reasoning", "coding", "writing", "research", "web", "vision", "reflection"];
+        br.innerHTML = B.explain().filter(function (x) { return want.indexOf(x.task) >= 0; }).map(function (x) {
+          var o = x.order;
+          return "<div style=\"margin:2px 0\"><b>" + x.label + ":</b> " + (o.length ? o.slice(0, 3).map(function (r, i) { return (i ? "" : "") + r.name + (r.resting ? " (resting)" : "") + (r.left < 35 ? " (" + r.left + "% left)" : ""); }).join(" → ") : "no brain can do this yet") + "</div>";
+        }).join("");
+      }
+      if (bs && B && B.routeReport) {
+        var rep = B.routeReport().filter(function (r) { return r.used || r.fail || r.resting || /^agent:/.test(r.id) || r.id === "groq:" + ((root.FRIDAY_CONFIG || {}).MODEL || ""); });
+        bs.innerHTML = rep.map(function (r) {
+          return "<div style=\"margin:2px 0\">" + r.name + ": " + r.used + (r.limit ? " of about " + r.limit : "") + " today" + (r.resting ? " · resting" : "") + (r.missing ? " · not available" : "") + (r.free ? "" : " · paid") + "</div>";
+        }).join("") + "<div style=\"margin-top:6px\">AI voice: " + (today.tts || 0) + " of about 100 clips today." + (backups.length ? "" : " No backup brain yet: paste a free key below (Gemini, OpenRouter, Cloudflare) so she has more brains to pick from.") + "</div>";
+      }
+      if (bc) bc.textContent = backups.length ? "Groq + " + backups.length + " more" : "Groq";
     }
     this._syncBrain = syncBrain;
     syncBrain();
@@ -2139,7 +2153,7 @@
     this._syncHeaders();
     this.onIcon(id);
     var tag = (this.profile.id || "sky").replace(/[^a-z0-9]/g, "") || "sky";
-    var label = this.profile.assistantName || (tag === "batsie" ? "Reed" : "Friday");
+    var label = this.profile.displayName || this.profile.assistantName || (tag === "batsie" ? "Reed" : "Friday");
     var href = appUrl(this.profile.id || "sky");
     fetch("icons/choices/" + id + "-180.png").then(function (r) {
       if (!r.ok) throw new Error("icon");
