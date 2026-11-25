@@ -9,8 +9,8 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "3.5.6";
-  var APP_LABEL = "StandBy";
+  var APP_VERSION = "3.5.7";
+  var APP_LABEL = "Ask First";
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -229,11 +229,52 @@
      opening an app), they wait here. The first runs now; each time the Shortcut
      hands back to Friday, the next one starts. */
   var handedOffAt = 0; // when she sent you to another app on purpose (Shortcut, call, Music...)
-  function goShortcut(cmd, opts) {
+  /* 3.5.7: she never hands anything to the Shortcut on her own. If she can't do it in the app,
+     she asks first. "Yes" hands it over, "no" leaves it, anything else just moves on. */
+  var pendingShortcut = null; // { items: [{ kind, value }], at }
+  var SC_LEAD = "^(?:(?:hey |ok |okay )?(?:friday|jarvis|reed)[, ]+)?";
+  var SC_YES = new RegExp(SC_LEAD + "(?:yes|yeah|yea|yep|yup|sure|ok|okay|do it|go ahead|please do|please|yes please|go for it|hand it over|send it|use (?:the |my )?shortcut)(?:,? (?:please|thanks|thank you|friday|reed))?[.!]*$", "i");
+  var SC_NO = new RegExp(SC_LEAD + "(?:no|nope|nah|no thanks|no thank you|don'?t|never ?mind|leave it|skip it|cancel|forget it|not now)(?:,? (?:thanks|thank you|friday|reed))?[.!]*$", "i");
+  function cantLine() { var h = honorific(); return "I can't do that one in the app" + (h ? ", " + h : "") + "."; }
+  async function offerShortcut(items, line, quiet) {
+    pendingShortcut = { items: items, at: Date.now() };
+    emitActivity("shortcut", "Asked before using the Shortcut");
+    if (quiet) return;
+    chat._push("assistant", line);
+    setCaption(line);
+    await voice.speak(line, profile);
+  }
+  async function goShortcut(cmd, opts, lead) {
     if (opts && opts.collect) { opts.collect.push({ kind: "shortcut", value: cmd }); return; }
-    leftForApp = true;
-    handedOffAt = Date.now();
-    runShortcut(cmd);
+    await offerShortcut([{ kind: "shortcut", value: cmd }], (lead === undefined ? cantLine() : lead) + (lead === "" ? "" : " ") + "Want me to hand it to your Shortcut?");
+  }
+  // Called at the top of every request while she's waiting on a yes or no.
+  async function answerShortcut(text) {
+    if (!pendingShortcut) return false;
+    if (Date.now() - pendingShortcut.at > 120000) { pendingShortcut = null; return false; }
+    var t = String(text || "").replace(/[\u2019]/g, "'").trim();
+    var items = pendingShortcut.items;
+    if (SC_YES.test(t)) {
+      pendingShortcut = null;
+      chat._push("user", text);
+      var ok = "Handing it to your Shortcut.";
+      chat._push("assistant", ok); setCaption(ok);
+      await voice.speak(ok, profile);
+      runLeaveQueue(items);
+      return true;
+    }
+    if (SC_NO.test(t)) {
+      pendingShortcut = null;
+      chat._push("user", text);
+      var nope = "Okay, I'll leave it.";
+      chat._push("assistant", nope); setCaption(nope);
+      await voice.speak(nope, profile);
+      var urls = items.filter(function (it) { return it.kind === "url"; });
+      if (urls.length) runLeaveQueue(urls);
+      return true;
+    }
+    pendingShortcut = null; // they moved on to something else
+    return false;
   }
   function goUrl(url, opts) {
     if (opts && opts.collect) { opts.collect.push({ kind: "url", value: url }); return; }
@@ -678,6 +719,7 @@
       try { await handlePrivate(text, pcmd, opts); } finally { busy = false; if (neural) neural.setActive(null); }
       return;
     }
+    if (!opts.part && pendingShortcut && await answerShortcut(text)) return;
     setCaption(text);
     if (!opts.part) emitActivity("listening", "Heard: " + text.slice(0, 70));
     // 3.5.3: robot jobs go straight to the robot, in one piece ("open YouTube and search …" isn't split
@@ -751,8 +793,8 @@
         return;
       }
       if (camCmd) {
-        setCaption(camCmd === "cameras" ? "Pulling up the cameras." : "Opening the camera.");
-        goShortcut(camCmd, opts);
+        if (!opts.collect) chat._push("user", text);
+        await goShortcut(camCmd, opts, camCmd === "cameras" ? "I can't pull up the cameras in the app." : "I can't open the camera in the app.");
         return;
       }
       if (refreshCommand(text)) {
@@ -834,8 +876,17 @@
         setCaption(act.say || "");
         if (act.url) { await voice.speak(act.say, profile); goUrl(act.url, opts); return; }
         await voice.speak(act.say, profile);
-        if (act.shortcut) goShortcut(act.shortcut, opts);
+        if (act.shortcut) {
+          if (opts.collect) opts.collect.push({ kind: "shortcut", value: act.shortcut });
+          else await offerShortcut([{ kind: "shortcut", value: act.shortcut }], "Want me to also put it on your iPhone with your Shortcut?");
+        }
         if (act.steps && act.steps.length) await runMany(act.steps, null, opts);
+        return;
+      }
+      // 3.5.7: a bubble she can't do in the app: ask before using the Shortcut
+      if (opts.bubble) {
+        chat._push("user", text);
+        await goShortcut(text, opts);
         return;
       }
       var spokeStream = false;
@@ -853,13 +904,15 @@
         if (result.seconds < 60) line = "Timer set for " + result.seconds + " seconds.";
         setCaption(line);
         await voice.speak(line, profile);
-      } else if (result.kind === "phone" || (result.kind === "messages" && result.command)) {
-        setCaption(result.text);
-        await voice.speak(result.text, profile);
-        if (bubbles && result.command) bubbles.noteUsage("cmd:" + String(result.command).toLowerCase());
+      } else if ((result.kind === "phone" || result.kind === "messages") && result.command) {
+        var phSay = result.kind === "phone" && opts.collect ? cantLine() : result.text;
+        setCaption(phSay);
+        await voice.speak(phSay, profile);
         if (bubbles) bubbles.noteAppMentions(text);
         if (bubbles) bubbles.refreshSuggestions();
-        goShortcut(result.command, opts);
+        if (opts.collect) opts.collect.push({ kind: "shortcut", value: result.command });
+        else if (result.kind === "phone") await offerShortcut([{ kind: "shortcut", value: result.command }], "", true); // she already asked
+        else await offerShortcut([{ kind: "shortcut", value: result.command }], "Want me to send it with your Shortcut?");
         if (result.kind === "messages" && !opts.collect) showMessagesButton(result.command);
       } else if (result.kind === "memory") {
         setCaption(result.text || "");
@@ -869,6 +922,7 @@
       } else {
         setCaption(result.text || "");
         renderChat();
+        if (!opts.collect && /\bshortcut\b[^.!]*\?\s*$/i.test(result.text || "")) offerShortcut([{ kind: "shortcut", value: text }], "", true);
         if (result.pictures && window.FridayPictures) {
           // 3.5.2: real photos in their own panel, with her answer on top
           window.FridayPictures.render(document.getElementById("pics-box"), result.pictures, result.text, openUrl);
@@ -917,7 +971,12 @@
       await handleUtterance(steps[i], { part: true, collect: collect, showChat: false });
     }
     if (!own) return;
-    if (collect.length) { runLeaveQueue(collect); orb.setTalking("idle", 0); return; }
+    if (collect.length) {
+      var scN = collect.filter(function (it) { return it.kind === "shortcut"; }).length;
+      if (!scN) { runLeaveQueue(collect); orb.setTalking("idle", 0); return; }
+      await offerShortcut(collect, (scN === 1 ? "I couldn't do one of those in the app. Want me to hand it" : "I couldn't do " + scN + " of those in the app. Want me to hand them") + " to your Shortcut?");
+      return;
+    }
     if (outer && outer.part) return;
     if (handsFree && !voice.listening) setTimeout(function () { beginListen(); }, 400);
     else if (!voice.speaking) orb.setTalking("idle", 0);
@@ -1048,20 +1107,20 @@
     if ((ex.partner || ex.textSend) && !opts.collect && await textInApp(ex, text)) return;
     if (ex.partner) {
       chat._push("user", text);
+      if (!opts.collect) { await goShortcut(ex.partner.command, opts, "I can't send that one from the app."); return; }
       var line = "Sending that to " + ex.partner.to + ".";
       chat._push("assistant", line);
       setCaption(line);
-      emitActivity("shortcut", "Message for " + ex.partner.to);
       await voice.speak(line, profile);
       goShortcut(ex.partner.command, opts);
       return;
     }
     if (ex.textSend) {
       chat._push("user", text);
+      if (!opts.collect) { await goShortcut(ex.textSend.command, opts, "I can't send that one from the app."); return; }
       var tl = "Texting " + ex.textSend.to.replace(/[^\w' -]+/g, "").trim() + ".";
       chat._push("assistant", tl);
       setCaption(tl);
-      emitActivity("shortcut", "Text to " + ex.textSend.to);
       await voice.speak(tl, profile);
       goShortcut(ex.textSend.command, opts);
       return;
@@ -1550,7 +1609,7 @@
     openPanel("settings");
     setTimeout(function () { if (window.__fridaySettingsShow) { var el = window.__fridaySettingsShow("accord-private"); if (el) try { el.scrollIntoView({ block: "start" }); } catch (e) {} } }, 200);
   }
-  // Opens the text to the other phone (you tap Send). Falls back to your Shortcut, then to the Messages app.
+  // Opens the text to the other phone (you tap Send). Falls back to the Messages app (never the Shortcut).
   async function composeToPartner(body) {
     var pc = partnerInfo(), N = window.FridayNative;
     if (!pc.contact) return { ok: false, reason: "no-contact" };
@@ -1561,7 +1620,6 @@
         if (r.ok) return { ok: true, result: r.result };
       }
     }
-    if (N && N.isApp()) { runShortcut("text " + pc.contact + " saying " + body); return { ok: true, result: "shortcut" }; }
     window.__fridayLastSms = body;
     var a = document.getElementById("open-messages-btn");
     if (a) a.remove();
@@ -2139,8 +2197,7 @@
           handleUtterance("weather");
         }
         else if (act.type === "shortcut") {
-          setCaption("On it.");
-          runShortcut(act.command);
+          handleUtterance(act.command, { bubble: true });
         } else if (act.type === "url" && /^localdevvpn:\/\/enable/i.test(act.url || "")) FridayRefresh.run({ fromBubble: true });
         else if (act.type === "url") openUrl(act.url);
       },

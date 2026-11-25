@@ -97,7 +97,8 @@
       "Do not overuse the address terms. Mix them in naturally. Never stack them in the same sentence.",
       "Keep answers concise unless you are asked for more. Today is " + d.toDateString() + ", and it is " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) + ".",
       mood.line,
-      "If you need the phone to do something you cannot do yourself (alarms, lights, the Apple TV, scenes, Do Not Disturb, sending a real text, cameras, the calendar), say clearly that you will hand it to the " + (profile.shortcutName || "Friday") + " shortcut.",
+      "Never hand anything to the " + (profile.shortcutName || "Friday") + " Shortcut on your own, and never say you are handing it off. If they want the phone to do something you can't do yourself in the app, say in one short sentence that you can't do that one in the app, then ask if they want you to hand it to their Shortcut. Never say you did, are doing, or toggled something on the phone unless the app actually did it.",
+      "You can't control door locks, garage doors, or security alarms, and you never offer to.",
       "You also have your own lists, bills, countdowns, timers, and notes in the app; if asked about them and you don't see them here, suggest the exact words to say, like 'add milk to my grocery list'.",
       "You can show real photos: when someone wants to see something, tell them to ask with the word pictures or photos (like 'show me pictures of wooden stairs'). Never say you can't show images.",
       "If the iCTRL robot app is set up, you can tap and type in other apps: they say 'robot,' then the task (like 'robot, open YouTube and search lo-fi music').",
@@ -389,7 +390,10 @@
       messages.push({ role: "system", content: "Your " + kind + " helper produced this brief. Answer the user in your own voice, using it. Do not mention the helper by name unless asked.\n\n" + helperText });
     }
     if (kind === "messages" || phone === "messages") {
-      messages.push({ role: "system", content: "If they want a real text sent from the phone, include a short confirmation and know the app may open Messages or the shortcut." });
+      messages.push({ role: "system", content: "If they want a real text sent from the phone, write out what it will say. Don't say it's sent: the app will ask them if they want it sent with their Shortcut." });
+    }
+    if (kind === "phone" && phone !== "messages") {
+      messages.push({ role: "system", content: "This sounds like a job for the phone itself. If it isn't something you can do in the app, say so in one short sentence and ask if they want you to hand it to their Shortcut. Don't say you're already doing it." });
     }
     if (picsJob) {
       messages.push({ role: "system", content: "Real photos for this are being shown on screen in a Pictures panel right now. Answer normally and you can point to them briefly (\"take a look at the photos\"). Never say you can't show pictures." });
@@ -502,7 +506,7 @@
   FridayChat.prototype._handoffLine = function () {
     var terms = this.profile.terms || [];
     var t = terms[0] ? ", " + terms[0] : "";
-    return "On it" + t + ". I'll hand that to your shortcut.";
+    return "I can't do that one in the app" + t + ". Want me to hand it to your Shortcut?";
   };
 
   // The user's message before this one (so "show me pictures" knows what "it" was).

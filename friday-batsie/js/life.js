@@ -575,7 +575,7 @@
         var s2 = S().get("settings", {}) || {};
         var hand = s2.iphoneTimers !== false && secs >= (+s2.iphoneTimerMin || 10) * 60 && !phoneRingsTimers();
         return {
-          say: (timer.name !== "Timer" && !/^Timer \d/.test(timer.name) ? cap(timer.name) + " timer" : "Timer") + " set for " + spokenDuration(secs) + "." + (hand ? " I'm also setting it on your iPhone." : ""),
+          say: (timer.name !== "Timer" && !/^Timer \d/.test(timer.name) ? cap(timer.name) + " timer" : "Timer") + " set for " + spokenDuration(secs) + ".",
           panel: "timer",
           shortcut: hand ? "timer for " + Math.round(secs / 60) + " minutes" : null
         };
