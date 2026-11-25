@@ -25,5 +25,5 @@
   "devDependencies": {
     "@capacitor/cli": "^8.0.0"
   },
-  "appVersion": "3.5.8"
+  "appVersion": "3.5.9"
 }

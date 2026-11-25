@@ -539,7 +539,11 @@
       var note = j && String(j.note || "").replace(/[*_#`]/g, "").replace(/\s+/g, " ").trim().slice(0, 600);
       if (!feeling || !note || note.length < 20) return false;
       root.FridayStorage.set("self", { note: note, feeling: feeling, day: dayKey(), updated: new Date().toISOString() });
-      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("memory", "She feels " + feeling + " today");
+      // her trail of feelings: one bubble a day on her Self node in the neural map
+      var log = (root.FridayStorage.get("selfLog", []) || []).filter(function (x) { return x && x.day !== dayKey(); });
+      log.push({ day: dayKey(), feeling: feeling, at: new Date().toISOString() });
+      root.FridayStorage.set("selfLog", log.slice(-60));
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("self", "She feels " + feeling + " today");
       selfEvent();
       return true;
     } catch (e) {

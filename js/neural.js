@@ -18,6 +18,7 @@
     { id: "memory", label: "Memory", ring: 1, kind: "mind", tip: "Things she knows about you, plus a summary of older chats.", panel: "memory" },
     { id: "voice", label: "Voice", ring: 1, kind: "mind", tip: "Listening and speaking." },
     { id: "vision", label: "Vision", ring: 1, kind: "mind", tip: "Photos you show her.", panel: "photo-take" },
+    { id: "self", label: "Self", ring: 1, kind: "mind", tip: "Her own personality and how she feels. She chooses them herself, a little each day. Each small bubble is a day and how she felt.", selfOnly: true },
     { id: "research", label: "Research", ring: 2, kind: "helper", tip: "Web search and research helper." },
     { id: "coding", label: "Coding", ring: 2, kind: "helper", tip: "Coding helper." },
     { id: "money", label: "Money", ring: 2, kind: "helper", tip: "Money helper and your bills.", panel: "money" },
@@ -47,6 +48,7 @@
     ["money", "bills"], ["memory", "countdowns"], ["research", "weather"], ["core", "shortcut"],
     ["lists", "notes"], ["timers", "countdowns"], ["bills", "countdowns"], ["weather", "shortcut"], ["lists", "timers"],
     ["thinking", "translate"], ["core", "routines"], ["routines", "shortcut"], ["memory", "habits"], ["money", "spending"],
+    ["core", "self"], ["self", "memory"], ["self", "voice"],
     ["core", "calendar"], ["calendar", "countdowns"], ["voice", "partner"], ["partner", "contacts"], ["shortcut", "home"], ["core", "home"], ["shortcut", "contacts"]
   ];
   // What lights up for each kind of activity: a path of nodes the pulses travel along.
@@ -120,11 +122,15 @@
     this.selected = null;
     this.lastBrain = "";
     var rings = { 1: [], 2: [], 3: [], 4: [] };
-    DEFS.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
+    // 3.5.9: her Self node (her own personality) is Friday's only
+    var prof0 = null; try { prof0 = root.FRIDAY_CONFIG.getProfile(); } catch (e) {}
+    var hasSelf = !!(root.FridaySelf && root.FridaySelf.on(prof0));
+    var defs = DEFS.filter(function (d) { return !d.selfOnly || hasSelf; });
+    defs.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
     var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.52, off: 0.0 }, 3: { r: 0.92, y: 0.5, off: 0.25 }, 4: { r: 0.5, y: -0.98, off: 0.6 } };
     var self = this;
     this.nodes = {};
-    DEFS.forEach(function (d) {
+    defs.forEach(function (d) {
       var p = [0, 0, 0];
       if (d.ring) {
         var arr = rings[d.ring], i = arr.indexOf(d), sh = shape[d.ring];
@@ -242,7 +248,8 @@
       "friday:countdowns": ["countdowns", "Countdown updated"], "friday:notes": ["notes", "Note saved"],
       "friday:timers": ["timers", "Timers changed"], "friday:memory": ["memory", "Memory updated"],
       "friday:habits": ["habits", "Habits updated"], "friday:spending": ["spending", "Spending logged"],
-      "friday:routines": ["routines", "Routines changed"], "friday:contacts": ["contacts", "Contacts synced"]
+      "friday:routines": ["routines", "Routines changed"], "friday:contacts": ["contacts", "Contacts synced"],
+      "friday:self": ["self", "Her personality changed"]
     };
     Object.keys(map).forEach(function (ev) {
       root.addEventListener(ev, function () { self.pulse(map[ev][0], map[ev][1]); if (self.running) self._syncLeaves(); });
@@ -343,6 +350,10 @@
       if (l && l.items) Object.keys(l.items).forEach(function (k) { var n = l.items[k].filter(function (x) { return !x.done; }).length; add("lists", "list:" + k, k.charAt(0).toUpperCase() + k.slice(1), (k === "to-do" ? "To-do" : k) + " list · " + n + " open"); });
       (S.get("countdowns", []) || []).forEach(function (c) { add("countdowns", c.id || c.name, c.name, c.name); });
       (S.get("bills", []) || []).forEach(function (b) { add("bills", b.id || b.name, b.name, b.name + (b.amount ? " · $" + b.amount : "")); });
+      // 3.5.9: one bubble per day she picked how she felt (Friday only)
+      if (this.nodes && this.nodes.self) (S.get("selfLog", []) || []).slice(-45).forEach(function (x) {
+        if (x && x.feeling) add("self", x.day, x.feeling, new Date(x.at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" }) + ": she felt " + x.feeling, x.feeling);
+      });
     } catch (e) {}
     return out;
   };
@@ -468,6 +479,7 @@
       if (id === "routines" && root.FridayExtras) { var rr = root.FridayExtras.routines(); return rr.length + " routine" + (rr.length === 1 ? "" : "s") + ": " + rr.map(function (x) { return x.phrase; }).join(", "); }
       if (id === "habits" && root.FridayExtras) { var hh = root.FridayExtras.habits(); return hh.list.length ? hh.list.map(function (x) { return x.name; }).join(", ") : "None yet"; }
       if (id === "spending" && root.FridayExtras) { var tt = root.FridayExtras.spendTotals(); return "This month $" + Math.round(tt.month) + " · this week $" + Math.round(tt.week); }
+      if (id === "self") { var me = S.get("self", null) || {}; return me.feeling ? "Feels " + me.feeling + " today. In her words: “" + me.note + "”" : (me.wasReset ? "Back to how she started. She picks again tomorrow." : "She hasn't picked yet. She will after a day of talking."); }
       if (id === "contacts") { var cn = (S.get("contacts", null) || {}).names; return cn && cn.length ? cn.length + " contact names synced" : "Not synced yet (Settings → Messages & Contacts)"; }
       if (id === "home") { var hi = S.get("homeInfo", null); return hi && hi.lights ? hi.lights + " lights in the app" : "Through your Shortcut"; }
       if (id === "calendar") return root.FridayNative && root.FridayNative.isApp() && root.FridayNative.calendar.available() ? "Right in the app" : "Through your Shortcut";
