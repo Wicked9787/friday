@@ -12,6 +12,7 @@
   var APP_VERSION = "4.0.0";
   var APP_LABEL = "Central Intelligence";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
+  function fillShownName() { var n = shownName(); document.querySelectorAll(".sc-shown").forEach(function (e) { e.textContent = n; }); }
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -1832,6 +1833,8 @@
     b.classList.toggle("hide-orb-typing", v.hideOrbTyping === true);
     var inp = document.getElementById("tb-input");
     if (inp) inp.placeholder = "Type to " + shownName();
+    var ci = document.getElementById("chat-input"); if (ci) ci.placeholder = "Message " + shownName();
+    var mt = document.getElementById("memory-text"); if (mt) mt.placeholder = "Something " + shownName() + " should remember";
     if (typing) placeOrbForTyping();
     if (bubbles) bubbles.layout();
     syncLive();
@@ -2152,8 +2155,10 @@
     // 4.0: an acronym name (F.R.I.D.A.Y.) is shown as written; plain names keep the lowercase style
     var shown0 = shownName(), styled = /\./.test(shown0) ? shown0 : shown0.toLowerCase();
     document.getElementById("caption-name").textContent = styled;
+    document.getElementById("caption-name").classList.toggle("as-written", styled !== styled.toLowerCase());
     document.getElementById("setup-name").textContent = styled;
     document.title = shown0;
+    fillShownName();
 
     orb = new FridayOrb(document.getElementById("orb-canvas"));
     orb.setLook(settingsData.look || profile.defaultLook || "N");

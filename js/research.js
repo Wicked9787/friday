@@ -263,6 +263,10 @@
       p.sources.forEach(function (s) { var k = s.url || s.domain; if (!seen[k]) { seen[k] = 1; sources.push(s); } });
     });
     sources.forEach(function (s) { s.verified = points.some(function (p) { return p.status === "verified" && p.sources.indexOf(s) >= 0; }); });
+    // one entry per site for what you see (prefer the link that backs a verified point)
+    var bySite = {};
+    sources.forEach(function (s) { var k = s.site || s.domain; if (!bySite[k] || (s.verified && !bySite[k].verified)) bySite[k] = s; });
+    sources = sources.filter(function (s) { return bySite[s.site || s.domain] === s; });
     var res = { ok: true, question: q, kind: g.kind, used: g.used, tried: g.tried, points: points, conflicts: conflicts, gaps: j && j.gaps ? String(j.gaps).slice(0, 200) : "", sources: sources.slice(0, 10) };
     res.brief = brief(res);
     if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("research", "Checked " + sources.length + " sources (" + points.filter(function (p) { return p.status === "verified"; }).length + " points verified)");
