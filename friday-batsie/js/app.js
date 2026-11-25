@@ -9,10 +9,14 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "4.0.0";
-  var APP_LABEL = "Central Intelligence";
+  var APP_VERSION = "4.1.0";
+  var APP_LABEL = "Trust";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
-  function fillShownName() { var n = shownName(); document.querySelectorAll(".sc-shown").forEach(function (e) { e.textContent = n; }); }
+  function fillShownName() {
+    var n = shownName(), reed = profile && profile.id === "batsie";
+    document.querySelectorAll(".sc-shown").forEach(function (e) { e.textContent = n; });
+    document.querySelectorAll(reed ? ".only-sky" : ".only-reed").forEach(function (e) { e.hidden = true; });
+  }
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
   function headacheOn() { var v = FridayStorage.get("settings", null) || (settings && settings.values) || settingsData || {}; return v.mood === "headache"; }
@@ -721,7 +725,7 @@
       var smry = (chat.summary && chat.summary.text) || "";
       var pOn = window.FridayPersona && window.FridayPersona.on(profile);
       sum.textContent = chat.memory.length + " things remembered." + (smry ? " She also keeps a short summary of your older chats so she remembers past conversations." : "") +
-        (pOn ? " Her conclusions about her own personality aren't kept here; they're in Settings → Mood & Display → Her own personality." : "");
+        (pOn ? window.FridayPersona.say(" Her conclusions about her own personality aren't kept here; they're in Settings → Mood & Display → Her own personality.") : "");
     }
   }
 
@@ -1580,8 +1584,8 @@
       if (!s || !s.url) return;
       var b = document.createElement("button");
       b.type = "button";
-      b.className = "src-chip" + (s.verified ? " ok" : "") + (s.tier === "low" ? " weak" : "");
-      b.textContent = (s.verified ? "✓ " : "") + (s.domain || s.title || "source");
+      b.className = "src-chip" + (s.verified ? " ok" : "") + (s.tier === "low" || s.unconfirmed ? " weak" : "");
+      b.textContent = (s.verified ? "✓ " : s.unconfirmed ? "? " : "") + (s.domain || s.title || "source");
       b.title = s.title || s.url;
       b.onclick = function (e) { e.stopPropagation(); openUrl(s.url); };
       box.appendChild(b);
@@ -2650,7 +2654,13 @@
     setTimeout(maybeGreet, 700);
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
+  // 4.1: wait (briefly) for her keys to load from the Keychain before starting
+  function start() {
+    var ready = (window.FridayStorage && FridayStorage.keysReady) || Promise.resolve();
+    var once = false, go = function () { if (once) return; once = true; init(); };
+    Promise.race([ready, new Promise(function (r) { setTimeout(r, 2500); })]).then(go, go);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
 })();
 // build 5 (v3.1)

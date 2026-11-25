@@ -470,7 +470,7 @@
       keyPh();
       var mk = document.getElementById("mainkey-current");
       if (mk) mk.textContent = root.FridayStorage.hasApiKey() ? "Saved" : "Not set";
-      mask.textContent = root.FridayStorage.hasApiKey() ? "Saved on this phone: " + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
+      mask.textContent = root.FridayStorage.hasApiKey() ? (root.FridayStorage.keyStore && root.FridayStorage.keyStore() === "keychain" ? "Saved in this iPhone's Keychain: " : "Saved on this phone: ") + root.FridayStorage.maskKey(root.FridayStorage.getApiKey()) : "No key saved yet.";
     }
     this._syncKey = syncKey;
     syncKey();
@@ -1039,11 +1039,19 @@
     var P = function () { return root.FridayPersona; };
     if (!P() || !P().on(this.profile)) { box.hidden = true; acc.hidden = true; return; }
     box.hidden = false; acc.hidden = false;
+    // 4.1: Reed is a he: the section's own wording follows
+    if (P().isHe && P().isHe() && !acc._pronouned) {
+      acc._pronouned = true;
+      var sm = acc.querySelector("summary");
+      if (sm && sm.firstChild && sm.firstChild.nodeType === 3) sm.firstChild.textContent = P().say(sm.firstChild.textContent);
+      acc.querySelectorAll(".hint, .sub, .sgroup-h").forEach(function (e) { if (!e.id) e.textContent = P().say(e.textContent); });
+    }
     var name = (root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.shownName) ? root.FRIDAY_CONFIG.shownName(this.profile) : ((this.profile && this.profile.assistantName) || "Friday");
     function el(id) { return document.getElementById(id); }
     function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
     var paint = function () {
       var m = P().selfModel();
+      var sy = P().say;
       el("self-feel").textContent = (m.mood ? "Mood today: " + m.mood.label + " · " : "") + "Maturity: " + m.maturity.label + " (" + m.maturity.basis + ")";
       el("self-current").textContent = m.mood ? m.mood.label : m.maturity.label;
       el("self-note").textContent = "“" + m.foundation.statement + "”";
@@ -1055,17 +1063,17 @@
           '<span style="position:absolute;top:-3px;bottom:-3px;width:2px;left:' + basePct + '%;background:rgba(255,255,255,.4)"></span>' +
           (origPct !== basePct ? '<span style="position:absolute;top:-2px;width:5px;height:10px;border-radius:3px;margin-left:-2px;left:' + origPct + '%;background:rgba(120,170,255,.8)"></span>' : '') + '</span>' +
           '<span style="width:34px;text-align:right;color:' + (bright ? "#e9d3a0" : "rgba(239,236,232,.6)") + '">' + t.v + (t.status === "reconsidering" ? "?" : "") + '</span></div>';
-      }).join("") + '<div class="sub" style="margin-top:6px">The white line is her current baseline. A blue mark shows where she started, once her baseline has moved. A bright bar is still settling, and a ? means she\'s reconsidering it. Each trait can develop up to 1.5 points in any 30 days.</div>';
+      }).join("") + '<div class="sub" style="margin-top:6px">' + sy("The white line is her current baseline. A blue mark shows where she started, once her baseline has moved. A bright bar is still settling, and a ? means she's reconsidering it. Each trait can develop up to 1.5 points in any 30 days.") + '</div>';
       el("self-ledger").innerHTML = m.recent.length ? m.recent.map(function (e) { return '<div style="margin:0 0 6px">' + esc(new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })) + " · " + esc(P().changeText(e)) + (e.evidence ? '<br><span style="opacity:.7">Because: ' + esc(e.evidence) + "</span>" : "") + "</div>"; }).join("") : "Nothing has changed yet.";
       var pats = m.patterns.map(function (o) { return "• " + esc(o.text); }).concat(m.provisional.slice(-4).map(function (o) { return '• <span style="opacity:.7">' + esc(o.text) + " (still testing)</span>"; }));
       el("self-patterns").innerHTML = pats.length ? pats.join("<br>") : "None yet.";
       var lr = m.foundation.lastReview, el2 = P().reviewEligible();
       var dot0 = function (t) { t = String(t || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
-      el("self-review").textContent = (lr ? "Last review " + new Date(lr.at).toLocaleDateString([], { month: "short", day: "numeric" }) + " (" + (lr.by === "friday" ? "she started it" : "you asked") + "): " + (lr.evolved ? "her identity evolved. " : "she kept her identity. ") + dot0(lr.reason) + " " : "No identity review yet. ") +
-        (el2.ok ? "She'll review her identity after her next reflection." : "She'll start one herself when her experience warrants it.") + " Identity version " + m.foundation.version + ".";
+      el("self-review").textContent = sy((lr ? "Last review " + new Date(lr.at).toLocaleDateString([], { month: "short", day: "numeric" }) + " (" + (lr.by === "friday" ? "she started it" : "you asked") + "): " + (lr.evolved ? "her identity evolved. " : "she kept her identity. ") + dot0(lr.reason) + " " : "No identity review yet. ") +
+        (el2.ok ? "She'll review her identity after her next reflection." : "She'll start one herself when her experience warrants it.") + " Identity version " + m.foundation.version + ".");
       var R = P().reflections(), r = R[R.length - 1];
       var dot = function (t) { t = String(t || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
-      el("self-reflect").textContent = r ? new Date(r.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ": " + dot(r.learned || r.happened || "") + (r.selfCritique ? " Self-check: " + dot(r.selfCritique) : "") + (r.applied.length ? " Changed: " + r.applied.join(", ") + "." : " No personality changes.") : "She hasn't reflected yet. She will once you've talked a bit with the app open.";
+      el("self-reflect").textContent = !r ? sy("She hasn't reflected yet. She will once you've talked a bit with the app open.") : new Date(r.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ": " + dot(r.learned || r.happened || "") + (r.selfCritique ? " Self-check: " + dot(r.selfCritique) : "") + (r.applied.length ? " Changed: " + r.applied.join(", ") + "." : " No personality changes.");
     };
     paint();
     if (!this._selfWatch) { this._selfWatch = true; root.addEventListener("friday:self", paint); }
@@ -1075,7 +1083,7 @@
         .then(function () { b.disabled = false; b.textContent = "Ask for an identity review"; });
     };
     el("btn-self-reset").onclick = function () {
-      if (!confirm("Reset " + name + "'s personality to how she started? Her traits and patterns start over. Her history and Memory are kept.")) return;
+      if (!confirm(P().say("Reset " + name + "'s personality to how she started? Her traits and patterns start over. Her history and Memory are kept."))) return;
       P().reset();
       self.onToast(name + "'s personality is reset.");
     };
@@ -1188,6 +1196,7 @@
       if (body) body.scrollTop = 0;
       self.page = pid || "";
       if (pid === "phone" && self._refreshPhone) self._refreshPhone();
+      if (pid === "brain" && self._syncBrain) self._syncBrain();   // 4.1: fresh numbers every time the page opens
       if (pid) {
         var item = document.querySelector('#settings-menu .smenu-item[data-page="' + pid + '"]');
         var grp = item && item.closest(".sgroup");
@@ -1730,9 +1739,10 @@
         }).join("");
       }
       if (bs && B && B.routeReport) {
-        var rep = B.routeReport().filter(function (r) { return r.used || r.fail || r.resting || /^agent:/.test(r.id) || r.id === "groq:" + ((root.FRIDAY_CONFIG || {}).MODEL || ""); });
+        var rep = B.routeReport().filter(function (r) { return r.used || r.fail || r.resting || r.live || /^agent:/.test(r.id) || r.id === "groq:" + ((root.FRIDAY_CONFIG || {}).MODEL || ""); });
         bs.innerHTML = rep.map(function (r) {
-          return "<div style=\"margin:2px 0\">" + r.name + ": " + r.used + (r.limit ? " of about " + r.limit : "") + " today" + (r.resting ? " · resting" : "") + (r.missing ? " · not available" : "") + (r.free ? "" : " · paid") + "</div>";
+          var use = r.live ? r.live.remaining + " of " + r.live.limit + " left today (from Groq)" : r.used + (r.limit ? " of about " + r.limit : "") + " today";
+          return "<div style=\"margin:2px 0\">" + r.name + ": " + use + (r.resting ? " · resting" : "") + (r.missing ? " · not available" : "") + (r.free ? "" : " · paid") + "</div>";
         }).join("") + "<div style=\"margin-top:6px\">AI voice: " + (today.tts || 0) + " of about 100 clips today." + (backups.length ? "" : " No backup brain yet: paste a free key below (Gemini, OpenRouter, Cloudflare) so she has more brains to pick from.") + "</div>";
       }
       if (bc) bc.textContent = backups.length ? "Groq + " + backups.length + " more" : "Groq";

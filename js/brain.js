@@ -231,13 +231,15 @@
       var d = r && r.data;
       var text = typeof d === "string" ? d : JSON.stringify(d == null ? "" : d);
       var st = +(r && r.status) || 0;
+      var hd = (r && r.headers) || {};
       return {
         ok: st >= 200 && st < 300, status: st, body: null, native: true,
+        headers: { get: function (n) { n = String(n).toLowerCase(); for (var k in hd) if (String(k).toLowerCase() === n) return hd[k]; return null; } },
         text: function () { return Promise.resolve(text); },
         json: function () { return Promise.resolve(typeof d === "string" ? JSON.parse(d) : d); }
       };
     }
-    if (H && mustGoNative(url)) return viaNative();
+    if (H && (mustGoNative(url) || init.native)) return viaNative();
     try { return await fetch(url, init); }
     catch (e) {
       if (e && e.name === "AbortError") throw e;
@@ -246,6 +248,14 @@
     }
   }
 
+  // Groq's own count: x-ratelimit-limit-requests / -remaining-requests are requests per day.
+  function readLimits(res, opts) {
+    if (!opts || !opts.onLimits || !res || !res.headers || !res.headers.get) return;
+    try {
+      var lim = res.headers.get("x-ratelimit-limit-requests"), rem = res.headers.get("x-ratelimit-remaining-requests");
+      if (lim != null && rem != null && isFinite(+lim) && isFinite(+rem) && +lim > 0) opts.onLimits({ limit: +lim, remaining: +rem, reset: res.headers.get("x-ratelimit-reset-requests") || "" });
+    } catch (e) {}
+  }
   async function callOpenAI(base, key, model, messages, opts) {
     base = String(base || "").trim().replace(/\/+$/, "");
     var url = /\/chat\/completions$/.test(base) ? base : base + "/chat/completions";
@@ -254,11 +264,13 @@
     var body = openaiBody(model, messages, opts);
     var res;
     try {
-      res = await http(url, { method: "POST", headers: headers, body: JSON.stringify(body), signal: opts.signal });
+      // 4.1: replies that aren't streamed go straight from the iPhone, where Groq's usage headers can be read
+      res = await http(url, { method: "POST", headers: headers, body: JSON.stringify(body), signal: opts.signal, native: !!(opts.onLimits && !opts.stream) });
     } catch (e) {
       if (e && e.name === "AbortError") throw e;
       throw BrainError("network", "offline");
     }
+    readLimits(res, opts);
     if (!res.ok) {
       var errText = "";
       try { errText = await res.text(); } catch (e2) {}
@@ -488,6 +500,7 @@
       h.ok++; t.ok++;
       h.ms = h.ms ? Math.round(h.ms * 0.7 + msTaken * 0.3) : msTaken;
       var u = usageAll(); u.counts[r.id] = (u.counts[r.id] || 0) + 1; store().set(USE_KEY, u);
+      if (h.live && at - h.live.at < 10000) h.live.usedAt = u.counts[r.id];   // Groq's count already includes this request
     } else {
       h.fail++; t.fail++;
       h.fails = (h.fails || []).filter(function (x) { return at - x < 30 * 60 * 1000; }).concat([at]).slice(-10);
@@ -496,10 +509,24 @@
     }
     saveHealth();
   }
-  // How much of today's free allowance is left (0 to 1). Two "daily limit" errors today = none left.
+  // 4.1: Groq's live count, kept with the route. Requests since the reading are subtracted.
+  function noteLive(r, l) {
+    var h = healthOf(r.id);
+    h.live = { limit: l.limit, remaining: l.remaining, reset: l.reset, at: now(), day: todayKey(), usedAt: usedToday(r.id) };
+    saveHealth();
+  }
+  function liveOf(r) {
+    var h = healthOf(r.id), l = h.live;
+    if (!l || l.day !== todayKey() || now() - l.at > 6 * 3600 * 1000) return null;
+    return { limit: l.limit, remaining: Math.max(0, l.remaining - Math.max(0, usedToday(r.id) - l.usedAt)), at: l.at };
+  }
+  // How much of today's free allowance is left (0 to 1): Groq's live count when there is one,
+  // otherwise an estimate from requests counted today. Two "daily limit" errors today = none left.
   function quotaLeft(r) {
     var h = healthOf(r.id);
     if ((h.dailyHits || []).filter(function (x) { return new Date(x).toDateString() === todayKey(); }).length >= 2) return 0;
+    var lv = liveOf(r);
+    if (lv) return Math.max(0, lv.remaining / lv.limit);
     var lim = dailyLimit(r);
     if (!lim) return 1;
     return Math.max(0, 1 - usedToday(r.id) / lim);
@@ -586,6 +613,7 @@
      Returns { text, data, route, task }. */
   async function askDetailed(messages, opts) {
     opts = opts || {};
+    try { if (store().keysReady) await Promise.race([store().keysReady, new Promise(function (r) { setTimeout(r, 2500); })]); } catch (e) {}
     var p = plan(messages, opts), counts = {}, tried = 0;
     var started = false;
     var wrapDelta = opts.onDelta ? function (t) { started = true; opts.onDelta(t); } : null;
@@ -597,7 +625,7 @@
       try {
         var res;
         if (r.kind === "groq") {
-          res = await callOpenAI(GROQ_BASE, groqKey(), r.model, messages, Object.assign({}, opts, { groq: true, onDelta: wrapDelta, tools: p.task === "web" ? opts.tools : null, raw: true }));
+          res = await callOpenAI(GROQ_BASE, groqKey(), r.model, messages, Object.assign({}, opts, { groq: true, onDelta: wrapDelta, tools: p.task === "web" ? opts.tools : null, raw: true, onLimits: (function (rt) { return function (l) { noteLive(rt, l); }; })(r) }));
         } else {
           var o = Object.assign({}, opts, { groq: /groq\.com/.test(r.agent.baseUrl || ""), tools: null, onDelta: wrapDelta });
           res = { text: await callAgent(r.agent, messages, o), data: null };
@@ -681,7 +709,7 @@
   }
   function routeReport() {
     return routes(false).concat(routes(true).filter(function (r) { return r.kind === "groq"; })).filter(function (r, i, a) { return a.findIndex(function (x) { return x.id === r.id; }) === i; })
-      .map(function (r) { var h = healthOf(r.id), lim = dailyLimit(r); return { id: r.id, name: r.name, free: r.free, used: usedToday(r.id), limit: lim, left: Math.round(quotaLeft(r) * 100), ok: h.ok, fail: h.fail, resting: !available(r.id), missing: !!missing[r.id], caps: r.caps }; });
+      .map(function (r) { var h = healthOf(r.id), lim = dailyLimit(r), lv = liveOf(r); return { id: r.id, name: r.name, free: r.free, used: usedToday(r.id), limit: lv ? lv.limit : lim, live: lv ? { limit: lv.limit, remaining: lv.remaining } : null, left: Math.round(quotaLeft(r) * 100), ok: h.ok, fail: h.fail, resting: !available(r.id), missing: !!missing[r.id], caps: r.caps }; });
   }
 
   // Ask one named connection directly ("ask Gemini ...").

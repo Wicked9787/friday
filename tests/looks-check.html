@@ -1,0 +1,10 @@
+<!doctype html><html><body style="margin:0;background:#000"><canvas id=c></canvas>
+<script src="SRC/config.js"></script><script src="SRC/orb.js"></script>
+<script>
+var q=new URLSearchParams(location.search), mode=q.get('mode')||'original';
+var o=new FridayOrb(document.getElementById('c'),{width:393,height:600,hd:mode!=='original'}); if(mode==='switch'){ ['N','X1','R'].forEach(function(id){o.look=null;o.setLook(id);for(var i=0;i<14;i++)o._frame(performance.now()+i*33);}); mode='original'; }
+if(o.setRender) o.setRender(mode);
+var bad=[], ids=Object.keys(FRIDAY_CONFIG.LOOKS);
+ids.forEach(function(id){ o.look=null; o.setLook(id); o._frames=0; o._fallbackStep=0; for(var i=0;i<14;i++) o._frame(performance.now()+i*33); if(o.look!==id) bad.push(id); });
+document.title=JSON.stringify({n:ids.length,bad:bad}); window.done=true;
+</script></body></html>

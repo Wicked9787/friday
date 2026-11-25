@@ -8,8 +8,13 @@
    - DuckDuckGo instant answers (definitions and quick facts)
    - Google News headlines (only for news and "what happened" questions)
 
+   4.1: links the AI writes itself aren't taken on trust. A link counts only if it was in the search
+   tool's own results, or the phone opens the page and finds the claim's key words on it. Links from
+   Google Search, Google News, Wikipedia and DuckDuckGo come from those services directly.
+
    What's verified is decided here in code, not by the AI: a point counts as verified only when two
-   different sites back it up (at least one of them reliable), or one highly reliable site does.
+   different sites back it up (at least one of them reliable), or one highly reliable site does,
+   counting only links that passed the check above.
    Points from one site are "single source", points from weak sites are "uncertain", and points the
    sources disagree on are "conflicting". She says which is which and never reads links aloud; the
    links show under her answer. */
@@ -51,13 +56,17 @@
     }
     return { tier: "unknown", score: 0.5 };
   }
-  function makeSource(title, url, via, date, domainHint) {
+  // origin: "model" = a link the AI wrote (checked before it counts); "tool" = from a search service's own
+  // results; "app" = the app fetched it itself (Wikipedia, DuckDuckGo, Google News)
+  function makeSource(title, url, via, date, domainHint, origin) {
     var d = domainOf(url);
     // Google's grounding links go through a redirect; its title is the real site
     if (!d || /vertexaisearch|googleusercontent|news\.google\.com$/.test(d)) d = domainOf(domainHint || title) || d;
     var rel = reliability(d);
-    return { title: String(title || d || "Source").slice(0, 140), url: String(url || ""), domain: d, site: siteOf(d), tier: rel.tier, score: rel.score, via: via, date: date || "" };
+    return { title: String(title || d || "Source").slice(0, 140), url: String(url || ""), domain: d, site: siteOf(d), tier: rel.tier, score: rel.score, via: via, date: date || "", origin: origin || "app", confirmed: origin === "model" ? null : origin || "app" };
   }
+  function trusted(s) { return !!s && (s.origin !== "model" || !!s.confirmed); }
+  function normUrl(u) { return String(u || "").toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/+$/, ""); }
 
   // What kind of question is it
   function kindOf(q) {
@@ -92,19 +101,24 @@
     try { j = m ? JSON.parse(m[0]) : null; } catch (e) { j = null; }
     (j && Array.isArray(j.findings) ? j.findings : []).slice(0, 8).forEach(function (f) {
       var srcs = (Array.isArray(f && f.sources) ? f.sources : []).filter(function (s) { return s && /^https?:\/\//.test(s.url || ""); })
-        .slice(0, 3).map(function (s) { return makeSource(s.title, s.url, "Web search", s.date); });
+        .slice(0, 3).map(function (s) { return makeSource(s.title, s.url, "Web search", s.date, null, "model"); });
       if (f && f.claim && srcs.length) out.items.push({ text: String(f.claim).slice(0, 300), sources: srcs });
     });
-    // pages the search tool itself returned (when the service includes them)
+    // pages the search tool itself returned (when the service includes them): these are trusted,
+    // and an AI-written link that matches one of them is confirmed without opening it
+    var toolUrls = {};
     try {
       var msg = r.data && r.data.choices && r.data.choices[0] && r.data.choices[0].message;
       (msg && msg.executed_tools || []).forEach(function (t) {
         var res = (t && t.search_results && (t.search_results.results || t.search_results)) || [];
-        (Array.isArray(res) ? res : []).slice(0, 6).forEach(function (x) {
-          if (x && /^https?:\/\//.test(x.url || "") && x.content) out.items.push({ text: String(x.content).replace(/\s+/g, " ").slice(0, 300), sources: [makeSource(x.title, x.url, "Web search")] });
+        (Array.isArray(res) ? res : []).slice(0, 10).forEach(function (x) {
+          if (!x || !/^https?:\/\//.test(x.url || "")) return;
+          toolUrls[normUrl(x.url)] = 1;
+          if (x.content) out.items.push({ text: String(x.content).replace(/\s+/g, " ").slice(0, 300), sources: [makeSource(x.title, x.url, "Web search", "", null, "tool")] });
         });
       });
     } catch (e2) {}
+    out.items.forEach(function (it) { it.sources.forEach(function (s) { if (s.origin === "model" && toolUrls[normUrl(s.url)]) s.confirmed = "search"; }); });
     return out.items.length ? out : null;
   }
 
@@ -114,7 +128,7 @@
     var g = await B.groundedSearch("Answer with specific, current facts. Today is " + new Date().toDateString() + ". Question: " + q);
     if (!g || !g.text) return null;
     var out = { via: "Google Search", items: [] };
-    var chunkSrc = g.chunks.map(function (c) { return c ? makeSource(c.title, c.url, "Google Search", "", c.title) : null; });
+    var chunkSrc = g.chunks.map(function (c) { return c ? makeSource(c.title, c.url, "Google Search", "", c.title, "tool") : null; });
     g.supports.slice(0, 8).forEach(function (s) {
       var srcs = s.chunks.map(function (i) { return chunkSrc[i]; }).filter(Boolean).slice(0, 3);
       if (s.text && srcs.length) out.items.push({ text: String(s.text).slice(0, 300), sources: srcs });
@@ -168,6 +182,53 @@
     return items.length ? { via: "Google News", items: items } : null;
   }
 
+  // ---------- 4.1: open AI-written links and look for the claim on the page ----------
+  var STOPW = /^(the|and|for|with|that|this|from|have|has|was|were|are|will|would|about|after|before|into|over|than|then|they|their|there|which|while|what|when|where|been|being|also|more|most|some|such|only|just|very|said|says|according)$/;
+  function keywords(t) {
+    var out = [], seen = {};
+    (String(t || "").toLowerCase().replace(/(\d),(\d)/g, "$1$2").match(/[a-z0-9']+/g) || []).forEach(function (w) {
+      w = w.replace(/'s$/, "").replace(/'/g, "");
+      if ((w.length >= 4 || /^\d{2,}$/.test(w)) && !STOPW.test(w) && !seen[w]) { seen[w] = 1; out.push(w); }
+    });
+    return out;
+  }
+  async function pageMentions(url, claims) {
+    var res = await withTimeout(Promise.resolve().then(function () { return http(url, { method: "GET", headers: { Accept: "text/html,*/*" } }); }), 6000);
+    if (!res || !res.ok) return { ok: false, note: "the page didn't open" };
+    var html = await withTimeout(Promise.resolve().then(function () { return res.text(); }), 4000);
+    if (!html) return { ok: false, note: "the page was empty" };
+    var text = String(html).slice(0, 400000).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ")
+      .replace(/&[a-z#0-9]+;/gi, " ").toLowerCase().replace(/(\d),(\d)/g, "$1$2");
+    var ok = claims.some(function (c) {
+      var kw = keywords(c);
+      if (!kw.length) return false;
+      var hits = kw.filter(function (w) { return text.indexOf(w) >= 0; }).length;
+      return hits >= Math.min(3, Math.max(2, Math.ceil(kw.length / 2)));
+    });
+    return ok ? { ok: true } : { ok: false, note: "the page doesn't mention it" };
+  }
+  async function checkLinks(evidence) {
+    var byUrl = {}, order = [];
+    evidence.forEach(function (e) {
+      e.sources.forEach(function (s) {
+        if (s.origin !== "model" || s.confirmed) return;
+        var k = normUrl(s.url);
+        if (!byUrl[k]) { byUrl[k] = { url: s.url, sources: [], claims: [] }; order.push(k); }
+        byUrl[k].sources.push(s);
+        if (byUrl[k].claims.indexOf(e.text) < 0) byUrl[k].claims.push(e.text);
+      });
+    });
+    var check = order.slice(0, 8), skipped = order.slice(8);
+    skipped.forEach(function (k) { byUrl[k].sources.forEach(function (s) { s.confirmed = false; s.checkNote = "not checked"; }); });
+    await Promise.all(check.map(function (k) {
+      var g = byUrl[k];
+      return pageMentions(g.url, g.claims).then(function (r) {
+        g.sources.forEach(function (s) { s.confirmed = r.ok ? "page" : false; if (!r.ok) s.checkNote = r.note; });
+      }, function () { g.sources.forEach(function (s) { s.confirmed = false; s.checkNote = "the page didn't open"; }); });
+    }));
+    return { checked: check.length, confirmed: check.filter(function (k) { return byUrl[k].sources[0].confirmed; }).length };
+  }
+
   // ---------- the research itself ----------
   var SOURCES = { web: fromWebSearch, google: fromGoogle, wikipedia: fromWikipedia, duckduckgo: fromDuckDuckGo, news: fromNews };
 
@@ -190,13 +251,17 @@
         evidence.push({ n: evidence.length + 1, text: it.text, sources: it.sources });
       });
     });
-    return { kind: k, evidence: evidence.slice(0, 16), used: used, tried: names };
+    evidence = evidence.slice(0, 16);
+    var links = await checkLinks(evidence);
+    return { kind: k, evidence: evidence, used: used, tried: names, links: links };
   }
 
   var RANK = { verified: 3, single: 2, uncertain: 1, conflicting: 0 };
   // The code decides what counts as verified, from the sources each point actually cites.
   function judge(sources, modelSays) {
     var sites = {}, best = 0, reliableSites = 0;
+    sources = (sources || []).filter(trusted);           // links the AI wrote count only once they're confirmed
+    if (!sources.length) return "uncertain";
     sources.forEach(function (s) { if (!sites[s.site]) { sites[s.site] = 1; if (s.score >= 0.5) reliableSites++; } best = Math.max(best, s.score); });
     var n = Object.keys(sites).length, st;
     if ((n >= 2 && reliableSites >= 1) || best >= 0.9) st = "verified";
@@ -262,18 +327,23 @@
     points.concat(conflicts.reduce(function (a, c) { return a.concat(c.claims); }, [])).forEach(function (p) {
       p.sources.forEach(function (s) { var k = s.url || s.domain; if (!seen[k]) { seen[k] = 1; sources.push(s); } });
     });
-    sources.forEach(function (s) { s.verified = points.some(function (p) { return p.status === "verified" && p.sources.indexOf(s) >= 0; }); });
+    sources.forEach(function (s) { s.verified = trusted(s) && points.some(function (p) { return p.status === "verified" && p.sources.indexOf(s) >= 0; }); s.unconfirmed = !trusted(s); });
     // one entry per site for what you see (prefer the link that backs a verified point)
     var bySite = {};
-    sources.forEach(function (s) { var k = s.site || s.domain; if (!bySite[k] || (s.verified && !bySite[k].verified)) bySite[k] = s; });
+    sources.forEach(function (s) {
+      var k = s.site || s.domain, cur = bySite[k];
+      if (!cur || (s.verified && !cur.verified) || (!cur.verified && trusted(s) && !trusted(cur))) bySite[k] = s;
+    });
     sources = sources.filter(function (s) { return bySite[s.site || s.domain] === s; });
-    var res = { ok: true, question: q, kind: g.kind, used: g.used, tried: g.tried, points: points, conflicts: conflicts, gaps: j && j.gaps ? String(j.gaps).slice(0, 200) : "", sources: sources.slice(0, 10) };
+    var linkChecks = [], seenL = {};
+    g.evidence.forEach(function (e) { e.sources.forEach(function (s) { if (s.origin === "model" && !seenL[s.url]) { seenL[s.url] = 1; linkChecks.push({ url: s.url, domain: s.domain, confirmed: s.confirmed || false, note: s.checkNote || "" }); } }); });
+    var res = { ok: true, question: q, kind: g.kind, used: g.used, tried: g.tried, links: g.links, linkChecks: linkChecks, points: points, conflicts: conflicts, gaps: j && j.gaps ? String(j.gaps).slice(0, 200) : "", sources: sources.slice(0, 10) };
     res.brief = brief(res);
     if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("research", "Checked " + sources.length + " sources (" + points.filter(function (p) { return p.status === "verified"; }).length + " points verified)");
     return res;
   }
 
-  function names(srcs) { var seen = {}, out = []; srcs.forEach(function (s) { var n = s.site || s.domain; if (n && !seen[n]) { seen[n] = 1; out.push(n); } }); return out.slice(0, 3).join(", "); }
+  function names(srcs) { var seen = {}, out = []; srcs.forEach(function (s) { var n = s.site || s.domain; if (n && !seen[n]) { seen[n] = 1; out.push(n + (trusted(s) ? "" : " (link not confirmed)")); } }); return out.slice(0, 3).join(", "); }
   function brief(r) {
     var by = function (st) { return r.points.filter(function (p) { return p.status === st; }); };
     var parts = ["Research results for \"" + r.question + "\" (checked " + r.used.join(", ") + "):"];
@@ -286,5 +356,5 @@
     return parts.join("\n\n");
   }
 
-  root.FridayResearch = { research: research, gather: gather, judge: judge, reliability: reliability, domainOf: domainOf, siteOf: siteOf, makeSource: makeSource, kindOf: kindOf, SOURCES: SOURCES, brief: brief };
+  root.FridayResearch = { research: research, gather: gather, judge: judge, trusted: trusted, checkLinks: checkLinks, pageMentions: pageMentions, reliability: reliability, domainOf: domainOf, siteOf: siteOf, makeSource: makeSource, kindOf: kindOf, SOURCES: SOURCES, brief: brief };
 })(window);

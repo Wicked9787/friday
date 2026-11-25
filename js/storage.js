@@ -25,32 +25,71 @@
     return rawSet(PREFIX + key, JSON.stringify(value));
   }
 
-  function getApiKey() {
-    return rawGet(KEY_API) || "";
+  /* 4.1: in the installed app, AI keys (your Groq key and every connection's key) live in the iPhone
+     Keychain, for this device only, readable after the phone's first unlock. They're loaded into memory
+     at startup so the rest of the app can read them instantly. An old copy in regular storage is only
+     removed after the Keychain copy has been written and read back. The website keeps using storage. */
+  var keyCache = null;           // { "apiKey": "...", "agentKey.<id>": "..." } while the Keychain is in use
+  function kit() {
+    var C = root.Capacitor;
+    try { return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.FridayKit && C.Plugins.FridayKit.secretSet ? C.Plugins.FridayKit : null; } catch (e) { return null; }
   }
-
-  function setApiKey(key) {
-    key = String(key || "").trim();
-    if (!key) {
-      rawDel(KEY_API);
-      return;
+  async function kcGet(K, name) {
+    try { var r = await K.secretGet({ key: "ai." + name }); return r && r.value != null ? String(r.value) : null; } catch (e) { return null; }
+  }
+  async function loadKeys() {
+    var K = kit();
+    if (!K) return;
+    var names = ["apiKey"], cache = {};
+    try { (get("connections", []) || []).forEach(function (c) { if (c && c.id) names.push("agentKey." + c.id); }); } catch (e) {}
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(PREFIX + "agentKey.") === 0 && names.indexOf(k.slice(PREFIX.length)) < 0) names.push(k.slice(PREFIX.length));
+      }
+    } catch (e) {}
+    for (var j = 0; j < names.length; j++) {
+      var name = names[j], local = rawGet(PREFIX + name), kc = await kcGet(K, name);
+      if (local) {
+        if (kc !== local) {
+          try { await K.secretSet({ key: "ai." + name, value: local }); } catch (e) {}
+          kc = await kcGet(K, name);
+        }
+        if (kc === local) rawDel(PREFIX + name);    // moved: the Keychain copy is confirmed
+        else { cache[name] = local; continue; }     // Keychain unavailable: keep the old copy working
+      }
+      if (kc) cache[name] = kc;
     }
-    rawSet(KEY_API, key);
+    keyCache = cache;
   }
+  var keysReady = loadKeys().catch(function () {});
+  function keyGet(name) { return keyCache ? (keyCache[name] || "") : (rawGet(PREFIX + name) || ""); }
+  function keySet(name, value) {
+    value = String(value || "").trim();
+    var K = keyCache ? kit() : null;
+    if (!K) { if (value) rawSet(PREFIX + name, value); else rawDel(PREFIX + name); return; }
+    if (value) {
+      keyCache[name] = value;
+      K.secretSet({ key: "ai." + name, value: value }).then(function () { rawDel(PREFIX + name); }, function () { rawSet(PREFIX + name, value); });
+    } else {
+      delete keyCache[name];
+      rawDel(PREFIX + name);
+      try { K.secretDelete({ key: "ai." + name }).catch(function () {}); } catch (e) {}
+    }
+  }
+  function keyStore() { return keyCache ? "keychain" : "storage"; }
+
+  function getApiKey() { return keyGet("apiKey"); }
+
+  function setApiKey(key) { keySet("apiKey", key); }
 
   function hasApiKey() {
     return getApiKey().length > 0;
   }
 
   // Keys for added agents (ChatGPT etc.) live only on this phone, never in backups.
-  function getAgentKey(id) {
-    return rawGet(PREFIX + "agentKey." + id) || "";
-  }
-  function setAgentKey(id, key) {
-    key = String(key || "").trim();
-    if (!key) { rawDel(PREFIX + "agentKey." + id); return; }
-    rawSet(PREFIX + "agentKey." + id, key);
-  }
+  function getAgentKey(id) { return keyGet("agentKey." + id); }
+  function setAgentKey(id, key) { keySet("agentKey." + id, key); }
 
   function maskKey(key) {
     key = String(key || "");
@@ -157,11 +196,14 @@
       }
     } catch (e) {}
     keys.forEach(rawDel);
+    if (keyCache) Object.keys(keyCache).forEach(function (n) { keySet(n, ""); });   // Keychain keys go too
     if (profile) rawSet(PREFIX + "profile", profile);
     if (key) setApiKey(key);
   }
 
   root.FridayStorage = {
+    keysReady: keysReady,
+    keyStore: keyStore,
     get: get,
     set: set,
     getApiKey: getApiKey,

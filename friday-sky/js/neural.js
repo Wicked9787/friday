@@ -126,6 +126,7 @@
     var prof0 = null; try { prof0 = root.FRIDAY_CONFIG.getProfile(); } catch (e) {}
     var hasSelf = !!(root.FridayPersona && root.FridayPersona.on(prof0));
     var defs = DEFS.filter(function (d) { return !d.selfOnly || hasSelf; });
+    if (hasSelf && root.FridayPersona.isHe && root.FridayPersona.isHe()) defs = defs.map(function (d) { return d.id === "self" ? Object.assign({}, d, { tip: root.FridayPersona.say(d.tip) }) : d; });
     defs.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
     var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.52, off: 0.0 }, 3: { r: 0.92, y: 0.5, off: 0.25 }, 4: { r: 0.5, y: -0.98, off: 0.6 } };
     var self = this;

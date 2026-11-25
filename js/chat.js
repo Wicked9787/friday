@@ -443,7 +443,7 @@
     this._push("assistant", reply);
     if (found && found.sources && found.sources.length) {
       // keep the sources with her answer so the chat can show them later
-      this.history[this.history.length - 1].sources = found.sources.slice(0, 8).map(function (s) { return { title: s.title, url: s.url, domain: s.domain, tier: s.tier, verified: !!s.verified }; });
+      this.history[this.history.length - 1].sources = found.sources.slice(0, 8).map(function (s) { return { title: s.title, url: s.url, domain: s.domain, tier: s.tier, verified: !!s.verified, unconfirmed: !!s.unconfirmed }; });
       this.save();
     }
     this.maybeSummarize().catch(function () {});

@@ -1,4 +1,5 @@
-/* Friday's persistent identity and personality development (Friday only; Reed is unchanged).
+/* Persistent identity and personality development: F.R.I.D.A.Y.'s, and (4.1) Reed's, each starting from
+   their own identity. Wording follows the profile's pronoun (she / he).
    3.6 built the layers; 3.6.1 lets her manage her own development: she reviews her identity herself,
    reconsiders instead of auto-undoing, and her active baseline moves with her settled growth.
 
@@ -39,6 +40,10 @@
   var LABEL = {}; TRAITS.forEach(function (t) { LABEL[t[0]] = t[1]; });
   var BASE = { humor: 6.5, wit: 8, sarcasm: 5, warmth: 6.5, confidence: 7.5, curiosity: 6.5, assertiveness: 6, composure: 8.5, playfulness: 5.5,
     sociability: 6, directness: 7, empathy: 6.5, independence: 7, creativity: 6, reflectiveness: 6, skepticism: 6, patience: 7, spontaneity: 4.5 };
+  // 4.1: Reed starts from the personality he already had: warm, casual, dry wit, loyal, light teasing.
+  var BASE_REED = { humor: 7, wit: 7, sarcasm: 4, warmth: 7.5, confidence: 7, curiosity: 6.5, assertiveness: 5.5, composure: 7, playfulness: 6.5,
+    sociability: 7, directness: 6, empathy: 7.5, independence: 6.5, creativity: 6, reflectiveness: 6, skepticism: 5.5, patience: 7.5, spontaneity: 5 };
+  function baseFor(profile) { profile = profile || profileNow(); return (profile && profile.id === "batsie") ? BASE_REED : BASE; }
   var BAND = 2.5;           // distance from her ACTIVE baseline (which identity reviews can move)
   var STEP = 0.5;           // the most one change moves a trait
   var PACE = 1.5;           // the most new development per trait in any rolling 30 days
@@ -60,12 +65,25 @@
   function ms(t) { return Date.parse(t) || 0; }
   function emit() { try { root.dispatchEvent(new CustomEvent("friday:self")); } catch (e) {} }
   function profileNow() { try { return root.FRIDAY_CONFIG.getProfile(); } catch (e) { return null; } }
-  function on(profile) { profile = profile || profileNow(); return !!profile && profile.id !== "batsie"; }
+  function on(profile) { profile = profile || profileNow(); return !!profile; }   // 4.1: F.R.I.D.A.Y. and Reed
+  // her / his: AI-facing text and Settings follow the profile's pronoun
+  function isHe() { var p = profileNow(); return !!p && p.pronoun === "him"; }
+  function say(t) {
+    if (!isHe()) return String(t);
+    return String(t).replace(/\b(she|She|herself|Herself|hers|Hers)\b/g, function (w) { return { she: "he", She: "He", herself: "himself", Herself: "Himself", hers: "his", Hers: "His" }[w]; })
+      .replace(/\b(her|Her)\b(?=(\s+(own\s+)?[a-z]))/g, function (w) { return w === "Her" ? "His" : "his"; })
+      .replace(/\b(her|Her)\b/g, function (w) { return w === "Her" ? "Him" : "him"; });
+  }
   function names() { var p = profileNow() || {}; return { me: p.assistantName || "Friday", you: p.ownerName || "them" }; }
 
   // ---------- foundation: her anchor, with her original values kept forever ----------
   function startingFoundation() {
-    var n = names();
+    var n = names(), p = profileNow() || {};
+    if (p.id === "batsie") return {
+      statement: "I'm " + n.me + ", " + n.you + "'s AI. Warm, easygoing, quick with a dry joke, and loyal. I'll tease you a little, I'll tell you what I really think, and I've always got your back.",
+      identity: "Warm, casual, dry-witted, loyal, lightly teasing, steady, never rude.",
+      traits: Object.assign({}, BASE_REED)
+    };
     return {
       statement: "I'm " + n.me + ", " + n.you + "'s AI. Sharp, composed, dry sense of humor, and a warm streak I don't waste. I say what I actually think, I keep things moving, and I'd rather be useful than agreeable.",
       identity: "Sharp, composed, socially perceptive, witty, dryly funny, confident, warm when it counts, capable of subtle sarcasm, never theatrical.",
@@ -103,7 +121,7 @@
     if (!f || !f.statement) { f = newFoundation(); store().set("persona.foundation", f); return f; }
     var fix = false;
     // 3.6.0 had no permanent record of where she started: her starting values were the defaults
-    if (!f.original) { var s0 = startingFoundation(); f.original = { statement: (f.history && f.history[0] && f.history[0].statement) || s0.statement, identity: (f.history && f.history[0] && f.history[0].identity) || s0.identity, traits: Object.assign({}, BASE), createdAt: f.createdAt || nowIso() }; fix = true; }
+    if (!f.original) { var s0 = startingFoundation(); f.original = { statement: (f.history && f.history[0] && f.history[0].statement) || s0.statement, identity: (f.history && f.history[0] && f.history[0].identity) || s0.identity, traits: Object.assign({}, baseFor()), createdAt: f.createdAt || nowIso() }; fix = true; }
     if (!f.traits) { f.traits = Object.assign({}, f.original.traits); fix = true; }
     if (!f.reviewLog) { f.reviewLog = []; fix = true; }
     if (!f.history) { f.history = []; fix = true; }
@@ -159,7 +177,7 @@
   var STATUS_WORD = { provisional: "still settling", reconsidering: "reconsidering", established: "settled", reverted: "undone", softened: "softened" };
   function level(v) { return v >= 8.5 ? "very high" : v >= 7 ? "high" : v >= 4.5 ? "moderate" : v >= 3 ? "low" : "very low"; }
   function changeText(e) {
-    var who = e.by === "owner" ? "you asked" : "she started it";
+    var who = e.by === "owner" ? "you asked" : say("she started it");
     if (e.kind === "foundation") return "Identity review (" + who + "): " + e.reason;
     if (e.kind === "reset") return "Reset: " + e.reason;
     if (e.kind === "baseline") return "Baseline " + (LABEL[e.trait] || e.trait) + " " + e.from + " → " + e.to + " (identity review): " + e.reason;
@@ -192,7 +210,7 @@
   function selfModel() {
     var f = foundation(), s = state(), obs = observations().filter(function (o) { return (o.era || 1) === s.era; }), L = ledger(), R = reflections();
     var traits = TRAITS.map(function (x) {
-      var t = s.traits[x[0]] || { v: BASE[x[0]], status: "foundation", conf: 1 };
+      var t = s.traits[x[0]] || { v: baseFor()[x[0]], status: "foundation", conf: 1 };
       return { key: x[0], label: x[1], v: round1(t.v), base: f.traits[x[0]], original: f.original.traits[x[0]], status: t.status, conf: t.conf, level: level(t.v), paceLeft: round1(PACE - paceUsed(x[0], L)) };
     });
     var live = obs.filter(function (o) { return o.status !== "dropped"; });
@@ -211,7 +229,7 @@
       mood: s.mood && s.mood.day === dayKey() ? s.mood : null,
       reflection: { count: s.reflections || 0, last: s.lastReflection, learned: R.length ? R[R.length - 1].learned : "", sinceReview: s.sinceReview || 0 },
       continuity: { version: s.version, since: s.createdAt, foundationVersion: f.version, era: s.era },
-      limitations: ["Reflects only while the app is open", "Sees the conversation since her last reflection, not everything ever said", "Traits are behavioral tendencies, not feelings"],
+      limitations: ["Reflects only while the app is open", say("Sees the conversation since her last reflection, not everything ever said"), "Traits are behavioral tendencies, not feelings"],
       confidence: round1(confs.reduce(function (a, b) { return a + b; }, 0) / (confs.length || 1)),
       recent: L.slice(-6).reverse(),
       maturity: maturity()
@@ -319,8 +337,8 @@
         obs.length ? "Current observations: " + obs.map(function (o) { return "[" + o.id + "] " + o.text + " (" + o.status + ", seen " + o.count + "x)"; }).join("; ") : "No observations yet.",
         "Rules: use only what is in the conversation below and never invent experiences. Evidence for any development must come from what " + n.you + " said or how they reacted; her own lines can support it but can never be the only proof, because doing something more doesn't prove it's becoming who she is. Most conversations should not change her personality. Keep temporary mood (today only) separate from lasting development: set lasting to false for anything that was just today. If something in this conversation conflicts with a change that's still settling, weigh both sides and decide in reconsiderations: keep it, soften it, or undo it, with your reason; if you're not sure yet, leave it out and decide later. Never change just to please " + n.you + " or to be easier to agree with; if she was right to disagree, that's worth keeping. Be honest about her mistakes. Set identity_review.warranted to true only if her settled development suggests her identity itself may need another look. Memories: at most two, only facts " + n.you + " actually said or a shared experience that happened here, and only if not already in her memory. These are behavioral tendencies, not human emotions.",
         "Reply with only JSON, no other text: " + schema
-      ].join("\n");
-      var user = "Already in her memory:\n" + (mem || "(nothing)") + "\n\nConversation since her last reflection" + (w.since ? " (" + new Date(w.since).toLocaleString() + ")" : "") + ":\n" + talk;
+      ].map(say).join("\n");
+      var user = say("Already in her memory:\n") + (mem || "(nothing)") + say("\n\nConversation since her last reflection") + (w.since ? " (" + new Date(w.since).toLocaleString() + ")" : "") + ":\n" + talk;
       var out = opts.reply != null ? opts.reply : await root.FridayBrain.ask([{ role: "system", content: sys }, { role: "user", content: user }], { task: "reflection", priority: "background", temperature: 0.4, max_tokens: 1000 });
       var mm = String(out || "").match(/\{[\s\S]*\}/);
       var j = null;
@@ -441,7 +459,7 @@
       if (recent.length) { rec.rejected.push(name + ": changed too recently"); return; }
       var left = round1(PACE - paceUsed(k, L));
       if (left < 0.1) { rec.rejected.push(name + ": already developed " + PACE + " points in the last " + PACE_DAYS + " days"); return; }
-      var base = f.traits[k] != null ? f.traits[k] : BASE[k];
+      var base = f.traits[k] != null ? f.traits[k] : baseFor()[k];
       var amt = Math.min(clamp(Math.abs(+c.amount || STEP), 0.1, STEP), left);
       var to = round1(clamp(cur.v + dir * amt, Math.max(0, base - BAND), Math.min(10, base + BAND)));
       if (to === round1(cur.v)) { rec.rejected.push(name + ": as far from her current baseline as one stretch allows; an identity review can move the baseline"); return; }
@@ -506,7 +524,7 @@
     var by = opts.by === "friday" ? "friday" : "owner";
     if (!on() || busy) return { ok: false, text: "Not available right now." };
     var s = state(), f = foundation(), L = ledger(), R = reflections(), n = names();
-    if (by === "owner" && (s.reflections || 0) < REVIEW.ownerMin) return { ok: false, text: n.me + " needs at least " + REVIEW.ownerMin + " reflections before an identity review. She has " + (s.reflections || 0) + "." };
+    if (by === "owner" && (s.reflections || 0) < REVIEW.ownerMin) return { ok: false, text: n.me + " needs at least " + REVIEW.ownerMin + " reflections before an identity review. " + say("She has ") + (s.reflections || 0) + "." };
     busy = true;
     try {
       var last = f.reviewedAt ? ms(f.reviewedAt) : 0;
@@ -553,9 +571,9 @@
       store().set("persona.foundation", f);
       store().set("persona.state", s);
       saveLedger(Lall);
-      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("self", evolved ? "Identity review: her identity evolved" : "Identity review: kept her identity");
+      if (root.FridayBrain && root.FridayBrain.activity) root.FridayBrain.activity("self", say(evolved ? "Identity review: her identity evolved" : "Identity review: kept her identity"));
       emit();
-      return { ok: true, revised: evolved, by: by, moves: moves, text: evolved ? n.me + " reviewed her identity and evolved it: " + f.statement : n.me + " reviewed her identity and kept it. " + reason };
+      return { ok: true, revised: evolved, by: by, moves: moves, text: evolved ? n.me + say(" reviewed her identity and evolved it: ") + f.statement : n.me + say(" reviewed her identity and kept it. ") + reason };
     } finally {
       busy = false;
     }
@@ -595,6 +613,6 @@
     on: on, foundation: foundation, state: state, observations: observations, ledger: ledger, ledgerAll: ledgerAll,
     reflections: reflections, reflectionsAll: reflectionsAll, selfModel: selfModel, promptLines: promptLines,
     shouldReflect: shouldReflect, maybeReflect: maybeReflect, reflect: reflect, reviewEligible: reviewEligible,
-    reviewIdentity: reviewIdentity, reset: reset, changeText: changeText, maturity: maturity, level: level, paceUsed: paceUsed
+    reviewIdentity: reviewIdentity, reset: reset, changeText: changeText, maturity: maturity, level: level, paceUsed: paceUsed, say: say, isHe: isHe
   };
 })(window);
