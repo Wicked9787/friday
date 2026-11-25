@@ -1048,15 +1048,21 @@
       el("self-current").textContent = m.mood ? m.mood.label : m.maturity.label;
       el("self-note").textContent = "“" + m.foundation.statement + "”";
       el("self-traits").innerHTML = m.traits.map(function (t) {
-        var pct = Math.round(t.v * 10), basePct = Math.round(t.base * 10);
+        var pct = Math.round(t.v * 10), basePct = Math.round(t.base * 10), origPct = Math.round(t.original * 10);
+        var bright = t.status === "developing" || t.status === "reconsidering";
         return '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12.5px"><span style="width:104px;color:rgba(239,236,232,.85)">' + esc(t.label) + '</span>' +
-          '<span style="position:relative;flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08)"><span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;border-radius:3px;background:' + (t.status === "developing" ? "#e9d3a0" : "rgba(232,200,114,.75)") + '"></span>' +
-          '<span style="position:absolute;top:-3px;bottom:-3px;width:2px;left:' + basePct + '%;background:rgba(255,255,255,.35)"></span></span>' +
-          '<span style="width:34px;text-align:right;color:' + (t.status === "developing" ? "#e9d3a0" : "rgba(239,236,232,.6)") + '">' + t.v + '</span></div>';
-      }).join("") + '<div class="sub" style="margin-top:6px">The small line is where she started. A bright bar is a change that\'s still settling.</div>';
+          '<span style="position:relative;flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08)"><span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;border-radius:3px;background:' + (bright ? "#e9d3a0" : "rgba(232,200,114,.75)") + '"></span>' +
+          '<span style="position:absolute;top:-3px;bottom:-3px;width:2px;left:' + basePct + '%;background:rgba(255,255,255,.4)"></span>' +
+          (origPct !== basePct ? '<span style="position:absolute;top:-2px;width:5px;height:10px;border-radius:3px;margin-left:-2px;left:' + origPct + '%;background:rgba(120,170,255,.8)"></span>' : '') + '</span>' +
+          '<span style="width:34px;text-align:right;color:' + (bright ? "#e9d3a0" : "rgba(239,236,232,.6)") + '">' + t.v + (t.status === "reconsidering" ? "?" : "") + '</span></div>';
+      }).join("") + '<div class="sub" style="margin-top:6px">The white line is her current baseline. A blue mark shows where she started, once her baseline has moved. A bright bar is still settling, and a ? means she\'s reconsidering it. Each trait can develop up to 1.5 points in any 30 days.</div>';
       el("self-ledger").innerHTML = m.recent.length ? m.recent.map(function (e) { return '<div style="margin:0 0 6px">' + esc(new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })) + " · " + esc(P().changeText(e)) + (e.evidence ? '<br><span style="opacity:.7">Because: ' + esc(e.evidence) + "</span>" : "") + "</div>"; }).join("") : "Nothing has changed yet.";
       var pats = m.patterns.map(function (o) { return "• " + esc(o.text); }).concat(m.provisional.slice(-4).map(function (o) { return '• <span style="opacity:.7">' + esc(o.text) + " (still testing)</span>"; }));
       el("self-patterns").innerHTML = pats.length ? pats.join("<br>") : "None yet.";
+      var lr = m.foundation.lastReview, el2 = P().reviewEligible();
+      var dot0 = function (t) { t = String(t || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
+      el("self-review").textContent = (lr ? "Last review " + new Date(lr.at).toLocaleDateString([], { month: "short", day: "numeric" }) + " (" + (lr.by === "friday" ? "she started it" : "you asked") + "): " + (lr.evolved ? "her identity evolved. " : "she kept her identity. ") + dot0(lr.reason) + " " : "No identity review yet. ") +
+        (el2.ok ? "She'll review her identity after her next reflection." : "She'll start one herself when her experience warrants it.") + " Identity version " + m.foundation.version + ".";
       var R = P().reflections(), r = R[R.length - 1];
       var dot = function (t) { t = String(t || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
       el("self-reflect").textContent = r ? new Date(r.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ": " + dot(r.learned || r.happened || "") + (r.selfCritique ? " Self-check: " + dot(r.selfCritique) : "") + (r.applied.length ? " Changed: " + r.applied.join(", ") + "." : " No personality changes.") : "She hasn't reflected yet. She will once you've talked a bit with the app open.";
@@ -1065,11 +1071,11 @@
     if (!this._selfWatch) { this._selfWatch = true; root.addEventListener("friday:self", paint); }
     el("btn-self-review").onclick = function () {
       var b = el("btn-self-review"); b.disabled = true; b.textContent = "Reviewing…";
-      P().reviewIdentity().then(function (r) { self.onToast(r.text); paint(); }, function () { self.onToast("The review didn't finish. Try again later."); })
-        .then(function () { b.disabled = false; b.textContent = "Identity review"; });
+      P().reviewIdentity({ by: "owner" }).then(function (r) { self.onToast(r.text); paint(); }, function () { self.onToast("The review didn't finish. Try again later."); })
+        .then(function () { b.disabled = false; b.textContent = "Ask for an identity review"; });
     };
     el("btn-self-reset").onclick = function () {
-      if (!confirm("Reset " + name + "'s personality to how she started? Her traits, patterns and reflections start over. Her Memory stays.")) return;
+      if (!confirm("Reset " + name + "'s personality to how she started? Her traits and patterns start over. Her history and Memory are kept.")) return;
       P().reset();
       self.onToast(name + "'s personality is reset.");
     };

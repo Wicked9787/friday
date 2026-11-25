@@ -278,7 +278,7 @@
         <summary>Her own personality <span class="accord-current" id="self-current"></span></summary>
         <div class="accord-body">
             <div id="self-box">
-              <p class="hint">She develops her own personality from your conversations: a steady foundation, plus traits that shift a little at a time when there's real evidence. She reflects while the app is open (at most twice a day) and writes down every change and why. A mood you pick above still comes first.</p>
+              <p class="hint">She develops her own personality from your conversations. You influence her through how you talk and react; she decides who she becomes. Changes happen a little at a time, only when what you said backs them up. She reflects while the app is open (at most twice a day) and writes down every change and why. A mood you pick above still comes first.</p>
               <p class="hint" id="self-feel" style="color:#e9d3a0"></p>
               <p class="hint" id="self-note" style="font-style:italic"></p>
               <div id="self-traits" style="margin:6px 4px 12px"></div>
@@ -286,13 +286,15 @@
               <div class="hint" id="self-ledger"></div>
               <div class="sgroup-h">Patterns you've built</div>
               <div class="hint" id="self-patterns"></div>
-              <div class="sgroup-h">Last reflection</div>
+              <div class="sgroup-h">Identity reviews</div>
+            <p class="hint" id="self-review"></p>
+            <div class="sgroup-h">Last reflection</div>
               <p class="hint" id="self-reflect"></p>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button class="btn" type="button" id="btn-self-review">Identity review</button>
+                <button class="btn" type="button" id="btn-self-review">Ask for an identity review</button>
                 <button class="btn" type="button" id="btn-self-reset">Reset her personality</button>
               </div>
-              <div class="sub">Identity review: she looks back over her settled changes and decides for herself whether her core identity still fits. Reset puts her back to how she started.</div>
+              <div class="sub">She manages her own development and starts identity reviews herself. Asking for one is only a nudge: she still decides whether anything should change. Reset puts her back to how she started and keeps her history.</div>
             </div>
         </div>
       </details>
@@ -929,8 +931,17 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.6</h1>
-      <p class="wn-tag">Her own identity, and a personality that develops</p>
+      <h1>What's new in 3.6.1</h1>
+      <p class="wn-tag">She manages her own development</p>
+      <ul>
+        <li>She starts identity reviews herself when her experience warrants one, and decides whether her identity should evolve. Keeping it as it is counts as a real outcome</li>
+        <li>When her identity evolves, her baseline moves to where she's settled, so how far she can grow isn't capped forever. Where she started is kept permanently, along with her whole history</li>
+        <li>Each trait can develop up to 1.5 points in any 30 days, so she grows gradually, never in bursts</li>
+        <li>When something conflicts with a recent change, she reconsiders it and decides to keep, soften or undo it. Nothing is undone automatically</li>
+        <li>What you say and how you react is her main evidence. Her own lines can support it, but can't prove a trait on their own</li>
+        <li>You can still see everything, nudge a review, pick a Mood, or Reset (her history is kept)</li>
+      </ul>
+      <p class="wn-tag">3.6 · Her own identity, and a personality that develops</p>
       <ul>
         <li>A steady foundation: who she is, her principles and her boundaries. It only changes through a deliberate Identity review</li>
         <li>18 traits (wit, humor, sarcasm, warmth, directness, patience…) that shift a little at a time, only when something you actually talked about shows a lasting pattern. Never just to please you, and never far from who she is</li>
