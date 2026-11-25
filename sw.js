@@ -11,6 +11,7 @@ var SHELL = [
   "./js/bubbles.js",
   "./js/voice.js",
   "./js/brain.js",
+  "./js/persona.js",
   "./js/chat.js",
   "./js/pictures.js",
   "./js/robot.js",

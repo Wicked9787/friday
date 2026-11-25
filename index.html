@@ -265,19 +265,35 @@
         <div class="accord-body">
           <div class="mood-row" id="mood-row"></div>
           <p class="hint">You can also say “focus mode”, “hype mode”, “calm mode”, “bedtime mode”, or “back to normal”.</p>
-          <div id="self-box" hidden style="margin:4px 0 14px">
-            <div class="sgroup-h">Her own personality</div>
-            <p class="hint">She chooses how she feels and who she is, a little each day, from how your talks go. A mood you pick above still comes first.</p>
-            <p class="hint" id="self-feel" style="color:#e9d3a0"></p>
-            <p class="hint" id="self-note" style="font-style:italic"></p>
-            <button class="btn" type="button" id="btn-self-reset">Reset her personality</button>
-          </div>
+
           <label class="toggle-row" style="margin-top:12px">Night mode <input type="checkbox" id="set-night"></label>
           <div class="sub">At night the orb dims, her voice is softer and slower, and she keeps it short.</div>
           <div class="life-two" style="margin-top:8px">
             <select id="set-night-from" aria-label="Night starts"></select>
             <select id="set-night-to" aria-label="Night ends"></select>
           </div>
+        </div>
+      </details>
+      <details class="accord" id="accord-self" hidden>
+        <summary>Her own personality <span class="accord-current" id="self-current"></span></summary>
+        <div class="accord-body">
+            <div id="self-box">
+              <p class="hint">She develops her own personality from your conversations: a steady foundation, plus traits that shift a little at a time when there's real evidence. She reflects while the app is open (at most twice a day) and writes down every change and why. A mood you pick above still comes first.</p>
+              <p class="hint" id="self-feel" style="color:#e9d3a0"></p>
+              <p class="hint" id="self-note" style="font-style:italic"></p>
+              <div id="self-traits" style="margin:6px 4px 12px"></div>
+              <div class="sgroup-h">What changed and why</div>
+              <div class="hint" id="self-ledger"></div>
+              <div class="sgroup-h">Patterns you've built</div>
+              <div class="hint" id="self-patterns"></div>
+              <div class="sgroup-h">Last reflection</div>
+              <p class="hint" id="self-reflect"></p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn" type="button" id="btn-self-review">Identity review</button>
+                <button class="btn" type="button" id="btn-self-reset">Reset her personality</button>
+              </div>
+              <div class="sub">Identity review: she looks back over her settled changes and decides for herself whether her core identity still fits. Reset puts her back to how she started.</div>
+            </div>
         </div>
       </details>
       <details class="accord" id="accord-battery">
@@ -913,8 +929,17 @@
 
   <div id="whatsnew" class="whatsnew hidden" role="dialog" aria-label="What's new">
     <div class="whatsnew-card">
-      <h1>What's new in 3.5.9</h1>
-      <p class="wn-tag">Her Self in the neural map</p>
+      <h1>What's new in 3.6</h1>
+      <p class="wn-tag">Her own identity, and a personality that develops</p>
+      <ul>
+        <li>A steady foundation: who she is, her principles and her boundaries. It only changes through a deliberate Identity review</li>
+        <li>18 traits (wit, humor, sarcasm, warmth, directness, patience…) that shift a little at a time, only when something you actually talked about shows a lasting pattern. Never just to please you, and never far from who she is</li>
+        <li>She reflects while the app is open (at most twice a day): what happened, what she learned, whether she was too agreeable or repetitive, and whether anything should change. Every change is written down with the reason, and changes that turn out wrong get undone</li>
+        <li>Running jokes, preferences and patterns you build together become part of her once they come back on different days</li>
+        <li>See it all in Settings → Mood &amp; Display → Her own personality, and in the Self part of her neural map. Reset is your override</li>
+        <li>She's honest about what she is: traits are tendencies and moods are conversational moods, not human feelings</li>
+      </ul>
+      <p class="wn-tag">3.5.9 · Her Self in the neural map</p>
       <ul>
         <li>A new Self part of her brain, joined to her core. Tap it to see how she feels today and her personality in her own words</li>
         <li>Each day she picks how she feels, a small bubble grows off Self, so over time you can see the trail of her moods</li>
@@ -1076,6 +1101,7 @@
   <script src="js/bubbles.js"></script>
   <script src="js/voice.js"></script>
   <script src="js/brain.js"></script>
+  <script src="js/persona.js"></script>
   <script src="js/chat.js"></script>
   <script src="js/pictures.js"></script>
   <script src="js/robot.js"></script>

@@ -866,6 +866,8 @@ details.accord[open] > summary::after { transform: rotate(-90deg); }
   -webkit-overflow-scrolling: touch;
 }
 .accord-body > .hint { margin: 0 4px 12px; }
+#accord-self .accord-body { max-height: none; overflow: visible; }
+#self-box .sgroup-h { margin-top: 14px; }
 .icon-grid, .layout-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

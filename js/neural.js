@@ -18,7 +18,7 @@
     { id: "memory", label: "Memory", ring: 1, kind: "mind", tip: "Things she knows about you, plus a summary of older chats.", panel: "memory" },
     { id: "voice", label: "Voice", ring: 1, kind: "mind", tip: "Listening and speaking." },
     { id: "vision", label: "Vision", ring: 1, kind: "mind", tip: "Photos you show her.", panel: "photo-take" },
-    { id: "self", label: "Self", ring: 1, kind: "mind", tip: "Her own personality and how she feels. She chooses them herself, a little each day. Each small bubble is a day and how she felt.", selfOnly: true },
+    { id: "self", label: "Self", ring: 1, kind: "mind", tip: "Her own personality: a stable foundation plus traits that develop through your conversations. Small bubbles are her daily moods and the patterns you've built together.", selfOnly: true },
     { id: "research", label: "Research", ring: 2, kind: "helper", tip: "Web search and research helper." },
     { id: "coding", label: "Coding", ring: 2, kind: "helper", tip: "Coding helper." },
     { id: "money", label: "Money", ring: 2, kind: "helper", tip: "Money helper and your bills.", panel: "money" },
@@ -124,7 +124,7 @@
     var rings = { 1: [], 2: [], 3: [], 4: [] };
     // 3.5.9: her Self node (her own personality) is Friday's only
     var prof0 = null; try { prof0 = root.FRIDAY_CONFIG.getProfile(); } catch (e) {}
-    var hasSelf = !!(root.FridaySelf && root.FridaySelf.on(prof0));
+    var hasSelf = !!(root.FridayPersona && root.FridayPersona.on(prof0));
     var defs = DEFS.filter(function (d) { return !d.selfOnly || hasSelf; });
     defs.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
     var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.52, off: 0.0 }, 3: { r: 0.92, y: 0.5, off: 0.25 }, 4: { r: 0.5, y: -0.98, off: 0.6 } };
@@ -351,9 +351,15 @@
       (S.get("countdowns", []) || []).forEach(function (c) { add("countdowns", c.id || c.name, c.name, c.name); });
       (S.get("bills", []) || []).forEach(function (b) { add("bills", b.id || b.name, b.name, b.name + (b.amount ? " · $" + b.amount : "")); });
       // 3.5.9: one bubble per day she picked how she felt (Friday only)
-      if (this.nodes && this.nodes.self) (S.get("selfLog", []) || []).slice(-45).forEach(function (x) {
-        if (x && x.feeling) add("self", x.day, x.feeling, new Date(x.at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" }) + ": she felt " + x.feeling, x.feeling);
-      });
+      if (this.nodes && this.nodes.self && root.FridayPersona) {
+        var PS = root.FridayPersona.state();
+        (PS.moods || []).slice(-30).forEach(function (x) {
+          if (x && x.label) add("self", "mood:" + x.day, x.label, new Date(x.at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" }) + ": her mood was " + x.label, x.label);
+        });
+        root.FridayPersona.observations().filter(function (o) { return o.status === "established"; }).slice(-15).forEach(function (o) {
+          add("self", "obs:" + o.id, o.text, "A pattern you've built together (seen " + o.count + " times): " + o.text, o.text);
+        });
+      }
     } catch (e) {}
     return out;
   };
@@ -479,7 +485,7 @@
       if (id === "routines" && root.FridayExtras) { var rr = root.FridayExtras.routines(); return rr.length + " routine" + (rr.length === 1 ? "" : "s") + ": " + rr.map(function (x) { return x.phrase; }).join(", "); }
       if (id === "habits" && root.FridayExtras) { var hh = root.FridayExtras.habits(); return hh.list.length ? hh.list.map(function (x) { return x.name; }).join(", ") : "None yet"; }
       if (id === "spending" && root.FridayExtras) { var tt = root.FridayExtras.spendTotals(); return "This month $" + Math.round(tt.month) + " · this week $" + Math.round(tt.week); }
-      if (id === "self") { var me = S.get("self", null) || {}; return me.feeling ? "Feels " + me.feeling + " today. In her words: “" + me.note + "”" : (me.wasReset ? "Back to how she started. She picks again tomorrow." : "She hasn't picked yet. She will after a day of talking."); }
+      if (id === "self" && root.FridayPersona) { var sm = root.FridayPersona.selfModel(); var top = sm.traits.slice().sort(function (a, b) { return b.v - a.v; }).slice(0, 3).map(function (t) { return t.label.toLowerCase(); }).join(", "); return (sm.mood ? "Mood today: " + sm.mood.label + ". " : "") + "Strongest: " + top + ". Maturity: " + sm.maturity.label + " · version " + sm.continuity.version + " · " + (sm.reflection.last ? sm.reflection.count + " reflections, last " + new Date(sm.reflection.last).toLocaleDateString([], { month: "short", day: "numeric" }) : "no reflections yet") + ". “" + sm.foundation.statement + "”"; }
       if (id === "contacts") { var cn = (S.get("contacts", null) || {}).names; return cn && cn.length ? cn.length + " contact names synced" : "Not synced yet (Settings → Messages & Contacts)"; }
       if (id === "home") { var hi = S.get("homeInfo", null); return hi && hi.lights ? hi.lights + " lights in the app" : "Through your Shortcut"; }
       if (id === "calendar") return root.FridayNative && root.FridayNative.isApp() && root.FridayNative.calendar.available() ? "Right in the app" : "Through your Shortcut";

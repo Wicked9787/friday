@@ -1031,24 +1031,46 @@
       "Script.complete();"
     ].join("\n");
   }
-  // 3.5.8: Friday's own personality: read it in her words; Reset is your override (Friday only)
+  // 3.6: Friday's own personality: her foundation, traits, change ledger, patterns, last reflection.
+  // Identity review and Reset (your override). Friday only.
   FridaySettings.prototype._bindSelf = function () {
-    var self = this, box = document.getElementById("self-box");
-    if (!box) return;
-    var FS = function () { return root.FridaySelf; };
-    if (!FS() || !FS().on(this.profile)) { box.hidden = true; return; }
-    box.hidden = false;
+    var self = this, box = document.getElementById("self-box"), acc = document.getElementById("accord-self");
+    if (!box || !acc) return;
+    var P = function () { return root.FridayPersona; };
+    if (!P() || !P().on(this.profile)) { box.hidden = true; acc.hidden = true; return; }
+    box.hidden = false; acc.hidden = false;
     var name = (this.profile && this.profile.assistantName) || "Friday";
+    function el(id) { return document.getElementById(id); }
+    function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
     var paint = function () {
-      var s = FS().get() || {};
-      document.getElementById("self-feel").textContent = s.feeling ? "Today she feels: " + s.feeling : (s.wasReset ? "Back to how she started. She'll start choosing again tomorrow." : "She hasn't picked yet. She will after a day of talking.");
-      document.getElementById("self-note").textContent = s.note ? "“" + s.note + "”" : "";
+      var m = P().selfModel();
+      el("self-feel").textContent = (m.mood ? "Mood today: " + m.mood.label + " · " : "") + "Maturity: " + m.maturity.label + " (" + m.maturity.basis + ")";
+      el("self-current").textContent = m.mood ? m.mood.label : m.maturity.label;
+      el("self-note").textContent = "“" + m.foundation.statement + "”";
+      el("self-traits").innerHTML = m.traits.map(function (t) {
+        var pct = Math.round(t.v * 10), basePct = Math.round(t.base * 10);
+        return '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;font-size:12.5px"><span style="width:104px;color:rgba(239,236,232,.85)">' + esc(t.label) + '</span>' +
+          '<span style="position:relative;flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.08)"><span style="position:absolute;left:0;top:0;bottom:0;width:' + pct + '%;border-radius:3px;background:' + (t.status === "developing" ? "#e9d3a0" : "rgba(232,200,114,.75)") + '"></span>' +
+          '<span style="position:absolute;top:-3px;bottom:-3px;width:2px;left:' + basePct + '%;background:rgba(255,255,255,.35)"></span></span>' +
+          '<span style="width:34px;text-align:right;color:' + (t.status === "developing" ? "#e9d3a0" : "rgba(239,236,232,.6)") + '">' + t.v + '</span></div>';
+      }).join("") + '<div class="sub" style="margin-top:6px">The small line is where she started. A bright bar is a change that\'s still settling.</div>';
+      el("self-ledger").innerHTML = m.recent.length ? m.recent.map(function (e) { return '<div style="margin:0 0 6px">' + esc(new Date(e.at).toLocaleDateString([], { month: "short", day: "numeric" })) + " · " + esc(P().changeText(e)) + (e.evidence ? '<br><span style="opacity:.7">Because: ' + esc(e.evidence) + "</span>" : "") + "</div>"; }).join("") : "Nothing has changed yet.";
+      var pats = m.patterns.map(function (o) { return "• " + esc(o.text); }).concat(m.provisional.slice(-4).map(function (o) { return '• <span style="opacity:.7">' + esc(o.text) + " (still testing)</span>"; }));
+      el("self-patterns").innerHTML = pats.length ? pats.join("<br>") : "None yet.";
+      var R = P().reflections(), r = R[R.length - 1];
+      var dot = function (t) { t = String(t || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
+      el("self-reflect").textContent = r ? new Date(r.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ": " + dot(r.learned || r.happened || "") + (r.selfCritique ? " Self-check: " + dot(r.selfCritique) : "") + (r.applied.length ? " Changed: " + r.applied.join(", ") + "." : " No personality changes.") : "She hasn't reflected yet. She will once you've talked a bit with the app open.";
     };
     paint();
     if (!this._selfWatch) { this._selfWatch = true; root.addEventListener("friday:self", paint); }
-    document.getElementById("btn-self-reset").onclick = function () {
-      if (!confirm("Reset " + name + "'s personality to how she started? She'll start choosing again tomorrow.")) return;
-      FS().reset();
+    el("btn-self-review").onclick = function () {
+      var b = el("btn-self-review"); b.disabled = true; b.textContent = "Reviewing…";
+      P().reviewIdentity().then(function (r) { self.onToast(r.text); paint(); }, function () { self.onToast("The review didn't finish. Try again later."); })
+        .then(function () { b.disabled = false; b.textContent = "Identity review"; });
+    };
+    el("btn-self-reset").onclick = function () {
+      if (!confirm("Reset " + name + "'s personality to how she started? Her traits, patterns and reflections start over. Her Memory stays.")) return;
+      P().reset();
       self.onToast(name + "'s personality is reset.");
     };
   };
