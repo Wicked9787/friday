@@ -92,14 +92,6 @@ jobs:
         run: |
           mkdir -p build/ipa/Payload
           cp -R build/DeviceDerivedData/Build/Products/Release-iphoneos/App.app build/ipa/Payload/
-          # 4.2.2: Swift packages add small resource bundles that only hold an App Store privacy note
-          # (Info.plist + PrivacyInfo.xcprivacy). Nothing in the app reads them, and SideStore stalls on
-          # them, so they're left out to keep the app laid out like 4.1.
-          for bdir in build/ipa/Payload/App.app/*.bundle; do
-            [ -d "$bdir" ] || continue
-            extra=$(find "$bdir" -type f ! -name Info.plist ! -name PrivacyInfo.xcprivacy | wc -l | tr -d ' ')
-            if [ "$extra" = "0" ]; then echo "Leaving out $(basename "$bdir")"; rm -rf "$bdir"; else echo "Keeping $(basename "$bdir") ($extra files)"; fi
-          done
           cd build/ipa
           /usr/bin/zip -qry ../${{ matrix.artifact_name }}-unsigned.ipa Payload
 
