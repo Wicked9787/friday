@@ -253,7 +253,7 @@ async def main():
         r = await pg.evaluate(ROUTER)
         chk("A1 task sorting: chat, code, reasoning, quick, vision, web, and an explicit task", r["tasks"] == {"chat": "chat", "code": "coding", "think": "reasoning", "quick": "quick", "vision": "vision", "web": "web", "explicit": "reflection"}, r["tasks"])
         chk("A2 conversation goes to a fast free brain first (Groq), with others behind it", r["chat"][0].startswith("Groq") and any(n in r["chatAll"] for n in ("Gemini", "OpenRouter")), r["chat"][:4])
-        chk("A3 reasoning prefers the strongest thinkers (Groq gpt-oss-120b or Gemini) over the fast small model", r["reasoning"][0] in ("Groq gpt-oss-120b", "Gemini") and r["reasoning"].index("Groq llama-3.1-8b-instant") > 2, r["reasoning"][:5])
+        chk("A3 reasoning prefers the strongest thinkers (Groq gpt-oss-120b or Gemini) over the fast small model", r["reasoning"][0] in ("Groq gpt-oss-120b", "Gemini") and ("Groq llama-3.1-8b-instant" not in r["reasoning"] or r["reasoning"].index("Groq llama-3.1-8b-instant") > 2), r["reasoning"][:5])
         chk("A4 photos only go to brains that can see (Groq vision models, Gemini); never text-only ones", all(x.endswith("|true") for x in r["vision"]) and any(x.startswith("Gemini") for x in r["vision"]) and not any("llama-3.3" in x for x in r["vision"]), r["vision"])
         chk("A5 web search only goes to brains with the web tool", r["web"] and all("gpt-oss" in x for x in r["web"]), r["web"])
         chk("A6 background work (her reflections) never uses a paid brain", "Claude" not in r["reflection"] and "Claude" not in r["bgNoPaid"] and r["reflection"], [r["reflection"], r["bgNoPaid"]])

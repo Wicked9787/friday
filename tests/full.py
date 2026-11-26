@@ -410,24 +410,32 @@ async def main():
             ("what's on my calendar today", "shortcut", "what's on my calendar today"),
             ("turn on do not disturb", "shortcut", "turn on do not disturb"),
             ("how much battery do I have", "shortcut", "how much battery do i have"),
-            ("show me the cameras", "Pulling up the cameras", None),
+            ("show me the cameras", "shortcut", "cameras"),
             ("good night", "shortcut", "good night"),
             ("lock the front door", "NOT_SHORTCUT", None),
             ("find my phone", "NOT_SHORTCUT", None),
             ("take me to the nearest gas station", "Opening Maps", None),
             ("what is this", "camera button", None),
             ("tell me a joke", "recharge", None),
-            ("text mom saying I'm on my way", "Texting mom", "text mom saying i'm on my way"),
+            ("text mom saying I'm on my way", "shortcut", "text mom saying i'm on my way"),
         ]
         for phrase, expect, sc_text in cmds:
             await close_panels(pg)
+            await pg.evaluate("(() => { const a = document.getElementById('run-shortcut-btn'); if (a) a.remove(); window.__fridayLastUrl = ''; })()")
             cap = await say(pg, phrase, 2600)
             href = await pg.evaluate("(document.getElementById('run-shortcut-btn')||{}).href || ''")
             if expect == "NOT_SHORTCUT":
                 good = "shortcuts://" not in href
             elif sc_text:
+                # 3.5.7 Ask First: she asks before handing anything to the Shortcut; "yes" hands it over
                 import urllib.parse
-                good = ("shortcuts://" in href) and (urllib.parse.quote(sc_text) in href.lower() or urllib.parse.quote(sc_text).replace("%27", "'") in href.lower())
+                asked = "hand it to your shortcut" in cap.lower() and "shortcuts://" not in href
+                await pg.evaluate("window.__fridayLastUrl = ''")
+                yes = await say(pg, "yes", 2600)
+                href = await pg.evaluate("window.__fridayLastUrl || (document.getElementById('run-shortcut-btn')||{}).href || ''")
+                handed = ("shortcuts://" in href) and (urllib.parse.quote(sc_text) in href.lower() or urllib.parse.quote(sc_text).replace("%27", "'") in href.lower())
+                good = asked and handed
+                cap = cap + " || yes → " + yes
             else:
                 good = expect.lower() in cap.lower()
             ok("D \"" + phrase + "\"", good, cap + (" | " + href[:90] if href else ""))
@@ -799,7 +807,7 @@ async def main():
         ok("R AI voice: clips play back to back with a natural pause, never overlapping", not gv["overlap"] and all(0.09 <= g <= 3.0 for g in gv["gaps"]), gv)
         await pg.click("#btn-settings"); await pg.wait_for_timeout(300)
         verl = await pg.evaluate("document.getElementById('app-version').textContent")
-        ok("R Settings shows the version and its label", verl == "Version 4.2.1 · Remote", verl)
+        ok("R Settings shows the version and its label", verl == "Version 4.2.2 · Remote", verl)
         await close_panels(pg)
 
         nm = await pg.evaluate("""() => ['tell patsy dinner is ready', 'text Batsy I am home', 'tell bats e hello', 'I have a party tonight', 'patty melt'].map(t => FridayVoice.fixNames(t))""")
@@ -896,6 +904,7 @@ async def main():
         await pg.evaluate("""(pn) => {
           const m = JSON.parse(localStorage.getItem('friday.memory') || '[]');
           m.push({ text: pn + "'s birthday is in May", at: new Date().toISOString() });
+          if (!m.some(x => /coffee/i.test(x.text || ''))) m.push({ text: 'Sky likes black coffee.', at: new Date().toISOString() });
           m.push({ text: 'Sky drinks coffee every morning before work', at: new Date().toISOString() });
           localStorage.setItem('friday.memory', JSON.stringify(m));
           window.dispatchEvent(new CustomEvent('friday:memory'));
@@ -1527,7 +1536,8 @@ async def main():
 
         # ---------- PL. 3.4 private line between Friday and Jarvis (both apps, end to end) ----------
         import urllib.parse as _up
-        OTHER = BASE.replace("/build/", "/build-jarvis/") if PROFILE == "sky" else BASE.replace("/build-jarvis/", "/build/")
+        # the other phone is the other app (the old build folders are gone since the tests moved into the repo)
+        OTHER = BASE_REED if PROFILE == "sky" else BASE_SKY
         osc = "Jarvis" if PROFILE == "sky" else "Friday"
         ctxA, pa, erra = await new_ctx(b, SEED_V1 % {"sc": sc})
         ctxB, pb, errb = await new_ctx(b, SEED_V1 % {"sc": osc})

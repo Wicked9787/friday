@@ -30,6 +30,7 @@ Optional environment variables:
 | File | What it covers | Time |
 | --- | --- | --- |
 | `brain4_check.py` | 4.x: central router (task sorting, ranking, quota, fallback, key rejection, background allowance), Groq's live request count, research (sources, reliability, verification rules, conflicts, link checks), Keychain keys (migration, restart, reset, failure), memory types, the written name F.R.I.D.A.Y. | ~6 min |
+| `v422_check.py` | 4.2.2: Google Search through Gemini (free-search models first, fallbacks, rejected key, new-style AQ. keys, research uses it), Groq's shut-down models skipped, Groq's newer model added, Diagnostics count, backup brains moving off a retired free model, and her knowing she can search (both apps) | ~2 min |
 | `v42_check.py` | 4.2: Apple TV remote for both apps (voice commands, the remote's layout and buttons on Settings → Lights, pairing with a code, forget, unreachable Apple TV, the website) and the safety copy in the Keychain (what's in it, no keys, restore after a wiped update, brains-only restore, removed brains stay removed, Reset, a damaged copy) | ~3 min |
 | `persona_check.py` | personality development for both apps: evidence rules, 30-day pace, reconsideration, self-started identity reviews, baseline moves, original values kept, Reset as a new era, persistence across restarts, Reed's own identity | ~2 min |
 | `quick.py` | live voice, phone jobs with pretend iPhone add-ons, lights, Home, keyboard, pictures, Settings hub, Gemini voices (blocks R, R2, Q, A3, H3, K2, H2, A4, T, GV of `full.py`) | ~4 min |

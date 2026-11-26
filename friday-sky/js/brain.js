@@ -14,6 +14,7 @@
   var GROQ_CHAT_MODELS = [
     "openai/gpt-oss-20b",
     "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
     "llama-3.3-70b-versatile",
     "qwen/qwen3-32b",
     "llama-3.1-8b-instant"
@@ -30,6 +31,10 @@
     "meta-llama/llama-4-scout-17b-16e-instruct",
     "meta-llama/llama-4-maverick-17b-128e-instruct"
   ];
+  // 4.2.2: Groq shut these down for free keys (Llama 4 Maverick in March, Qwen3 32B and Llama 4 Scout in July,
+  // Llama 3.1 8B and Llama 3.3 70B in August 2026). They stay on the lists, but she starts out knowing
+  // they're gone, so she doesn't spend a request (and a wait) finding out each time the app opens.
+  var GROQ_RETIRED = ["llama-3.3-70b-versatile", "qwen/qwen3-32b", "llama-3.1-8b-instant", "meta-llama/llama-4-scout-17b-16e-instruct", "meta-llama/llama-4-maverick-17b-128e-instruct"];
 
   var PRESETS = {
     groq:       { label: "Groq (free)", name: "Groq", base: GROQ_BASE, model: "openai/gpt-oss-120b", style: "openai", keyUrl: "https://console.groq.com/keys", free: true },
@@ -48,6 +53,7 @@
   // Models that are down or rate-limited are skipped until this time (ms).
   var cooldown = {};
   var missing = {};
+  GROQ_RETIRED.forEach(function (m) { missing["groq:" + m] = true; });
   var lastUsed = "";
 
   function now() { return Date.now(); }
@@ -651,7 +657,7 @@
           p.order.forEach(function (x) { if (x.kind === r.kind && (r.kind === "groq" || x.id === r.id)) markCooldown(x.id, "daily"); });
           continue;
         }
-        if (kind === "model") missing[r.id] = true;
+        if (kind === "model") { missing[r.id] = true; if (r.kind === "agent" && r.agent) repickModel(r.agent.id); }
         // a failed web search is usually the search tool, not the model: only rest it for real limits
         else if (kind !== "toolong" && !(p.task === "web" && kind !== "busy" && kind !== "daily")) markCooldown(r.id, kind);
       }
@@ -670,34 +676,63 @@
   }
 
   // Gemini with Google Search: answers grounded in pages it actually found (free tier, if a Gemini key is set up).
+  // 4.2.2: Google Search through Gemini is only free on some models. On the free tier that's Gemini 2.5
+  // Flash and Flash-Lite (Gemini 3 has no free Google Search), and a Gemini key added with the default
+  // "gemini-flash-latest" now points at Gemini 3, so every search failed. She now tries the models with
+  // free Google Search first, then her own model, remembers the one that worked, and (like her chat)
+  // retries a new-style AQ. key with the other way of sending it.
+  var groundGood = {};
   async function groundedSearch(question, opts) {
     opts = opts || {};
     var gem = connections().filter(function (c) { return c.provider === "gemini" || /generativelanguage/.test(c.baseUrl || ""); })
       .filter(function (c) { return keyFor(c) && available("ground:" + c.id); })[0];
     if (!gem) return null;
-    var key = keyFor(gem), model = /flash/.test(gem.model || "") ? gem.model : "gemini-flash-latest";
-    var url = geminiBase(gem.baseUrl) + "/models/" + encodeURIComponent(String(model).replace(/^models\//, "")) + ":generateContent";
+    var key = keyFor(gem), own = String(gem.model || "").replace(/^models\//, "");
+    var models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+    if (/flash/.test(own) && models.indexOf(own) < 0) models.push(own);
+    if (models.indexOf("gemini-flash-latest") < 0) models.push("gemini-flash-latest");
+    if (groundGood[gem.id] && models.indexOf(groundGood[gem.id]) > 0) { models.splice(models.indexOf(groundGood[gem.id]), 1); models.unshift(groundGood[gem.id]); }
     var body = { contents: [{ role: "user", parts: [{ text: question }] }], tools: [{ google_search: {} }], generationConfig: { temperature: 0.2 } };
-    var r = { id: "ground:" + gem.id, name: gem.name + " + Google Search", free: true, provider: "gemini", model: model };
-    var t0 = now();
-    try {
-      var res = await http(url, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify(body), signal: opts.signal });
-      if (!res.ok) { var et = ""; try { et = await res.text(); } catch (e0) {} throw BrainError(et.slice(0, 200), classifyError(res.status, et)); }
-      var data = await res.json();
-      var cand = (data.candidates || [])[0] || {};
-      var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join("").trim();
-      var gm = cand.groundingMetadata || {};
-      var chunks = (gm.groundingChunks || []).map(function (c) { return c && c.web ? { title: c.web.title || "", url: c.web.uri || "" } : null; });
-      var supports = (gm.groundingSupports || []).map(function (s) { return { text: (s.segment && s.segment.text) || "", chunks: s.groundingChunkIndices || [] }; });
-      noteRoute(r, "web", true, null, now() - t0);
-      noteUse(r.name);
-      return { text: text, chunks: chunks, supports: supports, via: "Google Search" };
-    } catch (e) {
-      if (e && e.name === "AbortError") throw e;
-      noteRoute(r, "web", false, e.kind || "other", 0);
-      if (e.kind && e.kind !== "offline") markCooldown(r.id, e.kind === "bad" ? "daily" : e.kind);
-      return null;
+    var r = { id: "ground:" + gem.id, name: gem.name + " + Google Search", free: true, provider: "gemini", model: models[0] };
+    var t0 = now(), lastErr = null;
+    for (var i = 0; i < models.length; i++) {
+      var model = models[i];
+      var url = geminiBase(gem.baseUrl) + "/models/" + encodeURIComponent(model) + ":generateContent";
+      try {
+        var send = function (bearer) {
+          var h = { "Content-Type": "application/json" };
+          if (bearer) h.Authorization = "Bearer " + key; else h["x-goog-api-key"] = key;
+          return http(url, { method: "POST", headers: h, body: JSON.stringify(body), signal: opts.signal });
+        };
+        var res = await send(false);
+        if (res.status === 401 && /^AQ\./.test(key)) res = await send(true);
+        if (!res.ok) {
+          var et = ""; try { et = await res.text(); } catch (e0) {}
+          lastErr = BrainError(et.slice(0, 200) || ("HTTP " + res.status), classifyError(res.status, et));
+          if (lastErr.kind === "auth") break;          // the key itself was refused: no other model will help
+          continue;                                    // this model has no free Google Search (or is busy): try the next
+        }
+        var data = await res.json();
+        var cand = (data.candidates || [])[0] || {};
+        var text = ((cand.content && cand.content.parts) || []).filter(function (p) { return p && p.text && !p.thought; }).map(function (p) { return p.text; }).join("").trim();
+        var gm = cand.groundingMetadata || {};
+        var chunks = (gm.groundingChunks || []).map(function (c) { return c && c.web ? { title: c.web.title || "", url: c.web.uri || "" } : null; });
+        var supports = (gm.groundingSupports || []).map(function (s) { return { text: (s.segment && s.segment.text) || "", chunks: s.groundingChunkIndices || [] }; });
+        groundGood[gem.id] = model;
+        r.model = model;
+        noteRoute(r, "web", true, null, now() - t0);
+        noteUse(r.name);
+        return { text: text, chunks: chunks, supports: supports, via: "Google Search", model: model };
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+        lastErr = e;
+        if (e && e.kind === "offline") break;
+      }
     }
+    var kind = (lastErr && lastErr.kind) || "other";
+    noteRoute(r, "web", false, kind, 0);
+    if (kind !== "offline") markCooldown(r.id, kind === "bad" ? "daily" : kind);
+    return null;
   }
 
   // What she'd pick for each task right now (for Settings and the neural map).
@@ -725,6 +760,37 @@
   }
 
   // List models a provider offers (for the "Find models" button).
+  // 4.2.2: free models come and go (OpenRouter's free list changes every few weeks, Cloudflare and others
+  // retire old ones). When a backup brain's model is gone, she picks another free model from that provider's
+  // own list, keeps the same brain and key, and carries on: nothing to re-add. Models she already tried for
+  // that brain aren't picked again.
+  var repicking = {};
+  async function repickModel(agentId) {
+    if (repicking[agentId]) return;
+    repicking[agentId] = true;
+    try {
+      var st = store(), all = st.get("connections", []) || [];
+      var ag = all.filter(function (c) { return c && c.id === agentId; })[0];
+      if (!ag || !(ag.provider === "cloudflare" || FREE_PICKS[ag.provider])) return;
+      var key = keyFor(ag), ids = [];
+      if (ag.provider === "cloudflare") ids = CF_MODELS.slice();
+      else {
+        var pr = PRESETS[ag.provider] || {};
+        try { ids = await listModels(styleOf(ag) === "gemini" ? "gemini" : (ag.style || pr.style || "openai"), ag.baseUrl || pr.base, key); } catch (e) { ids = []; }
+      }
+      var picks = ag.provider === "cloudflare" ? ids : pickModels(ag.provider, ids);
+      var tried = ag.triedModels || [];
+      var next = picks.filter(function (m) { return m && m !== ag.model && tried.indexOf(m) < 0; })[0];
+      if (!next) return;
+      all = st.get("connections", []) || [];
+      all.forEach(function (c) { if (c && c.id === agentId) { c.triedModels = tried.concat([c.model]).slice(-6); c.model = next; } });
+      st.set("connections", all);
+      delete missing["agent:" + agentId];
+      activity("agents", ag.name + " moved to " + next + " (its old free model was retired)");
+    } catch (e) {
+    } finally { repicking[agentId] = false; }
+  }
+
   async function listModels(style, base, key) {
     base = String(base || "").trim().replace(/\/+$/, "");
     var res;

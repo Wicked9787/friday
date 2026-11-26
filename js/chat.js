@@ -84,6 +84,11 @@
     return list.slice(0, 60).map(function (m) { return "- " + m.text; }).join("\n");
   }
 
+  // 4.2.2: she knows she can look things up (she used to guess she couldn't, and offer the Shortcut)
+  function webLine() {
+    if ((settings().webMode || "auto") === "off") return "Web search is turned off in Settings, Internet. If asked whether you can look things up online, say it's switched off there and they can turn it back on.";
+    return "You can look things up on the internet: when a question needs current or outside facts, the app searches the web for you (Google, news, Wikipedia and more) and gives you what it found before you answer. So never say you can't browse, search, or get online, and never offer the Shortcut for a web search. If asked whether you can search the web, say yes and offer to look something up; they can also start with 'look up' or 'search for'. You are not ChatGPT and you don't run on anyone's app settings, so never describe another company's product or settings as your own.";
+  }
   function personaPrompt(profile, memory, summary, query) {
     var terms = (profile.terms || []).join(" or ");
     var perTen = profile.addressPerTen || 4;
@@ -106,6 +111,7 @@
       mood.line,
       pLines.join("\n"),
       "Never hand anything to the " + (profile.shortcutName || "Friday") + " Shortcut on your own, and never say you are handing it off. If they want the phone to do something you can't do yourself in the app, say in one short sentence that you can't do that one in the app, then ask if they want you to hand it to their Shortcut. Never say you did, are doing, or toggled something on the phone unless the app actually did it.",
+      webLine(),
       "You can't control door locks, garage doors, or security alarms, and you never offer to.",
       "You also have your own lists, bills, countdowns, timers, and notes in the app; if asked about them and you don't see them here, suggest the exact words to say, like 'add milk to my grocery list'.",
       "You can show real photos: when someone wants to see something, tell them to ask with the word pictures or photos (like 'show me pictures of wooden stairs'). Never say you can't show images.",

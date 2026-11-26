@@ -33,3 +33,17 @@
 - Diagnostics by voice understands more ways of asking: "can you run diagnostics", "run diagnostics
   please", "hey Friday, run a diagnostic check", "diagnose yourself", "check your systems",
   "are your systems OK". Her summary now shows in the chat too.
+
+## 4.2.2
+- Google Search works again in her research. Google only gives free Google Search through Gemini on
+  some models (on the free tier, Gemini 2.5 Flash and Flash-Lite), and a Gemini key added with the
+  default model now points at Gemini 3, which has none. She now searches with 2.5 Flash first, then
+  2.5 Flash-Lite, then your Gemini model, remembers which one worked, and new-style AQ. keys work for
+  it too. Your Gemini model for chatting is unchanged.
+- She knows she can look things up online: she won't say she can't browse or offer the Shortcut for
+  a search. With web search turned off in Settings → Internet, she says that instead.
+- Groq shut down Llama 3.1 8B and Llama 3.3 70B in August (and Qwen3 32B and Llama 4 earlier). She
+  no longer spends a request finding that out each time, Groq's recommended replacement Qwen 3.6 27B
+  is added to her Groq brains, and Diagnostics counts the chat models Groq still offers.
+- If a backup brain's free model is retired (OpenRouter's free list changes every few weeks), she
+  moves that brain to another free model from the same service on her own. Same brain, same key.

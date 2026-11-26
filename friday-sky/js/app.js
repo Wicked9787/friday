@@ -9,7 +9,7 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "4.2.1";
+  var APP_VERSION = "4.2.2";
   var APP_LABEL = "Remote";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
   function fillShownName() {
@@ -2097,7 +2097,8 @@
       } catch (e) { add(false, "Couldn't reach Groq"); }
     }
     if (models.length) {
-      var want = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+      // 4.2.2: the Groq chat models that are still offered (Llama 3.1 8B and 3.3 70B were shut down in August 2026)
+      var want = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.6-27b"];
       var have = want.filter(function (m) { return models.indexOf(m) >= 0; });
       add(have.length >= 2, have.length + " of " + want.length + " chat brains available");
       var hasVoice = models.some(function (m) { return /orpheus/.test(m); });
