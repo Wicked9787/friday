@@ -142,6 +142,13 @@ async def main():
         chk("R4 a backup brain whose free model was retired picks another free model by itself (same brain, same key) and answers with it", mdl == "openai/gpt-oss-120b:free" and str(a2).startswith("agent:or1|OpenRouter here"), [a1, a2, mdl])
         miss = await pg.evaluate("(FridayBrain.routeReport().find(x => x.id === 'agent:or1') || {}).missing")
         chk("R5 and it's usable again right away (not left marked as gone)", miss is False, miss)
+        # 7c. the Brains page and Diagnostics never list models Groq shut down
+        await pg.evaluate("() => { window.__friday.openPanel('settings'); document.querySelector('.smenu-item[data-page=\"brain\"]').click(); const a = document.getElementById('accord-brain'); if (a) a.open = true; }")
+        await pg.wait_for_timeout(600)
+        bs = await pg.evaluate("(document.getElementById('brain-status') || {}).textContent || ''")
+        busy = await pg.evaluate("(FridayBrain.status().busy || []).join(', ')")
+        chk("R6 the Brains page and Diagnostics never show models Groq shut down as 'resting' or 'not available'", not any(x in bs for x in ("llama", "maverick", "scout", "qwen3-32b")) and not any(x in busy for x in ("llama", "maverick", "scout", "qwen3-32b")), [bs[:300], busy])
+        await pg.evaluate("document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'))")
         # 8. she knows she can search
         pp = await pg.evaluate("window.FridayGroq.personaPrompt(window.__friday.chat.profile, [], '')")
         chk("W1 her instructions say she can look things up on the web (no 'I can't browse', no Shortcut for searches)", "You can look things up on the internet" in pp and "never offer the Shortcut for a web search" in pp, pp[-700:])

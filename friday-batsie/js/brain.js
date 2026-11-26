@@ -546,6 +546,7 @@
       if (!forVision && cfg().MODEL) models.unshift(cfg().MODEL);
       models.forEach(function (m) {
         if (seen[m]) return; seen[m] = 1;
+        if (GROQ_RETIRED.indexOf(m) >= 0) return;           // shut down by Groq: not offered, so not listed as resting either
         var c = capsFor(m);
         if (forVision) c.vision = true;
         out.push({ id: "groq:" + m, kind: "groq", name: "Groq " + m.replace(/^.*\//, ""), provider: "groq", model: m, free: true, main: true, preferred: m === cfg().MODEL, caps: c });

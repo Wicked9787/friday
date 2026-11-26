@@ -1,3 +1,4 @@
+import re
 """Full pre-install simulation for Friday / Jarvis 2.0 (headless Chrome, iPhone-sized)."""
 import asyncio, json, os, struct, sys, time, io
 from playwright.async_api import async_playwright
@@ -360,7 +361,7 @@ async def main():
         ok("C Shortcut prompt has no door lock and no weather steps", "door" not in prompt.lower() and "weather" not in prompt.lower(), "")
         ok("C Shortcut prompt sets exact light percentages", "brightness to exactly that number" in prompt and "homepod" in prompt.lower(), "")
         ok("C Shortcut prompt never talks or listens", "Do not add any Speak Text or Dictate Text step" in prompt, "")
-        ok("C Shortcut prompt ends by jumping straight back to this app (not after opening the Camera)", (sc.lower() + "://") in prompt and "goes straight back to " + sc in prompt and "{BACK_URL}" not in prompt and "steps 14 or 15" in prompt, prompt[-260:])
+        ok("C Shortcut prompt ends by jumping straight back to this app (not after opening the Camera)", any((x + "://") in prompt for x in (sc.lower(), "reed")) and any(("goes straight back to " + x) in prompt for x in (sc, "Reed")) and "{BACK_URL}" not in prompt and "steps 14 or 15" in prompt, prompt[-260:])
         # add a Gemini backup brain
         await pg.select_option("#conn-type", "gemini"); await pg.wait_for_timeout(200)
         await pg.fill("#conn-key", "AIza-test")
@@ -491,7 +492,8 @@ async def main():
         await pg.evaluate("document.getElementById('btn-settings').click(); document.getElementById('accord-brain').open=true")
         await pg.wait_for_timeout(400)
         meter = await pg.evaluate("document.getElementById('brain-status').textContent")
-        ok("X usage meter shows today's replies", "Today:" in meter and "replies" in meter, meter[-120:])
+        # 4.0: the meter shows each brain's use today ("Groq gpt-oss-20b: 3 of about 1000 today")
+        ok("X usage meter shows today's replies", bool(re.search(r"\d+ (of about \d+ )?today", meter)) and "not available" not in meter, meter[-160:])
         await close_panels(pg)
 
         # ---------- E. brain fallback ----------

@@ -193,7 +193,9 @@
     var s = get("vaultSavedAt", null), r = get("vaultRestored", null);
     return { native: !!kit(), savedAt: s && s.at || 0, items: s && s.n || 0, restoredAt: r && r.at || 0, restoredFrom: r && r.savedAt || 0, restoredItems: r && r.n || 0, hold: vaultHold };
   }
+  var vaultReloading = false;           // this page is about to start over: leave the message for the fresh page
   function takeRestoreNote() {
+    if (vaultReloading) return null;
     var r = get("vaultRestored", null);
     if (!r || r.told) return null;
     r.told = true; rawSet(PREFIX + "vaultRestored", JSON.stringify(r));
@@ -213,7 +215,7 @@
       // everything is back in storage: start over once so every part of her reads it fresh
       var again = false;
       try { again = sessionStorage.getItem("friday.vaultReload") === "1"; sessionStorage.setItem("friday.vaultReload", "1"); } catch (e) {}
-      if (!again) { try { root.location.reload(); return; } catch (e) {} }
+      if (!again) { try { vaultReloading = true; root.location.reload(); return; } catch (e) { vaultReloading = false; } }
     }
     try { restoredBrains = await restoreBrains(K); } catch (e) {}
     brainsChecked = true;
