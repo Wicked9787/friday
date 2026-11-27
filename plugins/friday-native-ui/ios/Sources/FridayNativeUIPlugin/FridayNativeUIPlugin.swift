@@ -126,6 +126,13 @@ private enum FridayNativeTheme {
     static let line = Color.white.opacity(0.09)
 }
 
+private struct FridayNativeAction: Identifiable {
+    let key: String
+    let title: String
+    let icon: String
+    var id: String { key }
+}
+
 private struct FridayNativeRootView: View {
     let command: (String, String) -> Void
     let close: () -> Void
@@ -240,24 +247,24 @@ private struct FridayNativeRootView: View {
             pageHeading("COMMAND CENTER", subtitle: "Send requests to Friday's existing intelligence.")
             VStack(spacing: 10) {
                 ForEach([
-                    ("Talk to Friday", "message", "bubble.left.and.bubble.right"),
-                    ("Start live listening", "voice", "waveform"),
-                    ("Control my Home", "home", "house"),
-                    ("Open camera", "vision", "camera"),
-                    ("Open neural map", "neural", "point.3.connected.trianglepath.dotted"),
-                    ("Open settings", "settings", "gearshape")
-                ], id: \.1) { title, id, icon in
-                    Button { command(id, "") } label: {
+                    FridayNativeAction(key: "message", title: "Talk to Friday", icon: "bubble.left.and.bubble.right"),
+                    FridayNativeAction(key: "voice", title: "Start live listening", icon: "waveform"),
+                    FridayNativeAction(key: "home", title: "Control my Home", icon: "house"),
+                    FridayNativeAction(key: "vision", title: "Open camera", icon: "camera"),
+                    FridayNativeAction(key: "neural", title: "Open neural map", icon: "point.3.connected.trianglepath.dotted"),
+                    FridayNativeAction(key: "settings", title: "Open settings", icon: "gearshape")
+                ]) { item in
+                    Button { command(item.key, "") } label: {
                         HStack(spacing: 13) {
-                            Image(systemName: icon).foregroundStyle(FridayNativeTheme.gold).frame(width: 25)
-                            Text(title).foregroundStyle(.white)
+                            Image(systemName: item.icon).foregroundStyle(FridayNativeTheme.gold).frame(width: 25)
+                            Text(item.title).foregroundStyle(.white)
                             Spacer()
                             Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(FridayNativeTheme.muted)
                         }
                         .padding(15)
                         .nativeCard()
                     }
-                }
+                }                }
             }
             Spacer(minLength: 10)
             HStack(spacing: 10) {
