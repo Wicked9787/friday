@@ -52,7 +52,7 @@ public class FridaySystemPlugin: CAPPlugin, CAPBridgedPlugin {
                 "batteryState": self.batteryStateName(device.batteryState),
                 "lowPowerMode": ProcessInfo.processInfo.isLowPowerModeEnabled,
                 "thermalState": thermal,
-                "userInterfaceStyle": device.userInterfaceStyle == .dark ? "dark" : "light"
+                "userInterfaceStyle": self.bridge?.viewController?.traitCollection.userInterfaceStyle == .dark ? "dark" : "light"
             ])
         }
     }
@@ -102,7 +102,6 @@ public class FridaySystemPlugin: CAPPlugin, CAPBridgedPlugin {
         case .restricted: return "restricted"
         case .denied: return "denied"
         case .authorized: return "authorized"
-        case .limited: return "limited"
         @unknown default: return "unknown"
         }
     }
@@ -309,10 +308,13 @@ private struct FridayQuickActions: View {
 
     var body: some View {
         NavigationStack {
-            List(actions, id: \.2) { item in
-                Button { onSelect(item.2) } label: {
-                    Label(item.0, systemImage: item.1)
-                        .foregroundStyle(Color(red: 0.88, green: 0.75, blue: 0.48))
+            List {
+                ForEach(actions.indices, id: \.self) { index in
+                    let item = actions[index]
+                    Button { onSelect(item.2) } label: {
+                        Label(item.0, systemImage: item.1)
+                            .foregroundStyle(Color(red: 0.88, green: 0.75, blue: 0.48))
+                    }
                 }
             }
             .scrollContentBackground(.hidden)
