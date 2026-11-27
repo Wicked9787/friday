@@ -178,7 +178,7 @@
       '<key>Precomposed</key><true/>\n' +
       '<key>URL</key><string>' + xml(href) + '</string>\n' +
       '</dict></array>\n' +
-      '<key>PayloadDescription</key><string>Adds ' + xml(label) + ' to your Home Screen with her own icon.</string>\n' +
+      '<key>PayloadDescription</key><string>Adds ' + xml(label) + ' to your Home Screen with ' + (root.FridayPersona && root.FridayPersona.isHe && root.FridayPersona.isHe() ? 'his' : 'her') + ' own icon.</string>\n' +
       '<key>PayloadDisplayName</key><string>' + xml(label) + '</string>\n' +
       '<key>PayloadIdentifier</key><string>com.friday.' + tag + '.profile</string>\n' +
       '<key>PayloadOrganization</key><string>Friday</string>\n' +
@@ -990,7 +990,7 @@
   // ---------- 3.5.6: StandBy widget that shows her current orb look ----------
   function standbyScript(name, scheme) {
     return [
-      "// " + name + " StandBy: her current orb look, from " + name + "'s folder in Files.",
+      "// " + name + " StandBy: " + (root.FridayPersona && root.FridayPersona.isHe && root.FridayPersona.isHe() ? "his" : "her") + " current orb look, from " + name + "'s folder in Files.",
       "// Needs a Scriptable File Bookmark named \"" + name + "\" pointing to On My iPhone > " + name + " > Widget.",
       "const NAME = " + JSON.stringify(name) + ", SCHEME = " + JSON.stringify(scheme) + ";",
       "const fm = FileManager.local();",
@@ -1177,7 +1177,7 @@
     };
     var od = el("set-ondevice-listen");
     if (od) { od.checked = v.onDeviceListen !== false; od.onchange = function () { v.onDeviceListen = od.checked; saveSettings(v); }; }
-    setText("private-receive", "When a private message comes in, " + partner + " taps the link in the text to open " + other + ". Or set up the message automation (below) so " + other + " opens and reads it by herself. Either way works.");
+    setText("private-receive", "When a private message comes in, " + partner + " taps the link in the text to open " + other + ". Or set up the message automation (below) so " + other + " opens and reads it by " + (other === "Reed" ? "himself" : "herself") + ". Either way works.");
     sync();
   };
 
@@ -1314,18 +1314,32 @@
       if (!N || !N.isApp() || !N.home.available()) { setText("home-status", "Lights go through your Shortcut in this version."); return; }
       setText("home-status", "Checking…");
       N.home._status = null;
-      N.home.ready().then(function (ok) {
-        var hi = root.FridayStorage.get("homeInfo", null);
-        var why;
-        if (ok) why = "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".");
-        else if (!hi) why = "She couldn't check your Home just now. Try again in a moment.";
-        else if (hi.authorization && hi.authorization !== "authorized") why = "Home access is off for this app. Turn on Home Information in iPhone Settings → " + ((self.profile && self.profile.displayName) || (self.profile && self.profile.assistantName) || "Friday") + ".";
-        else if (!hi.homes) why = "Home access is on, but iOS isn't showing this install any homes. That usually means the Home permission didn't come through when AltStore signed the app. The LightsTest version is the one that carries it.";
-        else if (!hi.lights) why = "She can see your Home (" + (hi.accessories || 0) + " accessories) but none of them are lights" + (hi.otherPlugs ? ". If a lamp is on a smart plug or switch, rename it in the Home app to include \u201clight\u201d or \u201clamp\u201d" : "") + ".";
-        else why = "Something stopped her from reaching your lights. Try again in a moment.";
-        setText("home-status", why + (ok ? "" : " She still tries the app first every time, then hands off to your Shortcut if it doesn't work."));
-        refreshPhone();
-      });
+      // 4.2.3: say exactly what's in the way, in his or her own words; if the homes were still loading, look once more
+      var he = !!(self.profile && self.profile.pronoun === "him");
+      var She = he ? "He" : "She", she = he ? "he" : "she", her = he ? "him" : "her";
+      var appName = (self.profile && self.profile.displayName) || (self.profile && self.profile.assistantName) || "Friday";
+      var tries = 0;
+      var look = function () {
+        N.home.ready().then(function (ok) {
+          var hi = root.FridayStorage.get("homeInfo", null);
+          if (!ok && hi && hi.authorization === "authorized" && !hi.homes && hi.loaded === false && tries < 2) {
+            tries++; N.home._status = null; setText("home-status", "Waiting for your home to load…"); setTimeout(look, 3500); return;
+          }
+          var why;
+          if (ok) why = "Lights work right in the app" + (hi ? ": " + hi.lights + " lights, " + (hi.scenes || []).length + " scenes." : ".");
+          else if (!hi) why = She + " couldn't check your Home just now. Try again in a moment.";
+          else if (hi.entitled === "no") why = "This copy of " + appName + " was installed without the Apple Home permission, so iPhone won't let " + her + " into your home. Install the HomeKit file again through SideStore (My Apps → +), not inside LiveContainer.";
+          else if (hi.authorization === "denied") why = "Home access is turned off for " + appName + ". In iPhone Settings → Privacy & Security → Home (or HomeKit), turn on " + appName + ".";
+          else if (hi.authorization && hi.authorization !== "authorized") why = "iPhone hasn't given " + appName + " Home access yet. If it asks to let " + appName + " use your Home data, tap Allow, then check again. If it never asks, look in iPhone Settings → Privacy & Security → Home (or HomeKit).";
+          else if (!hi.homes && hi.loaded === false) why = "Home access is on, but your home didn't finish loading. Check again in a few seconds.";
+          else if (!hi.homes) why = "Home access is on, but the Apple account on this iPhone isn't in any home. Open the Home app on this phone: if your lights aren't there, have the person who set up the Home invite this Apple account (Home app → ⋯ → Home Settings → Invite People), accept the invite on this phone, then check again. Also check iPhone Settings → your name → iCloud → Home is on.";
+          else if (!hi.lights) why = She + " can see your Home (" + (hi.accessories || 0) + " accessories) but none of them are lights" + (hi.otherPlugs ? ". If a lamp is on a smart plug or switch, rename it in the Home app to include \u201clight\u201d or \u201clamp\u201d" : "") + ".";
+          else why = "Something stopped " + her + " from reaching your lights. Try again in a moment.";
+          setText("home-status", why + (ok ? "" : " " + She + " still tries the app first every time, then asks before handing it to your Shortcut."));
+          refreshPhone();
+        });
+      };
+      look();
     };
 
     // AiDot lights: sign in once, then she controls them over home Wi-Fi

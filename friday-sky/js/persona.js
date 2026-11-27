@@ -70,8 +70,11 @@
   function isHe() { var p = profileNow(); return !!p && p.pronoun === "him"; }
   function say(t) {
     if (!isHe()) return String(t);
-    return String(t).replace(/\b(she|She|herself|Herself|hers|Hers)\b/g, function (w) { return { she: "he", She: "He", herself: "himself", Herself: "Himself", hers: "his", Hers: "His" }[w]; })
-      .replace(/\b(her|Her)\b(?=\s+(own\s+)?[a-z])(?!\s+(?:through|to|for|with|about|and|or|but|by|in|on|at|from|when|if|that|as|a|an|the|up|again|too|so|now|know|feel|back|out|off)\b)/g, function (w) { return w === "Her" ? "His" : "his"; })
+    // 4.2.3: "her" before a thing is "his" (her brain → his brain); before a verb, a little word or the end
+    // it's "him" (show her a photo → show him a photo, wakes her any time → wakes him any time)
+    return String(t).replace(/\b(hand|hands|give|gives|show|shows|tell|tells|let|lets|send|sends|bring|brings|wake|wakes|open|opens|ask|asks|help|helps)\s+her\b/g, "$1 him")
+      .replace(/\b(she|She|herself|Herself|hers|Hers|SHE|HER)\b/g, function (w) { return { she: "he", She: "He", herself: "himself", Herself: "Himself", hers: "his", Hers: "His", SHE: "HE", HER: "HIS" }[w]; })
+      .replace(/\b(her|Her)\b(?=\s+(own\s+)?[A-Za-z])(?!\s+(?:through|to|for|with|about|and|or|but|by|in|on|at|from|when|if|that|as|a|an|the|up|again|too|so|now|know|feel|back|out|off|get|gets|use|uses|see|sees|check|checks|once|sooner|later|any|anything|something|nothing|everything|more|less|some|every|what|how|why|where|who|which|your|this|these|those|all|one|it|them|you|me|us|just|only|right|straight|first|today|tonight|there|here|away|around|over|down|into|onto|while|until|before|after|since|because|than|then|also|still|even|start|stop|do|does|can|will|would|should|could|might|must|has|have|had|is|was|be|keep|hand|give|show|tell|let|make|help|wake|talk|ask|hear|listen|say|read|move|put|set|turn|try|look|go|come|run|take|sleep|know|think|pick|send|bring|reach)\b)/g, function (w) { return w === "Her" ? "His" : "his"; })
       .replace(/\b(her|Her)\b/g, function (w) { return w === "Her" ? "Him" : "him"; });
   }
   function names() { var p = profileNow() || {}; return { me: p.assistantName || "Friday", you: p.ownerName || "them" }; }

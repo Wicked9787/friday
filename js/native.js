@@ -222,7 +222,8 @@
       try {
         var r = await P.list();
         ok = !!(r && r.authorization === "authorized" && r.lights && r.lights.length);
-        if (r) S().set("homeInfo", { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], homes: r.homes, accessories: r.accessories, otherPlugs: r.otherPlugs, authorization: r.authorization, at: Date.now() });
+        // 4.2.3: also whether iOS finished loading the homes, and whether this install carries the Home permission
+        if (r) S().set("homeInfo", { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], homes: r.homes, accessories: r.accessories, otherPlugs: r.otherPlugs, authorization: r.authorization, loaded: r.loaded, entitled: r.entitled, at: Date.now() });
       } catch (e) { ok = false; }
       home._status = { ok: ok, at: Date.now() };
       return ok;
@@ -277,6 +278,12 @@
       if (!P) return { ok: false };
       try { var r = await P.musicPlay({ query: query || "", kind: kind || "any", shuffle: !!shuffle }); return { ok: true, title: (r && r.title) || "" }; }
       catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+    },
+    // 4.2.3: Media & Apple Music access and how many songs are in the library (for Diagnostics)
+    musicStatus: async function () {
+      var P = plugin("FridayKit");
+      if (!P || !P.musicStatus) return null;
+      try { return await P.musicStatus(); } catch (e) { return null; }
     },
     text: async function (number, body) {
       var P = plugin("FridayKit");

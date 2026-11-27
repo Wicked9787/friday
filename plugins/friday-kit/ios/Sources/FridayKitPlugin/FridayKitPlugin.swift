@@ -27,6 +27,7 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
         CAPPluginMethod(name: "musicControl", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "musicPlay", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "nowPlaying", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "musicStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "canText", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "composeText", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "canOpen", returnType: CAPPluginReturnPromise),
@@ -465,6 +466,21 @@ public class FridayKitPlugin: CAPPlugin, CAPBridgedPlugin, MFMessageComposeViewC
                 }
             }
         }
+    }
+
+    /// 4.2.3: for Diagnostics: is Media & Apple Music allowed, and how many songs can the app see in the library?
+    @objc func musicStatus(_ call: CAPPluginCall) {
+        let s = MPMediaLibrary.authorizationStatus()
+        var name = "notDetermined"
+        switch s {
+        case .authorized: name = "authorized"
+        case .denied: name = "denied"
+        case .restricted: name = "restricted"
+        default: name = "notDetermined"
+        }
+        var songs = 0
+        if s == .authorized { songs = MPMediaQuery.songs().items?.count ?? 0 }
+        call.resolve(["authorization": name, "songs": songs])
     }
 
     @objc func nowPlaying(_ call: CAPPluginCall) {

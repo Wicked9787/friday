@@ -809,7 +809,7 @@ async def main():
         ok("R AI voice: clips play back to back with a natural pause, never overlapping", not gv["overlap"] and all(0.09 <= g <= 3.0 for g in gv["gaps"]), gv)
         await pg.click("#btn-settings"); await pg.wait_for_timeout(300)
         verl = await pg.evaluate("document.getElementById('app-version').textContent")
-        ok("R Settings shows the version and its label", verl == "Version 4.2.2 · Remote", verl)
+        ok("R Settings shows the version and its label", verl == "Version 4.2.3 · Remote", verl)
         await close_panels(pg)
 
         nm = await pg.evaluate("""() => ['tell patsy dinner is ready', 'text Batsy I am home', 'tell bats e hello', 'I have a party tonight', 'patty melt'].map(t => FridayVoice.fixNames(t))""")
@@ -1098,7 +1098,7 @@ async def main():
         await pq.evaluate("document.getElementById('btn-home-check').click()"); await pq.wait_for_timeout(800)
         hs = await pq.evaluate("document.getElementById('home-status').textContent")
         rows = await pq.evaluate("[...document.querySelectorAll('#phone-list li')].map(li=>li.textContent)")
-        ok("Q Check lights explains why (no homes visible) and that she still tries the app first", "isn't showing this install any homes" in hs and "tries the app first" in hs, hs)
+        ok("Q Check lights explains why (no homes visible) and that she still tries the app first", "isn't in any home" in hs and "tries the app first" in hs, hs)
         ok("Q status list shows music, calls and texts in the app", any("Music on this iPhone" in r and "In the app" in r for r in rows) and any(r.startswith("Calls") and "In the app" in r for r in rows) and any(r.startswith("Texts") and "tap Send" in r for r in rows), rows)
         await pq.evaluate("(()=>{ const H = Capacitor.Plugins.FridayHome; H.list = H.__list; FridayNative.home._status = null; })()")
         await close_panels(pq)

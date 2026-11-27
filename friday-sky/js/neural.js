@@ -8,6 +8,8 @@
    Same API as before: new FridayNeural(canvas), start(), stop(), setActive(kind). */
 (function (root) {
   "use strict";
+  // 4.2.3: her / his: the map's own wording follows the profile (Reed is a he); memories stay as written
+  function sy(t) { try { return root.FridayPersona && root.FridayPersona.say ? root.FridayPersona.say(t) : t; } catch (e) { return t; } }
 
   var TAU = Math.PI * 2;
   var GOLD = [255, 208, 115], GOLD_SOFT = [232, 200, 114], SILVER = [214, 222, 234], CORE = [255, 224, 160];
@@ -126,7 +128,8 @@
     var prof0 = null; try { prof0 = root.FRIDAY_CONFIG.getProfile(); } catch (e) {}
     var hasSelf = !!(root.FridayPersona && root.FridayPersona.on(prof0));
     var defs = DEFS.filter(function (d) { return !d.selfOnly || hasSelf; });
-    if (hasSelf && root.FridayPersona.isHe && root.FridayPersona.isHe()) defs = defs.map(function (d) { return d.id === "self" ? Object.assign({}, d, { tip: root.FridayPersona.say(d.tip) }) : d; });
+    // 4.2.3: Reed is a he: every part of his map says he / him / his
+    if (root.FridayPersona && root.FridayPersona.isHe && root.FridayPersona.isHe()) defs = defs.map(function (d) { return Object.assign({}, d, { tip: root.FridayPersona.say(d.tip) }); });
     defs.forEach(function (d) { if (d.ring) rings[d.ring].push(d); });
     var shape = { 1: { r: 0.40, y: 0.02, off: 0.4 }, 2: { r: 0.74, y: -0.52, off: 0.0 }, 3: { r: 0.92, y: 0.5, off: 0.25 }, 4: { r: 0.5, y: -0.98, off: 0.6 } };
     var self = this;
@@ -166,7 +169,7 @@
       gx.fillStyle = gg0; gx.fillRect(0, 0, 64, 64);
       this._glow = gc;
     } catch (e3) {}
-    this.nodes.core.def = Object.assign({}, this.nodes.core.def, { label: name, tip: "This is " + name + ". Everything she does flows through here." });
+    this.nodes.core.def = Object.assign({}, this.nodes.core.def, { label: name, tip: "This is " + name + ". Everything " + sy("she") + " does flows through here." });
     // background synapse dust
     this.dust = [];
     for (var k = 0; k < 260; k++) {
@@ -250,7 +253,7 @@
       "friday:timers": ["timers", "Timers changed"], "friday:memory": ["memory", "Memory updated"],
       "friday:habits": ["habits", "Habits updated"], "friday:spending": ["spending", "Spending logged"],
       "friday:routines": ["routines", "Routines changed"], "friday:contacts": ["contacts", "Contacts synced"],
-      "friday:self": ["self", "Her personality changed"]
+      "friday:self": ["self", sy("Her personality changed")]
     };
     Object.keys(map).forEach(function (ev) {
       root.addEventListener(ev, function () { self.pulse(map[ev][0], map[ev][1]); if (self.running) self._syncLeaves(); });
@@ -340,7 +343,7 @@
     if (!S) return out;
     function add(parent, key, label, tip, text) { out.push({ id: parent + ":" + hashStr(key), parent: parent, label: shortLabel(label), tip: tip || label, text: String(text || label || "") }); }
     try {
-      (S.get("memory", []) || []).slice(-60).forEach(function (m) { var t = (m && m.text) || m; if (t) add("memory", t, t, (m.auto ? "She learned this on her own: " : "You told her: ") + t, t); });
+      (S.get("memory", []) || []).slice(-60).forEach(function (m) { var t = (m && m.text) || m; if (t) add("memory", t, t, sy(m.auto ? "She learned this on her own: " : "You told her: ") + t, t); });
       (S.get("connections", []) || []).filter(function (x) { return x.type === "agent"; }).forEach(function (a) { add("agents", a.id || a.name, a.name, a.name + (a.backup ? " · backup brain" : " · say “ask " + a.name + " …”")); });
       var X = root.FridayExtras;
       if (X) {
@@ -355,7 +358,7 @@
       if (this.nodes && this.nodes.self && root.FridayPersona) {
         var PS = root.FridayPersona.state();
         (PS.moods || []).slice(-30).forEach(function (x) {
-          if (x && x.label) add("self", "mood:" + x.day, x.label, new Date(x.at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" }) + ": her mood was " + x.label, x.label);
+          if (x && x.label) add("self", "mood:" + x.day, x.label, new Date(x.at || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" }) + sy(": her mood was ") + x.label, x.label);
         });
         root.FridayPersona.observations().filter(function (o) { return o.status === "established"; }).slice(-15).forEach(function (o) {
           add("self", "obs:" + o.id, o.text, "A pattern you've built together (seen " + o.count + " times): " + o.text, o.text);
@@ -800,7 +803,7 @@
     var el = document.getElementById("neural-log");
     if (!el) return;
     el.innerHTML = "";
-    if (!this.log.length) { el.innerHTML = '<div class="neural-row muted">Her activity shows up here as it happens.</div>'; return; }
+    if (!this.log.length) { el.innerHTML = '<div class="neural-row muted">' + sy("Her activity shows up here as it happens.") + '</div>'; return; }
     this.log.slice(0, 6).forEach(function (r) {
       var d = document.createElement("div"); d.className = "neural-row";
       var tm = document.createElement("span"); tm.textContent = r.t;

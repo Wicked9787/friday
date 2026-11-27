@@ -47,3 +47,15 @@
   is added to her Groq brains, and Diagnostics counts the chat models Groq still offers.
 - If a backup brain's free model is retired (OpenRouter's free list changes every few weeks), she
   moves that brain to another free model from the same service on her own. Same brain, same key.
+
+## 4.2.3
+- Reed is a he everywhere in his app: Settings, Memory, the neural map, Diagnostics and What's New say
+  he, him and his. Only the app's own wording changed; chats, memories, notes and private messages are
+  left exactly as written. F.R.I.D.A.Y.'s screens are unchanged.
+- Check lights in the app says exactly what's in the way: the installed copy is missing the Home
+  permission (for example when an installer left it out; install the HomeKit file through SideStore),
+  Home access is turned off, the Apple account on the phone isn't in a home (with the invite steps), or
+  the home is still loading. It no longer mentions AltStore or the LightsTest file.
+- If Home access is on but the home hasn't loaded yet, the app waits 6 seconds more before giving up.
+- Diagnostics checks Apple Home (lights and scenes, or the reason they can't be reached) and the music
+  library (access, and how many songs the app can see).

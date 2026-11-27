@@ -9,13 +9,62 @@
 
   var orb, voice, chat, bubbles, tools, settings, neural, life, eyes, bedside;
   var extras = window.FridayExtras || null;
-  var APP_VERSION = "4.2.2";
+  var APP_VERSION = "4.2.3";
   var APP_LABEL = "Remote";
   function shownName() { try { return window.FRIDAY_CONFIG.shownName(profile); } catch (e) { return (profile && profile.assistantName) || "Friday"; } }
   function fillShownName() {
     var n = shownName(), reed = profile && profile.id === "batsie";
     document.querySelectorAll(".sc-shown").forEach(function (e) { e.textContent = n; });
     document.querySelectorAll(reed ? ".only-sky" : ".only-reed").forEach(function (e) { e.hidden = true; });
+  }
+  // 4.2.3: Reed is a he. Every screen of his says he / him / his and his own name. Only the app's own
+  // wording changes: chats, memories, notes, lists, private messages and anything from the web are left
+  // exactly as they were written. F.R.I.D.A.Y.'s screens are untouched.
+  var HE_SKIP = "#chat-thread, #type-thread, #caption, #memory-list, #note-list, #lists-box, #bills-box, #countdowns-box, " +
+    "#habits-box, #timers-box, #private-list, #private-current, #private-words, #private-receive, #photo-answer, #pics-box, " +
+    "#self-note, #self-patterns, #self-reflect, #neural-card, #neural-log, #aidot-list, #atv-list, #connections-list, #links-list, " +
+    "input, textarea, script, style, [data-keep-words]";
+  function heOn() { return !!(profile && profile.pronoun === "him" && window.FridayPersona && FridayPersona.say); }
+  function heText(node) {
+    var v = node.nodeValue;
+    if (!v || !/\b(she|her|hers|herself)\b/i.test(v)) return;
+    var el = node.parentElement;
+    if (!el || el.closest(HE_SKIP)) return;
+    var out = FridayPersona.say(v);
+    if (out !== v) node.nodeValue = out;
+  }
+  function heWalk(rootEl) {
+    if (!rootEl) return;
+    if (rootEl.nodeType === 3) { heText(rootEl); return; }
+    if (rootEl.nodeType !== 1 || rootEl.closest(HE_SKIP)) return;
+    var w = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null), n, list = [];
+    while ((n = w.nextNode())) list.push(n);
+    list.forEach(heText);
+    [rootEl].concat(Array.prototype.slice.call(rootEl.querySelectorAll("[aria-label], [title]"))).forEach(function (e) {
+      if (e.closest && e.closest(HE_SKIP)) return;
+      ["aria-label", "title"].forEach(function (a) { var v = e.getAttribute && e.getAttribute(a); if (v && /\b(she|her|hers|herself)\b/i.test(v)) e.setAttribute(a, FridayPersona.say(v)); });
+    });
+  }
+  function heWording() {
+    if (!heOn()) return;
+    var nm = shownName(), sc = (profile && profile.shortcutName) || nm;
+    // his own name where the screens wrote "Friday"
+    var ph = { "chat-input": "Message " + nm, "memory-text": "Something " + nm + " should remember", "set-shortcut": sc };
+    Object.keys(ph).forEach(function (id) { var e = document.getElementById(id); if (e) e.placeholder = ph[id]; });
+    var oc = document.getElementById("orb-canvas"); if (oc) oc.setAttribute("aria-label", nm + " orb");
+    var ss = document.getElementById("set-shortcut");
+    var sub = ss && ss.parentElement && ss.parentElement.querySelector(".sub");
+    if (sub && /Used when Friday/.test(sub.textContent)) sub.textContent = sub.textContent.replace(/Used when Friday/, "Used when " + nm);
+    heWalk(document.body);
+    // and anything the app writes later (Settings pages, Diagnostics, toasts, the map's panels)
+    try {
+      new MutationObserver(function (muts) {
+        muts.forEach(function (m) {
+          if (m.type === "characterData") heText(m.target);
+          else m.addedNodes.forEach(function (n) { heWalk(n); });
+        });
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    } catch (e) {}
   }
   var IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   var handsFree = cfg.queryParam("listen") === "1" || (IS_NATIVE && settingsData.handsFree !== false && settingsData.mood !== "headache");
@@ -2124,6 +2173,27 @@
       if (vi.restoredAt) add(true, "Brought back from the safety copy " + hhmm(vi.restoredAt) + " after an update wiped her storage");
     }
     if (window.FridayTV && FridayTV.available()) add(true, FridayTV.isSetUp() ? "Apple TV remote: paired" : "Apple TV remote: not paired (Settings → Lights)");
+    // 4.2.3: Apple Home, with the reason when the lights can't be reached from the app
+    var NH = window.FridayNative;
+    if (NH && NH.isApp && NH.isApp() && NH.home && NH.home.available()) {
+      var homeOk = false;
+      try { NH.home._status = null; homeOk = await NH.home.ready(); } catch (e) { homeOk = false; }
+      var hiD = FridayStorage.get("homeInfo", null) || {};
+      var plural = function (n, w) { return n + " " + w + (n === 1 ? "" : "s"); };
+      add(homeOk, homeOk ? "Apple Home: " + plural(hiD.lights || 0, "light") + ", " + plural((hiD.scenes || []).length, "scene") :
+        hiD.entitled === "no" ? "Apple Home: this install doesn't carry the Home permission (install the HomeKit file through SideStore)" :
+        hiD.authorization && hiD.authorization !== "authorized" ? "Apple Home: access not allowed (iPhone Settings → Privacy & Security → Home)" :
+        !hiD.homes ? (hiD.loaded === false ? "Apple Home: home still loading (check again in a moment)" : "Apple Home: this iPhone's Apple account isn't in a home (invite it from the Home app)") :
+        !hiD.lights ? "Apple Home: no lights found" : "Apple Home: couldn't reach the lights");
+    }
+    // 4.2.3: music plays from the Apple Music library on this iPhone
+    if (NH && NH.isApp && NH.isApp() && NH.kit && NH.kit.musicStatus) {
+      var ms = await NH.kit.musicStatus();
+      if (ms) add(ms.authorization === "authorized" && ms.songs > 0,
+        ms.authorization === "denied" || ms.authorization === "restricted" ? "Music: Media & Apple Music access is off (iPhone Settings → Apps → " + shownName() + ")" :
+        ms.authorization !== "authorized" ? "Music: not allowed yet (ask for a song and tap Allow)" :
+        ms.songs > 0 ? "Music library: " + ms.songs + " songs" : "Music library on this iPhone is empty (songs play from the Apple Music library)");
+    }
     var u = FridayStorage.get("usage.brain", null);
     if (u && u.date === new Date().toDateString()) add(true, "Today: " + (u.total || 0) + " replies, " + (u.tts || 0) + " AI voice clips");
     var box = document.getElementById("diag-list");
@@ -2186,6 +2256,7 @@
     document.getElementById("setup-name").textContent = styled;
     document.title = shown0;
     fillShownName();
+    heWording();
 
     orb = new FridayOrb(document.getElementById("orb-canvas"));
     orb.setLook(settingsData.look || profile.defaultLook || "N");

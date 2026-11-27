@@ -20,6 +20,7 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
 
     private var manager: HMHomeManager?
     private var isReady = false
+    private var homesLoaded = false      // 4.2.3: iOS actually delivered the homes (not just the 4-second wait)
     private var pending: [() -> Void] = []
 
     private func withHomes(_ block: @escaping () -> Void) {
@@ -34,21 +35,46 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
                 return
             }
             self.pending.append(block)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
-                guard let self = self, !self.isReady else { return }
-                self.isReady = true
-                let waiting = self.pending
-                self.pending = []
-                waiting.forEach { $0() }
+            self.giveUp(after: 4, extend: true)
+        }
+    }
+
+    /// Stop waiting for iOS to hand over the homes. 4.2.3: if Home access is on but the homes haven't
+    /// arrived yet (slow on some phones, like a member's phone loading a shared home), wait 6 seconds more once.
+    private func giveUp(after seconds: Double, extend: Bool) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [weak self] in
+            guard let self = self, !self.isReady else { return }
+            if extend, let m = self.manager, m.authorizationStatus.contains(.authorized) {
+                self.giveUp(after: 6, extend: false)
+                return
             }
+            self.isReady = true
+            let waiting = self.pending
+            self.pending = []
+            waiting.forEach { $0() }
         }
     }
 
     public func homeManagerDidUpdateHomes(_ manager: HMHomeManager) {
         isReady = true
+        homesLoaded = true
         let waiting = pending
         pending = []
         waiting.forEach { $0() }
+    }
+
+    /// 4.2.3: does this installed copy carry the Apple Home permission? Read from the signing profile the
+    /// installer put inside the app. "unknown" when there's no profile to read.
+    private func entitledText() -> String {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8), options: [], in: start.lowerBound..<data.endIndex) else { return "unknown" }
+        let xml = data.subdata(in: start.lowerBound..<end.upperBound)
+        guard let plist = (try? PropertyListSerialization.propertyList(from: xml, options: [], format: nil)) as? [String: Any],
+              let ents = plist["Entitlements"] as? [String: Any] else { return "unknown" }
+        if let v = ents["com.apple.developer.homekit"] as? Bool { return v ? "yes" : "no" }
+        return ents["com.apple.developer.homekit"] == nil ? "no" : "yes"
     }
 
     private func authText() -> String {
@@ -89,7 +115,8 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
 
     @objc func status(_ call: CAPPluginCall) {
         withHomes {
-            call.resolve(["authorization": self.authText(), "homes": self.manager?.homes.count ?? 0])
+            call.resolve(["authorization": self.authText(), "homes": self.manager?.homes.count ?? 0,
+                          "loaded": self.homesLoaded, "entitled": self.entitledText()])
         }
     }
 
@@ -112,7 +139,8 @@ public class FridayHomePlugin: CAPPlugin, CAPBridgedPlugin, HMHomeManagerDelegat
                 for set in home.actionSets { scenes.append(set.name) }
             }
             call.resolve(["authorization": self.authText(), "lights": found, "scenes": scenes, "rooms": rooms,
-                          "homes": self.manager?.homes.count ?? 0, "accessories": accessories, "otherPlugs": plugs])
+                          "homes": self.manager?.homes.count ?? 0, "accessories": accessories, "otherPlugs": plugs,
+                          "loaded": self.homesLoaded, "entitled": self.entitledText()])
         }
     }
 
