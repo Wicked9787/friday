@@ -36,7 +36,7 @@
         click("#tb-live");
         break;
       case "home":
-        sendPrompt(value || "Show my Home controls and connected devices.");
+        sendPrompt(value || "Show my HomeKit lights and scenes.");
         break;
       case "vision":
         click("#btn-eyes");
