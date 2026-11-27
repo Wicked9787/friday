@@ -475,26 +475,88 @@ private struct FridayNativeRootView: View {
 private struct FridayNativeOrb: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
-            let time = timeline.date.timeIntervalSinceReferenceDate
-            Canvas { context, size in
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                let radius = min(size.width, size.height) * 0.39
-                let glow = Path(ellipseIn: CGRect(x: c.x-radius*1.45, y: c.y-radius*1.45, width: radius*2.9, height: radius*2.9))
-                context.fill(glow, with: .radialGradient(Gradient(colors: [FridayNativeTheme.gold.opacity(0.18), .clear]), center: c, startRadius: 2, endRadius: radius*1.45))
-                for i in 0..<180 {
-                    let a = Double(i) * .pi * 2 / 180 + time * (i.isMultiple(of: 2) ? 0.13 : -0.09)
-                    let r = radius * (0.72 + 0.22 * sin(time * 0.7 + Double(i) * 0.17))
-                    let p = CGPoint(x: c.x + cos(a)*r, y: c.y + sin(a)*r)
-                    let rect = CGRect(x: p.x, y: p.y, width: 1.6, height: 1.6)
-                    context.fill(Path(ellipseIn: rect), with: .color(i.isMultiple(of: 3) ? FridayNativeTheme.gold.opacity(0.9) : FridayNativeTheme.silver.opacity(0.72)))
-                }
-                let core = Path(ellipseIn: CGRect(x: c.x-radius*0.54, y: c.y-radius*0.54, width: radius*1.08, height: radius*1.08))
-                context.fill(core, with: .radialGradient(Gradient(colors: [Color.white.opacity(0.18), Color(red: 0.12, green: 0.13, blue: 0.15), .black]), center: CGPoint(x: c.x-radius*0.16, y: c.y-radius*0.2), startRadius: 1, endRadius: radius*0.58))
-                let ring = Path(ellipseIn: CGRect(x: c.x-radius*0.88, y: c.y-radius*0.88, width: radius*1.76, height: radius*1.76))
-                context.stroke(ring, with: .color(FridayNativeTheme.gold.opacity(0.58)), lineWidth: 0.8)
-            }
+            orbCanvas(time: timeline.date.timeIntervalSinceReferenceDate)
         }
         .accessibilityLabel("Friday's animated particle orb")
+    }
+
+    private func orbCanvas(time: TimeInterval) -> some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let radius = min(size.width, size.height) * 0.39
+            drawGlow(in: &context, center: center, radius: radius)
+            drawParticles(in: &context, center: center, radius: radius, time: time)
+            drawCore(in: &context, center: center, radius: radius)
+            drawRing(in: &context, center: center, radius: radius)
+        }
+    }
+
+    private func drawGlow(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
+        let rect = CGRect(
+            x: center.x - radius * 1.45,
+            y: center.y - radius * 1.45,
+            width: radius * 2.9,
+            height: radius * 2.9
+        )
+        let path = Path(ellipseIn: rect)
+        let colors = [FridayNativeTheme.gold.opacity(0.18), Color.clear]
+        let gradient = Gradient(colors: colors)
+        context.fill(
+            path,
+            with: .radialGradient(gradient, center: center, startRadius: 2, endRadius: radius * 1.45)
+        )
+    }
+
+    private func drawParticles(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat, time: TimeInterval) {
+        for index in 0..<180 {
+            let indexValue = Double(index)
+            let direction = index.isMultiple(of: 2) ? 0.13 : -0.09
+            let angle = indexValue * .pi * 2 / 180 + time * direction
+            let pulse = sin(time * 0.7 + indexValue * 0.17)
+            let particleRadius = radius * CGFloat(0.72 + 0.22 * pulse)
+            let point = CGPoint(
+                x: center.x + CGFloat(cos(angle)) * particleRadius,
+                y: center.y + CGFloat(sin(angle)) * particleRadius
+            )
+            let rect = CGRect(x: point.x, y: point.y, width: 1.6, height: 1.6)
+            let particle = Path(ellipseIn: rect)
+            let color: Color = index.isMultiple(of: 3)
+                ? FridayNativeTheme.gold.opacity(0.9)
+                : FridayNativeTheme.silver.opacity(0.72)
+            context.fill(particle, with: .color(color))
+        }
+    }
+
+    private func drawCore(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
+        let coreRect = CGRect(
+            x: center.x - radius * 0.54,
+            y: center.y - radius * 0.54,
+            width: radius * 1.08,
+            height: radius * 1.08
+        )
+        let core = Path(ellipseIn: coreRect)
+        let highlight = CGPoint(x: center.x - radius * 0.16, y: center.y - radius * 0.2)
+        let colors = [
+            Color.white.opacity(0.18),
+            Color(red: 0.12, green: 0.13, blue: 0.15),
+            Color.black
+        ]
+        let gradient = Gradient(colors: colors)
+        context.fill(
+            core,
+            with: .radialGradient(gradient, center: highlight, startRadius: 1, endRadius: radius * 0.58)
+        )
+    }
+
+    private func drawRing(in context: inout GraphicsContext, center: CGPoint, radius: CGFloat) {
+        let ringRect = CGRect(
+            x: center.x - radius * 0.88,
+            y: center.y - radius * 0.88,
+            width: radius * 1.76,
+            height: radius * 1.76
+        )
+        let ring = Path(ellipseIn: ringRect)
+        context.stroke(ring, with: .color(FridayNativeTheme.gold.opacity(0.58)), lineWidth: 0.8)
     }
 }
 
