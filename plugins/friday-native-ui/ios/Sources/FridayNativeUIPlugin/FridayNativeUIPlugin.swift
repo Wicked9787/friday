@@ -264,7 +264,7 @@ private struct FridayNativeRootView: View {
                         .padding(15)
                         .nativeCard()
                     }
-                }                }
+                }
             }
             Spacer(minLength: 10)
             HStack(spacing: 10) {
