@@ -21,7 +21,8 @@
     "friday-listen": "file:./plugins/friday-listen",
     "friday-kit": "file:./plugins/friday-kit",
     "friday-aidot": "file:./plugins/friday-aidot",
-    "friday-atv": "file:./plugins/friday-atv"
+    "friday-atv": "file:./plugins/friday-atv",
+    "friday-system": "file:./plugins/friday-system"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0"
