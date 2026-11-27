@@ -53,6 +53,14 @@
       case "settings":
         click("#btn-settings");
         break;
+      case "biometric":
+        var P = nativePlugin();
+        if (P && P.setBiometricLock) {
+          P.setBiometricLock({ enabled: value === "enable" }).catch(function (e) {
+            try { root.alert("Friday app lock: " + String(e && e.message || e)); } catch (_) {}
+          });
+        }
+        break;
       default:
         if (value) sendPrompt(value);
         break;
