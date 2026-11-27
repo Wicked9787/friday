@@ -88,7 +88,11 @@
     var setup = document.getElementById("setup");
     if (setup && getComputedStyle(setup).display === "none") {
       setTimeout(function () {
-        try { P.present(); } catch (e) {}
+        try {
+          var profile = root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile ? root.FRIDAY_CONFIG.getProfile() : null;
+          var name = profile && (profile.displayName || profile.assistantName) || "F.R.I.D.A.Y.";
+          P.present({ assistantName: name });
+        } catch (e) {}
       }, 900);
     }
   }
