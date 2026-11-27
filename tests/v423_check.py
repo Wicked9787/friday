@@ -70,6 +70,16 @@ async def main():
         chk("W7 wording the app writes later turns to 'he' too (toasts, Settings messages)", tst == "He saved it.", tst)
         await pg.evaluate("document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open')); document.getElementById('whatsnew').classList.add('hidden')")
 
+        # ================= his name heard as "Read" / "Reid" =================
+        fx = await pg.evaluate("(['Read, play music', 'Reid turn on the lights', 'Hey read play some music', 'read my notes', 'Read.', 'hey Reid, pause the TV', 'I read it yesterday']).map(t => FridayVoice.fixNames(t))")
+        chk("V1 iPhone writing his name as 'Read,' or 'Reid' is turned back into Reed ('read my notes' left alone)",
+            fx == ["Reed, play music", "Reed turn on the lights", "Hey Reed play some music", "read my notes", "Reed.", "hey Reed, pause the TV", "I read it yesterday"], fx)
+        await pg.evaluate("window.__fakeCalls.length = 0")
+        cap = await say(pg, "Reed, play music", 2600)
+        mc = await pg.evaluate("window.__fakeCalls.filter(c => c[0] === 'music' || c[0] === 'play')")
+        chk("V2 'Reed, play music' plays music right in the app (no Shortcut offer)", mc and "shortcut" not in cap.lower(), [cap, mc])
+        await pg.evaluate("document.querySelectorAll('.panel.open').forEach(p => p.classList.remove('open'))")
+
         # ================= lights check: exactly what's wrong =================
         await pg.evaluate(HOME_MOCK, [{"authorization": "notDetermined", "lights": [], "scenes": [], "rooms": [], "homes": 0, "accessories": 0, "otherPlugs": 0, "loaded": False, "entitled": "no"}])
         h1 = await pg.evaluate(HOME_CHECK)
@@ -106,6 +116,8 @@ async def main():
         left2 = await pg.evaluate(SCAN)
         txt2 = await pg.evaluate("document.body.textContent")
         chk("F1 F.R.I.D.A.Y.'s screens still say she / her (nothing reworded)", len(left2) > 40 and "Talk over her" in txt2 and await pg.evaluate("!!document.querySelector('[aria-label=\"Show her a photo\"]')"), len(left2))
+        fx2 = await pg.evaluate("FridayVoice.fixNames('Read, play music')")
+        chk("F4 in F.R.I.D.A.Y.'s app 'Read,' is left alone (only Reed's name is fixed)", fx2 == "Read, play music", fx2)
         pr2 = await pg.evaluate("document.getElementById('private-receive').textContent")
         chk("F2 her private line note about Reed now says 'himself'", "himself" in pr2 and "Reed" in pr2, pr2)
         await pg.evaluate(HOME_MOCK, [{"authorization": "authorized", "lights": [], "scenes": [], "rooms": [], "homes": 0, "accessories": 0, "otherPlugs": 0, "loaded": True, "entitled": "yes"}])

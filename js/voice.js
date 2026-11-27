@@ -214,6 +214,17 @@
   function fixNames(text) {
     var t = String(text || "");
     if (!t) return t;
+    // 4.2.3: "Reed" is too short for the sound-alike list, and iPhone often writes it "Read" or "Reid".
+    // When the sentence starts with it (said to him), make it "Reed" so his commands are understood.
+    // ("read my notes" stays as it is: "Read" only counts with a comma after it, or after "hey".)
+    try {
+      var pn = ((root.FRIDAY_CONFIG && root.FRIDAY_CONFIG.getProfile()) || {}).assistantName;
+      if (pn === "Reed") {
+        t = t.replace(/^(\s*(?:hey|hi|ok|okay|yo)[, ]+)?(?:read|reid|reade|ried|rede)\b(?=\s*[,.!?]|\s*$)/i, function (m, pre) { return (pre || "") + "Reed"; })
+          .replace(/^(\s*(?:hey|hi|ok|okay|yo)[, ]+)(?:read|reid|reade|ried|rede)\b/i, "$1Reed")
+          .replace(/^(\s*)reid\b/i, "$1Reed");
+      }
+    } catch (e) {}
     var names = knownNames(true);
     var all = knownNames();
     var key = all.join("|");
