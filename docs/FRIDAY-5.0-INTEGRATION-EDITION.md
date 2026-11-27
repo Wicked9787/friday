@@ -10,6 +10,7 @@ The new Swift package adds native iOS services and a small optional SwiftUI quic
 
 - `plugins/friday-system/Package.swift`: Capacitor 8 Swift package.
 - `plugins/friday-system/ios/Sources/FridaySystemPlugin/FridaySystemPlugin.swift`: native EventKit, Contacts, UserNotifications, AVSpeechSynthesizer, device status, and SwiftUI quick-actions sheet.
+- `plugins/friday-system/ios/Sources/FridaySystemPlugin/FridayAppIntents.swift`: Siri App Shortcut phrases that launch Friday.
 - `plugins/friday-system/package.json`: local package metadata.
 - `js/friday-system-bridge.js`: stable JavaScript API exposed as `window.FridaySystem`.
 
@@ -29,6 +30,7 @@ The new Swift package adds native iOS services and a small optional SwiftUI quic
 | `speak(text, options)` | Native speech synthesis |
 | `showQuickActions()` | Present optional native SwiftUI action sheet |
 | `openAppSettings()` | Open this app's iOS Settings page |
+| Siri App Shortcut | Say “Open Friday”, “Wake up Friday”, or “Talk to Friday” to launch the app through Siri |
 
 Example from the existing JavaScript app:
 
