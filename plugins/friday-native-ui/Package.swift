@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "FridayNativeUI",
+    name: "FridayNativeUi",
     platforms: [.iOS(.v17)],
     products: [
-        .library(name: "FridayNativeUI", targets: ["FridayNativeUIPlugin"])
+        .library(name: "FridayNativeUi", targets: ["FridayNativeUIPlugin"])
     ],
     dependencies: [
         .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")
