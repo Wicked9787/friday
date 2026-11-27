@@ -223,7 +223,12 @@
         var r = await P.list();
         ok = !!(r && r.authorization === "authorized" && r.lights && r.lights.length);
         // 4.2.3: also whether iOS finished loading the homes, and whether this install carries the Home permission
-        if (r) S().set("homeInfo", { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], homes: r.homes, accessories: r.accessories, otherPlugs: r.otherPlugs, authorization: r.authorization, loaded: r.loaded, entitled: r.entitled, at: Date.now() });
+        // (saved only when something changed, so checking doesn't keep pushing back the safety copy's save)
+        if (r) {
+          var hiNew = { lights: (r.lights || []).length, scenes: r.scenes || [], rooms: r.rooms || [], homes: r.homes, accessories: r.accessories, otherPlugs: r.otherPlugs, authorization: r.authorization, loaded: r.loaded, entitled: r.entitled, at: Date.now() };
+          var hiOld = S().get("homeInfo", null), noAt = function (o) { var c = Object.assign({}, o); delete c.at; return JSON.stringify(c); };
+          if (!hiOld || noAt(hiOld) !== noAt(hiNew)) S().set("homeInfo", hiNew);
+        }
       } catch (e) { ok = false; }
       home._status = { ok: ok, at: Date.now() };
       return ok;
