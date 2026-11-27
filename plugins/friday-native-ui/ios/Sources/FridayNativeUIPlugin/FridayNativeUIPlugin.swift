@@ -30,7 +30,8 @@ public final class FridayNativeUIPlugin: CAPPlugin, CAPBridgedPlugin {
                     call.resolve(["presented": true, "alreadyVisible": true])
                     return
                 }
-                let view = FridayNativeRootView { [weak self] id, text in
+                let assistantName = call.getString("assistantName") ?? "F.R.I.D.A.Y."
+                let view = FridayNativeRootView(assistantName: assistantName) { [weak self] id, text in
                     self?.notifyListeners("command", data: ["id": id, "text": text])
                 } onClose: { [weak self] in
                     self?.dismissPresented()
@@ -134,6 +135,7 @@ private struct FridayNativeAction: Identifiable {
 }
 
 private struct FridayNativeRootView: View {
+    let assistantName: String
     let command: (String, String) -> Void
     let close: () -> Void
 
@@ -166,7 +168,7 @@ private struct FridayNativeRootView: View {
     private var header: some View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("F.R.I.D.A.Y.")
+                Text(assistantName.uppercased())
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .tracking(3.2)
                     .foregroundStyle(FridayNativeTheme.gold)
