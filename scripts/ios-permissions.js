@@ -10,6 +10,7 @@ const name = process.env.FRIDAY_PROFILE === "batsie" ? "Reed" : "Friday";
 const schemes = process.env.FRIDAY_PROFILE === "batsie" ? ["jarvis", "reed"] : ["friday"];
 const keys = {
   NSMicrophoneUsageDescription: `${name} uses the microphone so you can talk to it.`,
+  NSFaceIDUsageDescription: `${name} uses Face ID to protect access to the native interface when you enable app lock.`,
   NSSpeechRecognitionUsageDescription: `${name} uses speech recognition to show your words as you talk and know when you are done.`,
   NSContactsUsageDescription: `${name} reads contact names and numbers so texts and calls go to the right person. They stay on this phone.`,
   NSAppleMusicUsageDescription: `${name} plays, pauses and skips music from your library when you ask.`,
