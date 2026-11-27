@@ -31,11 +31,15 @@ public final class FridayNativeUIPlugin: CAPPlugin, CAPBridgedPlugin {
                     return
                 }
                 let assistantName = call.getString("assistantName") ?? "F.R.I.D.A.Y."
-                let view = FridayNativeRootView(assistantName: assistantName) { [weak self] id, text in
-                    self?.notifyListeners("command", data: ["id": id, "text": text])
-                } onClose: { [weak self] in
-                    self?.dismissPresented()
-                }
+                let view = FridayNativeRootView(
+                    assistantName: assistantName,
+                    command: { [weak self] id, text in
+                        self?.notifyListeners("command", data: ["id": id, "text": text])
+                    },
+                    close: { [weak self] in
+                        self?.dismissPresented()
+                    }
+                )
                 let controller = UIHostingController(rootView: view)
                 controller.modalPresentationStyle = .fullScreen
                 controller.view.backgroundColor = UIColor.black
