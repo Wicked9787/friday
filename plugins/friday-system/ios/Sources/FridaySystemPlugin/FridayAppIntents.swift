@@ -21,9 +21,9 @@ public struct FridayAppShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: OpenFridayAssistantIntent(),
             phrases: [
-                "Open \\(.applicationName)",
-                "Wake up \\(.applicationName)",
-                "Talk to \\(.applicationName)"
+                "Open \(.applicationName)",
+                "Wake up \(.applicationName)",
+                "Talk to \(.applicationName)"
             ],
             shortTitle: "Open Friday",
             systemImageName: "sparkles"
