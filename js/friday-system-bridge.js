@@ -21,6 +21,10 @@
     openAppSettings: function () { return plugin ? plugin.openAppSettings() : Promise.reject(new Error("Native iOS app required")); }
   };
   window.FridaySystem = api;
+  var toolsButton = document.getElementById("btn-native-tools");
+  if (toolsButton) toolsButton.addEventListener("click", function () {
+    if (api.available) api.showQuickActions().catch(function (error) { console.error("Friday native tools:", error); });
+  });
   if (plugin && plugin.addListener) {
     plugin.addListener("quickAction", function (event) {
       window.dispatchEvent(new CustomEvent("friday:native-action", { detail: event }));
