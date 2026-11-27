@@ -1,0 +1,9 @@
+{
+  "name": "friday-system",
+  "version": "1.0.0",
+  "description": "Permission-respecting native iOS system integrations for Friday and Reed.",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift"],
+  "capacitor": { "ios": { "src": "ios" } },
+  "peerDependencies": { "@capacitor/core": "^8.0.0" }
+}
