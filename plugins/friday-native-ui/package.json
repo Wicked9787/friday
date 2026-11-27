@@ -1,0 +1,13 @@
+{
+  "name": "friday-native-ui",
+  "version": "1.0.0",
+  "description": "Additive SwiftUI dashboard and native command bridge for Friday.",
+  "license": "MIT",
+  "files": ["ios/", "Package.swift"],
+  "capacitor": {
+    "ios": { "src": "ios" }
+  },
+  "peerDependencies": {
+    "@capacitor/core": "^8.0.0"
+  }
+}
