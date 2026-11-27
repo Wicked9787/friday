@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - friday-native
+      - friday-integration-5
     paths:
       - "index.html"
       - "config.js"
